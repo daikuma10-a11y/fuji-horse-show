@@ -8,9 +8,9 @@ import type {
 } from "./types"
 
 export const COMPETITION_DATES: { value: CompetitionDate; label: string }[] = [
-  { value: "2026-11-13", label: "2026年11月13日（金）" },
-  { value: "2026-11-14", label: "2026年11月14日（土）" },
-  { value: "2026-11-15", label: "2026年11月15日（日）" },
+  { value: "2026-09-11", label: "2026年9月11日（金）" },
+  { value: "2026-09-12", label: "2026年9月12日（土）" },
+  { value: "2026-09-13", label: "2026年9月13日（日）" },
 ]
 
 export const organizations: Organization[] = [
