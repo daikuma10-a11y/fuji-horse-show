@@ -2,7 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_JP } from 'next/font/google'
 import './globals.css'
-import { StoreProvider } from '@/lib/store'
+import { AutumnStoreProvider } from '@/components/autumn-store-provider'
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ['latin'],
@@ -25,15 +25,11 @@ export const viewport: Viewport = {
   userScalable: false,
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja" className="light">
       <body className={`${notoSansJP.className} antialiased`}>
-        <StoreProvider>{children}</StoreProvider>
+        <AutumnStoreProvider>{children}</AutumnStoreProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
