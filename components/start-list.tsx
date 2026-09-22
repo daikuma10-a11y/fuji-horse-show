@@ -56,9 +56,15 @@ export function StartList({
               {e.order}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-2xl font-bold text-foreground">{player?.name ?? "―"}</span>
-              <span className="text-xl text-foreground">馬：{horse?.name ?? "―"}</span>
-              <span className="text-lg text-muted-foreground">{org?.name ?? "―"}</span>
+              <span className={`text-2xl font-bold ${e.withdrawn ? "text-destructive line-through" : "text-foreground"}`}>
+  {player?.name ?? "—"} {e.withdrawn && "【棄権】"}
+</span>
+<span className={`text-xl ${e.withdrawn ? "text-destructive line-through" : "text-foreground"}`}>
+  馬：{horse?.name ?? "—"}
+</span>
+<span className="text-lg text-muted-foreground">
+  {org?.name ?? "—"}
+</span>
             </span>
             {!readOnly && (
               <span
