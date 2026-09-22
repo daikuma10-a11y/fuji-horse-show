@@ -277,9 +277,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return [...shifted, newEntry]
     }
     // 後ろ側に追加
-    const maxOrder = target.length ? target[target.length - 1].order : 0
-    newEntry.order = maxOrder + 1
-    return [...entries, newEntry]
+    // 通常出場者の最後に追加し、棄権者は最後尾にする
+const active = target.filter((e) => !e.withdrawn)
+const withdrawn = target.filter((e) => e.withdrawn)
+
+const newCompetitionEntries = [...active, newEntry, ...withdrawn].map(
+  (e, index) => ({ ...e, order: index + 1 })
+)
+
+const otherEntries = entries.filter(
+  (e) => e.competitionId !== add.competitionId
+)
+
+return [...otherEntries, ...newCompetitionEntries]
   }
 
   const setPayment = useCallback((orgId: string, paid: number) => {
