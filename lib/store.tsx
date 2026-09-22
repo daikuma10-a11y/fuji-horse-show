@@ -165,9 +165,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setStartEntries((prevEntries) => {
           let entries = [...prevEntries]
 
-          if (req.type === "withdraw" && req.withdraw) {
-            entries = entries.filter((e) => e.id !== req.withdraw!.entryId)
-          }
+         if (req.type === "withdraw" && req.withdraw) {
+  const targetId = req.withdraw.entryId
+  const target = entries.find((e) => e.id === targetId)
+
+  if (target) {
+    const others = entries.filter((e) => e.id !== targetId)
+    const sameCompetition = others.filter(
+      (e) => e.competitionId === target.competitionId
+    )
+    const maxOrder = Math.max(0, ...sameCompetition.map((e) => e.order))
+
+    entries = [
+      ...others,
+      {
+        ...target,
+        order: maxOrder + 1,
+        withdrawn: true,
+      },
+    ]
+  }
+}
 
           if (req.type === "add" && req.add) {
             entries = applyAdd(entries, req.add, seedCompetitionOfficial(req.add.competitionId))
