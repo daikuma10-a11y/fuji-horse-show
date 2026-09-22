@@ -45,20 +45,20 @@ export const horses: Horse[] = [
 // 競技（競技番号順に並べます）
 export const competitions: Competition[] = [
   // 11月13日
-  { id: "c-101", number: 1, date: "2026-11-13", name: "ビギナー障害飛越 60cm", official: false, entryFee: 4000 },
-  { id: "c-102", number: 2, date: "2026-11-13", name: "小障害飛越 80cm", official: true, entryFee: 6000 },
-  { id: "c-103", number: 3, date: "2026-11-13", name: "馬場馬術 第1課目", official: false, entryFee: 5000 },
-  { id: "c-104", number: 4, date: "2026-11-13", name: "中障害飛越 100cm", official: true, entryFee: 8000 },
+  { id: "c-101", number: 1, date: "2026-09-11", name: "ビギナー障害飛越 60cm", official: false, entryFee: 4000 },
+  { id: "c-102", number: 2, date: "2026-09-11", name: "小障害飛越 80cm", official: true, entryFee: 6000 },
+  { id: "c-103", number: 3, date: "2026-09-11", name: "馬場馬術 第1課目", official: false, entryFee: 5000 },
+  { id: "c-104", number: 4, date: "2026-09-11", name: "中障害飛越 100cm", official: true, entryFee: 8000 },
   // 11月14日
-  { id: "c-201", number: 5, date: "2026-11-14", name: "馬場馬術 第2課目", official: true, entryFee: 7000 },
-  { id: "c-202", number: 6, date: "2026-11-14", name: "小障害飛越 90cm", official: true, entryFee: 6500 },
-  { id: "c-203", number: 7, date: "2026-11-14", name: "親子ペア競技", official: false, entryFee: 3500 },
-  { id: "c-204", number: 8, date: "2026-11-14", name: "中障害飛越 110cm", official: true, entryFee: 9000 },
-  { id: "c-205", number: 9, date: "2026-11-14", name: "レクリエーション競技", official: false, entryFee: 3000 },
+  { id: "c-201", number: 5, date: "2026-09-12", name: "馬場馬術 第2課目", official: true, entryFee: 7000 },
+  { id: "c-202", number: 6, date: "2026-09-12", name: "小障害飛越 90cm", official: true, entryFee: 6500 },
+  { id: "c-203", number: 7, date: "2026-09-12", name: "親子ペア競技", official: false, entryFee: 3500 },
+  { id: "c-204", number: 8, date: "2026-09-12", name: "中障害飛越 110cm", official: true, entryFee: 9000 },
+  { id: "c-205", number: 9, date: "2026-09-12", name: "レクリエーション競技", official: false, entryFee: 3000 },
   // 11月15日
-  { id: "c-301", number: 10, date: "2026-11-15", name: "馬場馬術 セントジョージ賞典", official: true, entryFee: 10000 },
-  { id: "c-302", number: 11, date: "2026-11-15", name: "大障害飛越 120cm", official: true, entryFee: 12000 },
-  { id: "c-303", number: 12, date: "2026-11-15", name: "ファンライド競技", official: false, entryFee: 3000 },
+  { id: "c-301", number: 10, date: "2026-09-13", name: "馬場馬術 セントジョージ賞典", official: true, entryFee: 10000 },
+  { id: "c-302", number: 11, date: "2026-09-13", name: "大障害飛越 120cm", official: true, entryFee: 12000 },
+  { id: "c-303", number: 12, date: "2026-09-13", name: "ファンライド競技", official: false, entryFee: 3000 },
 ]
 
 // 出番表（初期エントリー）
