@@ -30,3 +30,17 @@ export async function supabaseInsert<T>(table: string, row: Record<string, unkno
   if (!rows[0]) throw new Error(`Supabase ${table} insert returned no row`)
   return rows[0]
 }
+
+export async function supabaseUpdate<T>(table: string, query: string, patch: Record<string, unknown>): Promise<T[]> {
+  if (!supabaseUrl || !supabaseKey) throw new Error("Supabase is not configured")
+  const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
+    method: "PATCH",
+    headers: headers({ "Content-Type": "application/json", Prefer: "return=representation" }),
+    body: JSON.stringify(patch),
+  })
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(`Supabase ${table} update failed: ${response.status} ${detail}`)
+  }
+  return response.json() as Promise<T[]>
+}
