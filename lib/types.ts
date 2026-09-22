@@ -40,6 +40,7 @@ export interface StartEntry {
   order: number
   playerId: string
   horseId: string
+  withdrawn?: boolean
 }
 
 export type RequestType = "add" | "change" | "withdraw"
