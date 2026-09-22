@@ -1,5 +1,5 @@
 import { AUTUMN_EVENT, assertAutumnEventId } from "./autumn-config"
-import { supabaseInsert, supabaseRest, supabaseUpdate } from "./supabase"
+import { supabaseInsert, supabaseRest, supabaseRpc } from "./supabase"
 
 export interface PersistedReceptionRequest {
   id: string
@@ -41,9 +41,7 @@ export async function persistWithdrawRequest(input: { entryId: string; competiti
   return supabaseInsert<PersistedReceptionRequest>("reception_requests", autumnRow({ request_type: "withdraw", entry_id: input.entryId, organization_id: input.organizationId, from_competition_id: input.competitionId, rider_id: input.riderId, horse_id: input.horseId, fee: 0, payload: { entryId: input.entryId, competitionId: input.competitionId, playerId: input.riderId, horseId: input.horseId } }))
 }
 
-export async function markRequestReflected(requestId: string) {
+export async function applyReceptionRequest(requestId: string, accessToken: string) {
   assertAutumnEventId(AUTUMN_EVENT.id)
-  const rows = await supabaseUpdate<PersistedReceptionRequest>("reception_requests", `id=eq.${requestId}&event_id=eq.${AUTUMN_EVENT.id}&status=eq.pending`, { status: "reflected", reflected_at: new Date().toISOString() })
-  if (rows.length !== 1) throw new Error("受付申請の反映状態を更新できませんでした")
-  return rows[0]
+  return supabaseRpc<string>("apply_autumn_reception_request", { p_request_id: requestId }, accessToken)
 }
