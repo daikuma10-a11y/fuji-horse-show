@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrgs, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 import type { AddPayload, AppRequest, ChangePayload, Competition, CompetitionDate, Horse, Organization, Payment, Player, StartEntry, WithdrawPayload } from "./types"
 import { calcAddFee, calcChangeFee, calcWithdrawAddFee, calcWithdrawFee } from "./fees"
-import { loadReceptionRequests } from "./supabase-rest"
+import { loadReceptionRequests, saveReceptionRequest } from "./supabase-rest"
 
 interface StoreValue {
   organizations: Organization[]; players: Player[]; horses: Horse[]; competitions: Competition[]; startEntries: StartEntry[]; requests: AppRequest[]; payments: Payment[]
@@ -16,8 +16,7 @@ interface StoreValue {
   setPayment: (orgId: string, paid: number) => void
 }
 const StoreContext = createContext<StoreValue | null>(null)
-let idCounter = 1000
-function nextId(prefix: string) { idCounter += 1; return `${prefix}-${idCounter}` }
+function nextId(prefix: string) { return `${prefix}-${crypto.randomUUID()}` }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [organizations] = useState<Organization[]>(seedOrgs); const [players] = useState<Player[]>(seedPlayers); const [horses] = useState<Horse[]>(seedHorses); const [competitions] = useState<Competition[]>(seedCompetitions)
@@ -32,9 +31,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => { active = false }
   }, [])
 
-  const submitAdd = useCallback((payload: AddPayload) => { const target=competitions.find(c=>c.id===payload.competitionId); const horse=horses.find(h=>h.id===payload.horseId); if(!target||!horse)return; setRequests(prev=>[{id:nextId("req"),type:"add",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:calcAddFee(target),add:payload},...prev]) }, [competitions,horses])
-  const submitChange = useCallback((payload: ChangePayload) => { const from=competitions.find(c=>c.id===payload.fromCompetitionId); const to=competitions.find(c=>c.id===payload.toCompetitionId); const horse=horses.find(h=>h.id===payload.toHorseId); if(!from||!to||!horse)return; setRequests(prev=>[{id:nextId("req"),type:"change",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:payload.treatedAsWithdrawAdd?calcWithdrawAddFee(to):calcChangeFee(from,to),change:payload},...prev]) }, [competitions,horses])
-  const submitWithdraw = useCallback((payload: WithdrawPayload) => { const horse=horses.find(h=>h.id===payload.horseId); if(!horse)return; setRequests(prev=>[{id:nextId("req"),type:"withdraw",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:calcWithdrawFee(),withdraw:payload},...prev]) }, [horses])
+  const persistNewRequest = useCallback((request: AppRequest) => {
+    setRequests(prev => [request, ...prev])
+    void saveReceptionRequest(request).catch(error => {
+      console.error(error)
+      setRequests(prev => prev.filter(r => r.id !== request.id))
+    })
+  }, [])
+
+  const submitAdd = useCallback((payload: AddPayload) => { const target=competitions.find(c=>c.id===payload.competitionId); const horse=horses.find(h=>h.id===payload.horseId); if(!target||!horse)return; persistNewRequest({id:nextId("req"),type:"add",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:calcAddFee(target),add:payload}) }, [competitions,horses,persistNewRequest])
+  const submitChange = useCallback((payload: ChangePayload) => { const from=competitions.find(c=>c.id===payload.fromCompetitionId); const to=competitions.find(c=>c.id===payload.toCompetitionId); const horse=horses.find(h=>h.id===payload.toHorseId); if(!from||!to||!horse)return; persistNewRequest({id:nextId("req"),type:"change",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:payload.treatedAsWithdrawAdd?calcWithdrawAddFee(to):calcChangeFee(from,to),change:payload}) }, [competitions,horses,persistNewRequest])
+  const submitWithdraw = useCallback((payload: WithdrawPayload) => { const horse=horses.find(h=>h.id===payload.horseId); if(!horse)return; persistNewRequest({id:nextId("req"),type:"withdraw",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:calcWithdrawFee(),withdraw:payload}) }, [horses,persistNewRequest])
 
   function renumberStartEntries(entries: StartEntry[]) { const maps=new Map<string,Map<string,number>>(); for(const cid of Array.from(new Set(entries.map(e=>e.competitionId)))) { const ordered=entries.filter(e=>e.competitionId===cid).sort((a,b)=>a.order-b.order); maps.set(cid,new Map(ordered.map((e,i)=>[e.id,i+1]))) } return entries.map(e=>({...e,order:maps.get(e.competitionId)?.get(e.id)??e.order})) }
   function seedCompetitionOfficial(id:string){ return competitions.find(c=>c.id===id)?.official??false }
