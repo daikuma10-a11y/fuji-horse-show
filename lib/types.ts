@@ -3,9 +3,23 @@
 
 export type CompetitionDate = "2026-09-11" | "2026-09-12" | "2026-09-13"
 
-export interface Organization { id: string; name: string }
-export interface Player { id: string; name: string; orgId: string }
-export interface Horse { id: string; name: string; orgId: string }
+/** 原本値を失わず、検索・並び替え・手入力履歴を分離して保持する共通項目 */
+export interface MasterAuditFields {
+  /** 原本に記載されていた値。未設定時は name と同一として扱う */
+  sourceName?: string
+  /** 五十音順・検索用の読み。取得不能なら未設定でよい */
+  reading?: string
+  /** 大会当日の手入力・修正で作られたデータ */
+  manual?: boolean
+  /** 自動判断せず本部確認が必要なデータ */
+  needsReview?: boolean
+  /** どの受領原本から来たかを追跡するID */
+  sourceFileVersionId?: string
+}
+
+export interface Organization extends MasterAuditFields { id: string; name: string }
+export interface Player extends MasterAuditFields { id: string; name: string; orgId: string }
+export interface Horse extends MasterAuditFields { id: string; name: string; orgId: string }
 
 export interface Competition {
   id: string
