@@ -1,9 +1,10 @@
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrgs, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 import type { AddPayload, AppRequest, ChangePayload, Competition, CompetitionDate, Horse, Organization, Payment, Player, StartEntry, WithdrawPayload } from "./types"
 import { calcAddFee, calcChangeFee, calcWithdrawAddFee, calcWithdrawFee } from "./fees"
+import { loadReceptionRequests } from "./supabase-rest"
 
 interface StoreValue {
   organizations: Organization[]; players: Player[]; horses: Horse[]; competitions: Competition[]; startEntries: StartEntry[]; requests: AppRequest[]; payments: Payment[]
@@ -24,6 +25,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const getCompetition = useCallback((id: string) => competitions.find(c => c.id === id), [competitions]); const getPlayer = useCallback((id: string) => players.find(p => p.id === id), [players]); const getHorse = useCallback((id: string) => horses.find(h => h.id === id), [horses]); const getOrg = useCallback((id: string) => organizations.find(o => o.id === id), [organizations])
   const competitionsByDate = useCallback((date: CompetitionDate) => competitions.filter(c => c.date === date).sort((a,b)=>a.number-b.number), [competitions])
   const entriesByCompetition = useCallback((competitionId: string) => startEntries.filter(e => e.competitionId === competitionId).sort((a,b)=>a.order-b.order), [startEntries])
+
+  useEffect(() => {
+    let active = true
+    loadReceptionRequests().then(rows => { if (active) setRequests(rows) }).catch(error => console.error(error))
+    return () => { active = false }
+  }, [])
 
   const submitAdd = useCallback((payload: AddPayload) => { const target=competitions.find(c=>c.id===payload.competitionId); const horse=horses.find(h=>h.id===payload.horseId); if(!target||!horse)return; setRequests(prev=>[{id:nextId("req"),type:"add",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:calcAddFee(target),add:payload},...prev]) }, [competitions,horses])
   const submitChange = useCallback((payload: ChangePayload) => { const from=competitions.find(c=>c.id===payload.fromCompetitionId); const to=competitions.find(c=>c.id===payload.toCompetitionId); const horse=horses.find(h=>h.id===payload.toHorseId); if(!from||!to||!horse)return; setRequests(prev=>[{id:nextId("req"),type:"change",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:payload.treatedAsWithdrawAdd?calcWithdrawAddFee(to):calcChangeFee(from,to),change:payload},...prev]) }, [competitions,horses])
