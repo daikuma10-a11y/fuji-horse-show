@@ -53,8 +53,8 @@ export function calcSettlement(params: {
     let competitionDiff = 0
 
     for (const req of requests) {
-      if (req.orgId !== org.id) continue
-      // 追加基本＋エントリーは追加料金へ
+      if (req.orgId !== org.id || req.status !== "reflected") continue
+      // 本部が出番表へ反映した申請だけを確定精算へ含める。
       additional += req.fee.addBase + req.fee.addEntry
       change += req.fee.changeBase
       competitionDiff += req.fee.competitionDiff
