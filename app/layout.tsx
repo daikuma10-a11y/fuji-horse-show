@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_JP } from 'next/font/google'
 import './globals.css'
@@ -34,7 +33,6 @@ export default function RootLayout({
     <html lang="ja" className="light">
       <body className={`${notoSansJP.className} antialiased`}>
         <StoreProvider>{children}</StoreProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )
