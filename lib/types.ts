@@ -1,7 +1,7 @@
 // Fuji Horse Show 受付システム 型定義
 // 後から Supabase テーブルへそのまま対応できるようにフラットな構造にしています。
 
-export type CompetitionDate = "2026-11-13" | "2026-11-14" | "2026-11-15"
+export type CompetitionDate = "2026-09-11" | "2026-09-12" | "2026-09-13"
 
 export interface Organization { id: string; name: string }
 export interface Player { id: string; name: string; orgId: string }
