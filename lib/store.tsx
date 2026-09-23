@@ -1,10 +1,10 @@
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrgs, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 import type { AddPayload, AppRequest, ChangePayload, Competition, CompetitionDate, Horse, Organization, Payment, Player, StartEntry, WithdrawPayload } from "./types"
 import { calcAddFee, calcChangeFee, calcWithdrawAddFee, calcWithdrawFee } from "./fees"
-import { markReceptionRequestReflected, saveReceptionRequest } from "./supabase-rest"
+import { loadReceptionRequests, markReceptionRequestReflected, saveReceptionRequest } from "./supabase-rest"
 
 export type ReconciliationStatus={state:"loading"|"verified"|"warning"|"error";matched:number;total:number;unresolved:number;message:string}
 interface StoreValue { organizations:Organization[];players:Player[];horses:Horse[];competitions:Competition[];startEntries:StartEntry[];requests:AppRequest[];payments:Payment[];reconciliation:ReconciliationStatus;getCompetition:(id:string)=>Competition|undefined;getPlayer:(id:string)=>Player|undefined;getHorse:(id:string)=>Horse|undefined;getOrg:(id:string)=>Organization|undefined;competitionsByDate:(date:CompetitionDate)=>Competition[];entriesByCompetition:(competitionId:string)=>StartEntry[];submitAdd:(payload:AddPayload)=>void;submitChange:(payload:ChangePayload)=>void;submitWithdraw:(payload:WithdrawPayload)=>void;reflectRequest:(requestId:string,targetOrder?:number)=>void;moveEntry:(entryId:string,direction:"up"|"down")=>void;setPayment:(orgId:string,paid:number)=>void }
@@ -14,9 +14,10 @@ function nextId(prefix:string){return `${prefix}-${crypto.randomUUID()}`}
 export function StoreProvider({children}:{children:ReactNode}){
  const [organizations]=useState<Organization[]>(seedOrgs),[players]=useState<Player[]>(seedPlayers),[horses]=useState<Horse[]>(seedHorses),[competitions]=useState<Competition[]>(seedCompetitions)
  const [startEntries,setStartEntries]=useState<StartEntry[]>(seedStartEntries),[requests,setRequests]=useState<AppRequest[]>([]),[payments,setPayments]=useState<Payment[]>([])
- const [reconciliation]=useState<ReconciliationStatus>({state:"warning",matched:0,total:0,unresolved:0,message:"診断中：DB自動読込を一時停止し、元データを表示しています"})
+ const [reconciliation]=useState<ReconciliationStatus>({state:"warning",matched:0,total:0,unresolved:0,message:"診断中：受付履歴のみDB読込中。出番表DB照合は一時停止しています"})
  const getCompetition=useCallback((id:string)=>competitions.find(c=>c.id===id),[competitions]),getPlayer=useCallback((id:string)=>players.find(p=>p.id===id),[players]),getHorse=useCallback((id:string)=>horses.find(h=>h.id===id),[horses]),getOrg=useCallback((id:string)=>organizations.find(o=>o.id===id),[organizations])
  const competitionsByDate=useCallback((date:CompetitionDate)=>competitions.filter(c=>c.date===date).sort((a,b)=>a.number-b.number),[competitions]),entriesByCompetition=useCallback((competitionId:string)=>startEntries.filter(e=>e.competitionId===competitionId).sort((a,b)=>a.order-b.order),[startEntries])
+ useEffect(()=>{let active=true;loadReceptionRequests().then(rows=>{if(active)setRequests(rows)}).catch(error=>{console.error("受付履歴のDB読込に失敗",error)});return()=>{active=false}},[])
  const persistNewRequest=useCallback((request:AppRequest)=>{setRequests(prev=>[request,...prev]);void saveReceptionRequest(request).catch(error=>{console.error(error);setRequests(prev=>prev.filter(r=>r.id!==request.id))})},[])
  const submitAdd=useCallback((payload:AddPayload)=>{const target=competitions.find(c=>c.id===payload.competitionId),horse=horses.find(h=>h.id===payload.horseId);if(!target||!horse)return;persistNewRequest({id:nextId("req"),type:"add",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:calcAddFee(target),add:payload})},[competitions,horses,persistNewRequest])
  const submitChange=useCallback((payload:ChangePayload)=>{const from=competitions.find(c=>c.id===payload.fromCompetitionId),to=competitions.find(c=>c.id===payload.toCompetitionId),horse=horses.find(h=>h.id===payload.toHorseId);if(!from||!to||!horse)return;persistNewRequest({id:nextId("req"),type:"change",status:"pending",createdAt:new Date().toISOString(),orgId:horse.orgId,fee:payload.treatedAsWithdrawAdd?calcWithdrawAddFee(to):calcChangeFee(from,to),change:payload})},[competitions,horses,persistNewRequest])
