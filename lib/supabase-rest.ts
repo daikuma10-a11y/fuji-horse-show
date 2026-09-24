@@ -1,4 +1,5 @@
 import type { AppRequest, Competition, FeeBreakdown, Horse, Player, StartEntry } from "./types"
+import { competitions as seedCompetitions, horses as seedHorses, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 
 const SUPABASE_URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
@@ -15,6 +16,16 @@ const obj=(value:unknown):Record<string,unknown>=>value&&typeof value==="object"
 const str=(value:unknown)=>typeof value==="string"?value:""
 const bool=(value:unknown)=>value===true
 const emptyFee=(total:number):FeeBreakdown=>({addBase:0,addEntry:0,changeBase:0,competitionDiff:0,total:Number.isFinite(total)?total:0})
+const playerName=(id:string)=>seedPlayers.find(p=>p.id===id)?.name??""
+const horseName=(id:string)=>seedHorses.find(h=>h.id===id)?.name??""
+const competitionNo=(id:string)=>seedCompetitions.find(c=>c.id===id)?.number??null
+const entryOrder=(id:string)=>seedStartEntries.find(e=>e.id===id)?.order??null
+function enrichedPayload(request:AppRequest){
+ if(request.add)return {...request,add:{...request.add,playerName:playerName(request.add.playerId),horseName:horseName(request.add.horseId),competitionNo:competitionNo(request.add.competitionId)}}
+ if(request.withdraw)return {...request,withdraw:{...request.withdraw,playerName:playerName(request.withdraw.playerId),horseName:horseName(request.withdraw.horseId),competitionNo:competitionNo(request.withdraw.competitionId),entryOrder:entryOrder(request.withdraw.entryId)}}
+ if(request.change)return {...request,change:{...request.change,fromPlayerName:playerName(request.change.fromPlayerId),fromHorseName:horseName(request.change.fromHorseId),toPlayerName:playerName(request.change.toPlayerId),toHorseName:horseName(request.change.toHorseId),fromCompetitionNo:competitionNo(request.change.fromCompetitionId),toCompetitionNo:competitionNo(request.change.toCompetitionId),entryOrder:entryOrder(request.change.entryId)}}
+ return request
+}
 
 function normalizeRequestRow(row:RequestRow):AppRequest|null{
  const p=obj(row.payload),type=row.request_type,status=row.status
@@ -48,9 +59,9 @@ export async function loadReceptionRequests():Promise<AppRequest[]>{
 
 export async function loadCompetitionFees():Promise<Map<number,number>>{const response=await fetch(`${SUPABASE_URL}/rest/v1/competitions?event_id=eq.${AUTUMN_EVENT_ID}&select=competition_no,fee`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`競技料金取得失敗: ${response.status}`);const rows=await response.json() as CompetitionFeeRow[];return new Map(rows.map(row=>[Number(row.competition_no),Number(row.fee??0)]))}
 
-export async function saveReceptionRequest(request:AppRequest):Promise<void>{const body={id:request.id,event_id:AUTUMN_EVENT_ID,request_type:request.type,fee_amount:request.fee.total,fee:request.fee.total,status:request.status,source:"fuji-horse-show-web",treated_as_withdraw_add:request.change?.treatedAsWithdrawAdd??false,note:request.add?.note||null,payload:request};const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests`,{method:"POST",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify(body)});if(!response.ok)throw new Error(`受付データ保存失敗: ${response.status}`)}
+export async function saveReceptionRequest(request:AppRequest):Promise<void>{const payload=enrichedPayload(request);const body={id:request.id,event_id:AUTUMN_EVENT_ID,request_type:request.type,fee_amount:request.fee.total,fee:request.fee.total,status:request.status,source:"fuji-horse-show-web",treated_as_withdraw_add:request.change?.treatedAsWithdrawAdd??false,note:request.add?.note||null,payload};const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests`,{method:"POST",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify(body)});if(!response.ok)throw new Error(`受付データ保存失敗: ${response.status}`)}
 
-export async function markReceptionRequestReflected(request:AppRequest):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?id=eq.${request.id}&event_id=eq.${AUTUMN_EVENT_ID}`,{method:"PATCH",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify({status:"reflected",reflected_at:new Date().toISOString(),payload:{...request,status:"reflected"}})});if(!response.ok)throw new Error(`受付反映状態の保存失敗: ${response.status}`)}
+export async function markReceptionRequestReflected(request:AppRequest):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?id=eq.${request.id}&event_id=eq.${AUTUMN_EVENT_ID}`,{method:"PATCH",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify({status:"reflected",reflected_at:new Date().toISOString(),payload:{...enrichedPayload(request),status:"reflected"}})});if(!response.ok)throw new Error(`受付反映状態の保存失敗: ${response.status}`)}
 
 export async function loadAutumnEntryRows():Promise<EntryRow[]>{const select="entry_id,competition_id,competition_no,start_order,status,rider_id,rider_name,horse_id,horse_name,organization_name";const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_entries?event_id=eq.${AUTUMN_EVENT_ID}&select=${select}&order=competition_no.asc,start_order.asc`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`出番表データ取得失敗: ${response.status}`);return response.json() as Promise<EntryRow[]>}
 
