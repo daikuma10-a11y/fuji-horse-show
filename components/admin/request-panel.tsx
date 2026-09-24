@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CheckCircle2, Clock } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { formatYen } from "@/lib/fees"
@@ -16,6 +16,9 @@ const typeLabel: Record<AppRequest["type"], { text: string; cls: string }> = {
 export function RequestPanel() {
   const { requests, reflectRequest, getCompetition, getPlayer, getHorse, getOrg, entriesByCompetition } = useStore()
   const [positions, setPositions] = useState<Record<string, string>>({})
+  const [restoreWait, setRestoreWait] = useState(true)
+  useEffect(()=>{const t=window.setTimeout(()=>setRestoreWait(false),2500);return()=>window.clearTimeout(t)},[])
+  if (requests.length === 0 && restoreWait) return <p className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-10 text-center text-xl text-muted-foreground">前回の申請を復元しています…</p>
   if (requests.length === 0) return <p className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-10 text-center text-xl text-muted-foreground">まだ受付された申請はありません。受付タブレットから追加・変更・棄権を申請すると、ここに表示されます。</p>
   function compText(id: string) { const c=getCompetition(id); return c?`競技${c.number}. ${c.name}${c.official?"（★公認）":""}`:"―" }
   function targetCompetitionId(r:AppRequest){if(r.add)return r.add.competitionId;if(r.change)return r.change.toCompetitionId;return null}
