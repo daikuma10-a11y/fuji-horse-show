@@ -4,11 +4,13 @@ import { competitions as seedCompetitions, horses as seedHorses, players as seed
 const SUPABASE_URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
 export const AUTUMN_EVENT_ID = "2af66251-66a2-4c51-8180-a5badf0584d4"
+export const ADMIN_SESSION_KEY = "fhs-admin-session-v1"
 
 const headers = { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`, "Content-Type": "application/json" }
 type RequestRow={id:string;request_type:AppRequest["type"];status:AppRequest["status"];created_at:string;fee:number|null;fee_amount?:number|null;organization_id?:string|null;original_entry_id?:string|null;entry_id?:string|null;target_competition_id?:string|null;from_competition_id?:string|null;to_competition_id?:string|null;rider_id?:string|null;horse_id?:string|null;treated_as_withdraw_add?:boolean|null;note?:string|null;request_note?:string|null;payload:unknown}
 type EntryRow={entry_id:string;competition_id:string;competition_no:string;start_order:number;status:string;rider_id:string;rider_name:string;horse_id:string;horse_name:string;organization_name:string}
 type CompetitionFeeRow={competition_no:string;fee:number|null}
+export type AdminSession={accessToken:string;refreshToken:string;expiresAt:number;email:string}
 export type EntryMatch={row:EntryRow;local:StartEntry|null;reason:"matched"|"not_found"|"ambiguous"}
 
 const norm=(value:string|undefined)=> (value??"").normalize("NFKC").replace(/[\s　]+/g,"").toLocaleLowerCase("ja-JP")
@@ -48,6 +50,9 @@ function normalizeRequestRow(row:RequestRow):AppRequest|null{
  const changedFields=rawFields.filter((v):v is "competition"|"player"|"horse"=>v==="competition"||v==="player"||v==="horse")
  return {...base,change:{entryId,fromCompetitionId,fromPlayerId,fromHorseId,toCompetitionId,toPlayerId,toHorseId,changedFields,treatedAsWithdrawAdd:bool(q.treatedAsWithdrawAdd)||bool(p.treatedAsWithdrawAdd)||row.treated_as_withdraw_add===true}}
 }
+
+export async function signInAdmin(email:string,password:string):Promise<AdminSession>{const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},body:JSON.stringify({email,password})});const body=await response.json() as {access_token?:string;refresh_token?:string;expires_in?:number;user?:{email?:string;app_metadata?:{role?:string}};msg?:string;error_description?:string};if(!response.ok||!body.access_token||!body.refresh_token)throw new Error(body.error_description||body.msg||"ログインに失敗しました");if(body.user?.app_metadata?.role!=="admin")throw new Error("このアカウントには本部管理者権限がありません");return{accessToken:body.access_token,refreshToken:body.refresh_token,expiresAt:Date.now()+(body.expires_in??3600)*1000,email:body.user.email??email}}
+export async function refreshAdminSession(session:AdminSession):Promise<AdminSession>{if(session.expiresAt>Date.now()+60000)return session;const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:session.refreshToken})});const body=await response.json() as {access_token?:string;refresh_token?:string;expires_in?:number;user?:{email?:string;app_metadata?:{role?:string}}};if(!response.ok||!body.access_token||!body.refresh_token||body.user?.app_metadata?.role!=="admin")throw new Error("本部ログインの有効期限が切れました。再ログインしてください");return{accessToken:body.access_token,refreshToken:body.refresh_token,expiresAt:Date.now()+(body.expires_in??3600)*1000,email:body.user.email??session.email}}
 
 export async function loadReceptionRequests():Promise<AppRequest[]>{
  const select="id,request_type,status,created_at,fee,fee_amount,organization_id,original_entry_id,entry_id,target_competition_id,from_competition_id,to_competition_id,rider_id,horse_id,treated_as_withdraw_add,note,request_note,payload"
