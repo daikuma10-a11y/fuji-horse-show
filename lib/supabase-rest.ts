@@ -20,21 +20,22 @@ function normalizeRequestRow(row:RequestRow):AppRequest|null{
  const p=obj(row.payload),type=row.request_type,status=row.status
  if(!["add","change","withdraw"].includes(type)||!["pending","reflected"].includes(status))return null
  const total=Number(row.fee_amount??row.fee??0),orgId=str(p.orgId)||row.organization_id||""
- const base={id:row.id,type,status,createdAt:row.created_at,orgId,fee:emptyFee(total)} as AppRequest
+ const base={id:row.id,type,status,createdAt:str(p.createdAt)||row.created_at,orgId,fee:emptyFee(total)} as AppRequest
  if(type==="add"){
-  const competitionId=str(p.competitionId)||row.target_competition_id||row.to_competition_id||"",playerId=str(p.playerId)||row.rider_id||"",horseId=str(p.horseId)||row.horse_id||""
+  const q=obj(p.add),competitionId=str(q.competitionId)||str(p.competitionId)||row.target_competition_id||row.to_competition_id||"",playerId=str(q.playerId)||str(p.playerId)||row.rider_id||"",horseId=str(q.horseId)||str(p.horseId)||row.horse_id||""
   if(!competitionId||!playerId||!horseId)return null
-  return {...base,add:{competitionId,playerId,horseId,note:str(p.note)||row.note||row.request_note||""}}
+  return {...base,add:{competitionId,playerId,horseId,note:str(q.note)||str(p.note)||row.note||row.request_note||""}}
  }
  if(type==="withdraw"){
-  const entryId=str(p.entryId)||row.entry_id||row.original_entry_id||"",competitionId=str(p.competitionId)||row.from_competition_id||"",playerId=str(p.playerId)||row.rider_id||"",horseId=str(p.horseId)||row.horse_id||""
+  const q=obj(p.withdraw),entryId=str(q.entryId)||str(p.entryId)||row.entry_id||row.original_entry_id||"",competitionId=str(q.competitionId)||str(p.competitionId)||row.from_competition_id||"",playerId=str(q.playerId)||str(p.playerId)||row.rider_id||"",horseId=str(q.horseId)||str(p.horseId)||row.horse_id||""
   if(!entryId||!competitionId||!playerId||!horseId)return null
   return {...base,withdraw:{entryId,competitionId,playerId,horseId}}
  }
- const entryId=str(p.entryId)||row.entry_id||row.original_entry_id||"",fromCompetitionId=str(p.fromCompetitionId)||row.from_competition_id||"",fromPlayerId=str(p.fromPlayerId)||row.rider_id||"",fromHorseId=str(p.fromHorseId)||row.horse_id||"",toCompetitionId=str(p.toCompetitionId)||row.to_competition_id||row.target_competition_id||"",toPlayerId=str(p.toPlayerId)||row.rider_id||"",toHorseId=str(p.toHorseId)||row.horse_id||""
+ const q=obj(p.change),entryId=str(q.entryId)||str(p.entryId)||row.entry_id||row.original_entry_id||"",fromCompetitionId=str(q.fromCompetitionId)||str(p.fromCompetitionId)||row.from_competition_id||"",fromPlayerId=str(q.fromPlayerId)||str(p.fromPlayerId)||row.rider_id||"",fromHorseId=str(q.fromHorseId)||str(p.fromHorseId)||row.horse_id||"",toCompetitionId=str(q.toCompetitionId)||str(p.toCompetitionId)||row.to_competition_id||row.target_competition_id||"",toPlayerId=str(q.toPlayerId)||str(p.toPlayerId)||row.rider_id||"",toHorseId=str(q.toHorseId)||str(p.toHorseId)||row.horse_id||""
  if(!entryId||!fromCompetitionId||!fromPlayerId||!fromHorseId||!toCompetitionId||!toPlayerId||!toHorseId)return null
- const changedFields=Array.isArray(p.changedFields)?p.changedFields.filter((v):v is "competition"|"player"|"horse"=>v==="competition"||v==="player"||v==="horse"):[]
- return {...base,change:{entryId,fromCompetitionId,fromPlayerId,fromHorseId,toCompetitionId,toPlayerId,toHorseId,changedFields,treatedAsWithdrawAdd:bool(p.treatedAsWithdrawAdd)||row.treated_as_withdraw_add===true}}
+ const rawFields=Array.isArray(q.changedFields)?q.changedFields:Array.isArray(p.changedFields)?p.changedFields:[]
+ const changedFields=rawFields.filter((v):v is "competition"|"player"|"horse"=>v==="competition"||v==="player"||v==="horse")
+ return {...base,change:{entryId,fromCompetitionId,fromPlayerId,fromHorseId,toCompetitionId,toPlayerId,toHorseId,changedFields,treatedAsWithdrawAdd:bool(q.treatedAsWithdrawAdd)||bool(p.treatedAsWithdrawAdd)||row.treated_as_withdraw_add===true}}
 }
 
 export async function loadReceptionRequests():Promise<AppRequest[]>{
