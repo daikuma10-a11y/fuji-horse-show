@@ -7,6 +7,7 @@ export const AUTUMN_EVENT_ID = "2af66251-66a2-4c51-8180-a5badf0584d4"
 const headers = { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`, "Content-Type": "application/json" }
 type RequestRow={id:string;request_type:AppRequest["type"];status:AppRequest["status"];created_at:string;fee:number|null;fee_amount?:number|null;organization_id?:string|null;original_entry_id?:string|null;entry_id?:string|null;target_competition_id?:string|null;from_competition_id?:string|null;to_competition_id?:string|null;rider_id?:string|null;horse_id?:string|null;treated_as_withdraw_add?:boolean|null;note?:string|null;request_note?:string|null;payload:unknown}
 type EntryRow={entry_id:string;competition_id:string;competition_no:string;start_order:number;status:string;rider_id:string;rider_name:string;horse_id:string;horse_name:string;organization_name:string}
+type CompetitionFeeRow={competition_no:string;fee:number|null}
 export type EntryMatch={row:EntryRow;local:StartEntry|null;reason:"matched"|"not_found"|"ambiguous"}
 
 const norm=(value:string|undefined)=> (value??"").normalize("NFKC").replace(/[\s　]+/g,"").toLocaleLowerCase("ja-JP")
@@ -43,6 +44,8 @@ export async function loadReceptionRequests():Promise<AppRequest[]>{
  const rows=await response.json() as RequestRow[]
  return rows.map(normalizeRequestRow).filter((row):row is AppRequest=>row!==null)
 }
+
+export async function loadCompetitionFees():Promise<Map<number,number>>{const response=await fetch(`${SUPABASE_URL}/rest/v1/competitions?event_id=eq.${AUTUMN_EVENT_ID}&select=competition_no,fee`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`競技料金取得失敗: ${response.status}`);const rows=await response.json() as CompetitionFeeRow[];return new Map(rows.map(row=>[Number(row.competition_no),Number(row.fee??0)]))}
 
 export async function saveReceptionRequest(request:AppRequest):Promise<void>{const body={id:request.id,event_id:AUTUMN_EVENT_ID,request_type:request.type,fee_amount:request.fee.total,fee:request.fee.total,status:request.status,source:"fuji-horse-show-web",treated_as_withdraw_add:request.change?.treatedAsWithdrawAdd??false,note:request.add?.note||null,payload:request};const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests`,{method:"POST",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify(body)});if(!response.ok)throw new Error(`受付データ保存失敗: ${response.status}`)}
 
