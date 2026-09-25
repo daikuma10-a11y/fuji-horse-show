@@ -11,8 +11,6 @@ export function SettlementPanel() {
   const { organizations, players, horses, competitions, startEntries, requests } = useStore()
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
 
-  // 正式DB反映後の entryId はUUID。正式出番表のローカル解決に失敗した行でも、
-  // 反映済み受付履歴に保存されたUUIDなら精算対象として扱う。
   const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
   const entryExists = (id: string) => startEntries.some((e) => e.id === id) || originalEntries.some((e) => e.id === id) || isUuid(id)
   const isResolvableRequest = (request: AppRequest) => {
@@ -23,10 +21,12 @@ export function SettlementPanel() {
       return competitions.some((c) => c.id === request.add!.competitionId) && players.some((p) => p.id === request.add!.playerId) && horses.some((h) => h.id === request.add!.horseId)
     }
     if (request.withdraw) {
-      return entryExists(request.withdraw.entryId) && competitions.some((c) => c.id === request.withdraw!.competitionId) && players.some((p) => p.id === request.withdraw!.playerId) && horses.some((h) => h.id === request.withdraw!.horseId)
+      return entryExists(request.withdraw.entryId) && competitions.some((c) => c.id === request.withdraw!.competitionId) && horses.some((h) => h.id === request.withdraw!.horseId)
     }
     if (request.change) {
-      return entryExists(request.change.entryId) && competitions.some((c) => c.id === request.change!.fromCompetitionId) && competitions.some((c) => c.id === request.change!.toCompetitionId) && players.some((p) => p.id === request.change!.fromPlayerId) && players.some((p) => p.id === request.change!.toPlayerId) && horses.some((h) => h.id === request.change!.fromHorseId) && horses.some((h) => h.id === request.change!.toHorseId)
+      // 精算は確定済みの申請料金を基準にする。正式DB反映後に選手IDのローカル変換が
+      // できない場合でも、entry・競技・馬・団体が確認できれば変更料金を除外しない。
+      return entryExists(request.change.entryId) && competitions.some((c) => c.id === request.change!.fromCompetitionId) && competitions.some((c) => c.id === request.change!.toCompetitionId) && horses.some((h) => h.id === request.change!.fromHorseId) && horses.some((h) => h.id === request.change!.toHorseId)
     }
     return false
   }
