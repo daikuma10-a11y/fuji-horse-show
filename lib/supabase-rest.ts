@@ -13,7 +13,7 @@ type CompetitionFeeRow={competition_no:string;fee:number|null}
 export type AdminSession={accessToken:string;refreshToken:string;expiresAt:number;email:string}
 export type EntryMatch={row:EntryRow;local:StartEntry|null;reason:"matched"|"not_found"|"ambiguous"}
 
-const norm=(value:string|undefined)=> (value??"").normalize("NFKC").replace(/[\s　]+/g,"").toLocaleLowerCase("ja-JP")
+const norm=(value:string|undefined)=>(value??"").normalize("NFKC").replace(/[\s　]+/g,"").toLocaleLowerCase("ja-JP")
 const obj=(value:unknown):Record<string,unknown>=>value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{}
 const str=(value:unknown)=>typeof value==="string"?value:""
 const bool=(value:unknown)=>value===true
@@ -57,7 +57,22 @@ export async function reorderEntries(competitionId:string,entryIds:string[],acce
   if(rows.length!==1||!rows[0]?.id)throw new Error("出番順の保存に失敗しました: 競技IDを一意に特定できません")
   dbCompetitionId=rows[0].id
  }
- const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/reorder_entries`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({p_competition_id:dbCompetitionId,p_entry_ids:entryIds})});if(!response.ok){let detail="";try{const body=await response.json() as {message?:string};detail=body.message?`: ${body.message}`:""}catch{}throw new Error(`出番順の保存に失敗しました (${response.status})${detail}`)}}
+ // Resolve the authoritative active-entry set immediately before saving. This avoids
+ // sending a stale/incomplete client list when some DB rows could not be mapped to seed data.
+ const current=await fetch(`${SUPABASE_URL}/rest/v1/entries?competition_id=eq.${dbCompetitionId}&select=id,status,start_order&order=start_order.asc`,{headers,cache:"no-store"})
+ if(!current.ok)throw new Error(`出番順の保存に失敗しました: 最新出番表取得エラー (${current.status})`)
+ const rows=await current.json() as {id:string;status:string|null;start_order:number}[]
+ const activeRows=rows.filter(row=>!["WD","withdrawn"].includes(row.status??"active"))
+ const activeIds=new Set(activeRows.map(row=>row.id))
+ const requested=entryIds.filter(id=>activeIds.has(id))
+ // Keep any authoritative active rows that the current screen could not resolve, preserving
+ // their relative order. The RPC still receives every active entry exactly once.
+ const requestedSet=new Set(requested)
+ const missing=activeRows.map(row=>row.id).filter(id=>!requestedSet.has(id))
+ const canonical=[...requested,...missing]
+ if(canonical.length!==activeRows.length||new Set(canonical).size!==activeRows.length)throw new Error("出番順の保存に失敗しました: 出番表IDの整合性を確認できません")
+ const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/reorder_entries`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({p_competition_id:dbCompetitionId,p_entry_ids:canonical})});if(!response.ok){let detail="";try{const body=await response.json() as {message?:string};detail=body.message?`: ${body.message}`:""}catch{}throw new Error(`出番順の保存に失敗しました (${response.status})${detail}`)}
+}
 export async function markReceptionRequestReflected(request:AppRequest):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?id=eq.${request.id}&event_id=eq.${AUTUMN_EVENT_ID}`,{method:"PATCH",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify({status:"reflected",reflected_at:new Date().toISOString(),payload:{...enrichedPayload(request),status:"reflected"}})});if(!response.ok)throw new Error(`受付反映状態の保存失敗: ${response.status}`)}
 export async function loadAutumnEntryRows():Promise<EntryRow[]>{const select="entry_id,competition_id,competition_no,start_order,status,rider_id,rider_name,horse_id,horse_name,organization_name";const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_entries?event_id=eq.${AUTUMN_EVENT_ID}&select=${select}&order=competition_no.asc,start_order.asc`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`出番表データ取得失敗: ${response.status}`);return response.json() as Promise<EntryRow[]>}
 export function reconcileAutumnEntries(rows:EntryRow[],entries:StartEntry[],competitions:Competition[],players:Player[],horses:Horse[]):EntryMatch[]{return rows.map(row=>{const competition=competitions.find(c=>c.number===Number(row.competition_no));if(!competition)return{row,local:null,reason:"not_found"};const candidates=entries.filter(e=>e.competitionId===competition.id&&e.order===row.start_order&&norm(players.find(p=>p.id===e.playerId)?.name)===norm(row.rider_name)&&norm(horses.find(h=>h.id===e.horseId)?.name)===norm(row.horse_name));if(candidates.length===1)return{row,local:candidates[0],reason:"matched"};if(candidates.length>1)return{row,local:null,reason:"ambiguous"};return{row,local:null,reason:"not_found"}})}
