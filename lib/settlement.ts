@@ -43,7 +43,6 @@ export function calcSettlement(params: {
   const compFee = (id: string) => competitions.find((c) => c.id === id)?.entryFee ?? 0
 
   return organizations.map((org) => {
-    // 通常エントリー料金：初期登録の出番から算出
     const normalEntry = seedEntries
       .filter((e) => horseOrg(e.horseId) === org.id)
       .reduce((sum, e) => sum + compFee(e.competitionId), 0)
@@ -54,7 +53,28 @@ export function calcSettlement(params: {
 
     for (const req of requests) {
       if (req.orgId !== org.id || req.status !== "reflected") continue
-      // 本部が出番表へ反映した申請だけを確定精算へ含める。
+
+      const brokenDownTotal = req.fee.addBase + req.fee.addEntry + req.fee.changeBase + req.fee.competitionDiff
+
+      // DBから再読込した過去申請は total だけ保持され、内訳が0になる場合がある。
+      // 追加申請は total 全額を追加料金として扱うことで、DB上の確定料金を精算へ確実に反映する。
+      if (req.type === "add") {
+        additional += brokenDownTotal !== 0 ? req.fee.addBase + req.fee.addEntry : req.fee.total
+        continue
+      }
+
+      if (req.type === "change") {
+        if (req.change?.treatedAsWithdrawAdd) {
+          additional += brokenDownTotal !== 0 ? req.fee.addBase + req.fee.addEntry : req.fee.total
+        } else if (brokenDownTotal !== 0) {
+          change += req.fee.changeBase
+          competitionDiff += req.fee.competitionDiff
+        } else {
+          change += req.fee.total
+        }
+        continue
+      }
+
       additional += req.fee.addBase + req.fee.addEntry
       change += req.fee.changeBase
       competitionDiff += req.fee.competitionDiff
