@@ -24,8 +24,6 @@ export function SettlementPanel() {
       return entryExists(request.withdraw.entryId) && competitions.some((c) => c.id === request.withdraw!.competitionId) && horses.some((h) => h.id === request.withdraw!.horseId)
     }
     if (request.change) {
-      // 精算は確定済みの申請料金を基準にする。正式DB反映後に選手IDのローカル変換が
-      // できない場合でも、entry・競技・馬・団体が確認できれば変更料金を除外しない。
       return entryExists(request.change.entryId) && competitions.some((c) => c.id === request.change!.fromCompetitionId) && competitions.some((c) => c.id === request.change!.toCompetitionId) && horses.some((h) => h.id === request.change!.fromHorseId) && horses.some((h) => h.id === request.change!.toHorseId)
     }
     return false
@@ -39,6 +37,18 @@ export function SettlementPanel() {
   const playerName = (id: string) => players.find((p) => p.id === id)?.name ?? "選手不明"
   const horseName = (id: string) => horses.find((h) => h.id === id)?.name ?? "馬匹不明"
   const competition = (id: string) => competitions.find((c) => c.id === id)
+  const requestRiderName = (request: AppRequest) => {
+    const riderId = request.add?.playerId ?? request.change?.toPlayerId ?? request.withdraw?.playerId ?? ""
+    const direct = players.find((p) => p.id === riderId)?.name
+    if (direct) return direct
+    if (request.change) {
+      const reflectedEntry = startEntries.find((entry) => entry.id === request.change!.entryId)
+        ?? startEntries.find((entry) => entry.competitionId === request.change!.toCompetitionId && entry.horseId === request.change!.toHorseId)
+      const reflectedPlayer = reflectedEntry ? players.find((p) => p.id === reflectedEntry.playerId)?.name : undefined
+      if (reflectedPlayer) return reflectedPlayer
+    }
+    return "選手不明"
+  }
 
   if (selected) {
     const normalDetails = originalEntries.filter((entry) => horses.find((h) => h.id === entry.horseId)?.orgId === selected.orgId).map((entry) => ({ id: entry.id, rider: playerName(entry.playerId), horse: horseName(entry.horseId), competition: competition(entry.competitionId) }))
@@ -55,7 +65,7 @@ export function SettlementPanel() {
       <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
         <h4 className="text-2xl font-bold">料金明細</h4><p className="mt-1 text-sm font-semibold text-muted-foreground">選手・馬・競技ごとに、合計金額の根拠を確認できます。</p>
         <div className="mt-5"><h5 className="mb-3 text-lg font-bold">通常エントリー</h5><div className="overflow-hidden rounded-xl border border-border">{normalDetails.map((detail,index)=><div key={detail.id} className={`p-4 ${index?"border-t border-border":""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-bold">{detail.rider} ／ {detail.horse}</p><p className="mt-1 text-sm font-semibold text-muted-foreground">競技{detail.competition?.number??"?"} {detail.competition?.name??"競技不明"}</p></div><span className="shrink-0 text-lg font-bold">{formatYen(detail.competition?.entryFee??0)}</span></div></div>)}</div></div>
-        {requestDetails.length>0&&<div className="mt-6"><h5 className="mb-3 text-lg font-bold">受付反映分</h5><div className="overflow-hidden rounded-xl border border-border">{requestDetails.map((request,index)=>{const riderId=request.add?.playerId??request.change?.toPlayerId??request.withdraw?.playerId??"";const horseId=request.add?.horseId??request.change?.toHorseId??request.withdraw?.horseId??"";const competitionId=request.add?.competitionId??request.change?.toCompetitionId??request.withdraw?.competitionId??"";const comp=competition(competitionId);const label=request.type==="add"?"追加":request.type==="change"?"変更":"棄権";return <div key={request.id} className={`p-4 ${index?"border-t border-border":""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-bold"><span className="mr-2 rounded-md bg-primary/10 px-2 py-1 text-sm text-primary">{label}</span>{playerName(riderId)} ／ {horseName(horseId)}</p><p className="mt-2 text-sm font-semibold text-muted-foreground">競技{comp?.number??"?"} {comp?.name??"競技不明"}</p>{request.type==="add"&&<p className="mt-1 text-xs text-muted-foreground">追加手数料 {formatYen(request.fee.addBase)} ＋ 競技料金 {formatYen(request.fee.addEntry)}</p>}{request.type==="change"&&<p className="mt-1 text-xs text-muted-foreground">変更手数料 {formatYen(request.fee.changeBase)} ＋ 競技差額 {formatYen(request.fee.competitionDiff)}</p>}{request.type==="withdraw"&&<p className="mt-1 text-xs text-muted-foreground">棄権申請 0円（元エントリー料金は返金なし）</p>}</div><span className="shrink-0 text-lg font-bold">{formatYen(request.type==="withdraw"?0:request.fee.total)}</span></div></div>})}</div></div>}
+        {requestDetails.length>0&&<div className="mt-6"><h5 className="mb-3 text-lg font-bold">受付反映分</h5><div className="overflow-hidden rounded-xl border border-border">{requestDetails.map((request,index)=>{const horseId=request.add?.horseId??request.change?.toHorseId??request.withdraw?.horseId??"";const competitionId=request.add?.competitionId??request.change?.toCompetitionId??request.withdraw?.competitionId??"";const comp=competition(competitionId);const label=request.type==="add"?"追加":request.type==="change"?"変更":"棄権";return <div key={request.id} className={`p-4 ${index?"border-t border-border":""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-bold"><span className="mr-2 rounded-md bg-primary/10 px-2 py-1 text-sm text-primary">{label}</span>{requestRiderName(request)} ／ {horseName(horseId)}</p><p className="mt-2 text-sm font-semibold text-muted-foreground">競技{comp?.number??"?"} {comp?.name??"競技不明"}</p>{request.type==="add"&&<p className="mt-1 text-xs text-muted-foreground">追加手数料 {formatYen(request.fee.addBase)} ＋ 競技料金 {formatYen(request.fee.addEntry)}</p>}{request.type==="change"&&<p className="mt-1 text-xs text-muted-foreground">変更手数料 {formatYen(request.fee.changeBase)} ＋ 競技差額 {formatYen(request.fee.competitionDiff)}</p>}{request.type==="withdraw"&&<p className="mt-1 text-xs text-muted-foreground">棄権申請 0円（元エントリー料金は返金なし）</p>}</div><span className="shrink-0 text-lg font-bold">{formatYen(request.type==="withdraw"?0:request.fee.total)}</span></div></div>})}</div></div>}
       </div>
     </div>
   }
