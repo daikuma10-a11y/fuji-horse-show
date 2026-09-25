@@ -10,13 +10,13 @@ import type {
 export interface OrgSettlement {
   orgId: string
   orgName: string
-  /** 現在の正式出番表に載っているエントリー料金 */
+  /** 大会申込時の通常エントリー料金。棄権しても返金しない */
   normalEntry: number
-  /** 追加申請の手数料部分 */
+  /** 追加申請料金（追加手数料＋追加先競技料金） */
   additional: number
-  /** 変更料金 */
+  /** 変更手数料 */
   change: number
-  /** 競技変更による差額（現在の出番表料金に含まれるため通常は0） */
+  /** 高い競技へ変更した場合の差額 */
   competitionDiff: number
   total: number
   paid: number
@@ -38,10 +38,10 @@ export function calcSettlement(params: {
   const compFee = (id: string) => competitions.find((c) => c.id === id)?.entryFee ?? 0
 
   return organizations.map((org) => {
-    // 正式出番表の現在状態から競技エントリー料金を算出する。
-    // 棄権は0円扱いなので除外し、追加された出番の競技料金もここに含める。
+    // seedEntries は大会申込時の元エントリーを渡す。
+    // 棄権は申込済み競技料金を返金せず、棄権申請自体の手数料が0円という扱い。
     const normalEntry = seedEntries
-      .filter((e) => !e.withdrawn && horseOrg(e.horseId) === org.id)
+      .filter((e) => horseOrg(e.horseId) === org.id)
       .reduce((sum, e) => sum + compFee(e.competitionId), 0)
 
     let additional = 0
@@ -52,23 +52,22 @@ export function calcSettlement(params: {
       if (req.orgId !== org.id || req.status !== "reflected") continue
       const brokenDownTotal = req.fee.addBase + req.fee.addEntry + req.fee.changeBase + req.fee.competitionDiff
 
-      if (req.type === "add") {
-        // 競技エントリー料は normalEntry に既に含まれるので、追加手数料だけ加算する。
-        // 古いDB行で内訳が無い場合は、保存総額から現在の対象競技料金を引いて手数料を復元する。
-        const entryFee = req.add ? compFee(req.add.competitionId) : 0
-        additional += brokenDownTotal !== 0 ? req.fee.addBase : Math.max(0, req.fee.total - entryFee)
+      if (req.type === "add" || (req.type === "change" && req.change?.treatedAsWithdrawAdd)) {
+        // 追加は3,000円＋追加先競技のエントリー料金。DBに内訳が残っていればそのまま使う。
+        additional += brokenDownTotal !== 0 ? req.fee.addBase + req.fee.addEntry : req.fee.total
         continue
       }
 
       if (req.type === "change") {
-        if (req.change?.treatedAsWithdrawAdd) {
-          const entryFee = compFee(req.change.toCompetitionId)
-          additional += brokenDownTotal !== 0 ? req.fee.addBase : Math.max(0, req.fee.total - entryFee)
+        if (brokenDownTotal !== 0) {
+          change += req.fee.changeBase
+          competitionDiff += req.fee.competitionDiff
         } else {
-          // 現在の競技料金は normalEntry に反映済みなので、変更手数料のみ加算する。
-          change += brokenDownTotal !== 0 ? req.fee.changeBase : req.fee.total
+          // 古いDB行で内訳が無い場合は保存済み総額を変更料金として保持する。
+          change += req.fee.total
         }
       }
+      // withdraw は0円。元の通常エントリー料金は normalEntry に残す。
     }
 
     const total = normalEntry + additional + change + competitionDiff
