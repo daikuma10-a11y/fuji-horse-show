@@ -17,11 +17,12 @@ export function SettlementPanel() {
       <button type="button" onClick={() => setSelectedOrgId(null)} className="w-fit rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button>
       <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
         <h3 className="text-3xl font-bold text-foreground">{selected.orgName}</h3>
+        <p className="mt-2 text-base font-semibold text-muted-foreground">棄権した出番は0円として現在の出番表から計算しています。</p>
         <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
-          <Cell label="現在のエントリー料金" value={formatYen(selected.normalEntry)} />
-          <Cell label="追加手数料" value={formatYen(selected.additional)} />
-          <Cell label="変更手数料" value={formatYen(selected.change)} />
-          <Cell label="競技変更の差額" value={formatYen(selected.competitionDiff)} />
+          <Cell label="現在の競技エントリー料金" value={formatYen(selected.normalEntry)} />
+          <Cell label="追加申請手数料" value={formatYen(selected.additional)} />
+          <Cell label="変更申請手数料" value={formatYen(selected.change)} />
+          <Cell label="その他差額" value={formatYen(selected.competitionDiff)} />
         </dl>
         <div className="mt-6 border-t-2 border-border pt-5"><p className="text-lg font-semibold text-muted-foreground">現在の合計金額</p><p className="mt-1 text-4xl font-bold text-primary">{formatYen(selected.total)}</p></div>
       </div>
@@ -31,7 +32,7 @@ export function SettlementPanel() {
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5">
-        <p className="text-lg font-semibold">団体を選ぶと現在のエントリー料金と申請手数料の内訳を確認できます。</p>
+        <p className="text-lg font-semibold">団体を選ぶと、現在の正式出番表を基準にした精算内訳を確認できます。</p>
         <div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 合計</span><span className="text-3xl font-bold text-primary">{formatYen(grandTotal)}</span></div>
       </div>
       <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">
