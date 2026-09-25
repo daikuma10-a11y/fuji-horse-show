@@ -5,11 +5,44 @@ import { useStore } from "@/lib/store"
 import { calcSettlement } from "@/lib/settlement"
 import { formatYen } from "@/lib/fees"
 import { startEntries as originalEntries } from "@/lib/mock-data"
+import type { AppRequest } from "@/lib/types"
 
 export function SettlementPanel() {
   const { organizations, players, horses, competitions, requests } = useStore()
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
-  const rows = calcSettlement({ organizations, seedEntries: originalEntries, horses, competitions, requests, payments: [] })
+
+  // 精算には、現在の大会データへ安全に紐付けできる反映済み申請だけを使う。
+  // 旧テスト時代のIDだけが残るレコードは履歴としてDBに残し、金額集計には混ぜない。
+  const isResolvableRequest = (request: AppRequest) => {
+    if (request.status !== "reflected") return false
+    const orgExists = organizations.some((org) => org.id === request.orgId)
+    if (!orgExists) return false
+    if (request.add) {
+      return competitions.some((c) => c.id === request.add!.competitionId) &&
+        players.some((p) => p.id === request.add!.playerId) &&
+        horses.some((h) => h.id === request.add!.horseId)
+    }
+    if (request.withdraw) {
+      return originalEntries.some((e) => e.id === request.withdraw!.entryId) &&
+        competitions.some((c) => c.id === request.withdraw!.competitionId) &&
+        players.some((p) => p.id === request.withdraw!.playerId) &&
+        horses.some((h) => h.id === request.withdraw!.horseId)
+    }
+    if (request.change) {
+      return originalEntries.some((e) => e.id === request.change!.entryId) &&
+        competitions.some((c) => c.id === request.change!.fromCompetitionId) &&
+        competitions.some((c) => c.id === request.change!.toCompetitionId) &&
+        players.some((p) => p.id === request.change!.fromPlayerId) &&
+        players.some((p) => p.id === request.change!.toPlayerId) &&
+        horses.some((h) => h.id === request.change!.fromHorseId) &&
+        horses.some((h) => h.id === request.change!.toHorseId)
+    }
+    return false
+  }
+
+  const settlementRequests = requests.filter(isResolvableRequest)
+  const excludedLegacyCount = requests.filter((request) => request.status === "reflected" && !isResolvableRequest(request)).length
+  const rows = calcSettlement({ organizations, seedEntries: originalEntries, horses, competitions, requests: settlementRequests, payments: [] })
   const grandTotal = rows.reduce((sum, row) => sum + row.total, 0)
   const selected = rows.find((row) => row.orgId === selectedOrgId)
   const playerName = (id: string) => players.find((p) => p.id === id)?.name ?? "選手不明"
@@ -25,7 +58,7 @@ export function SettlementPanel() {
         horse: horseName(entry.horseId),
         competition: competition(entry.competitionId),
       }))
-    const requestDetails = requests.filter((request) => request.orgId === selected.orgId && request.status === "reflected")
+    const requestDetails = settlementRequests.filter((request) => request.orgId === selected.orgId)
 
     return (
       <div className="flex flex-col gap-5">
@@ -53,7 +86,6 @@ export function SettlementPanel() {
           </div>
 
           {requestDetails.length > 0 && <div className="mt-6"><h5 className="mb-3 text-lg font-bold">受付反映分</h5><div className="overflow-hidden rounded-xl border border-border">{requestDetails.map((request, index) => {
-            const payload = request.add ?? request.change ?? request.withdraw
             const riderId = request.add?.playerId ?? request.change?.toPlayerId ?? request.withdraw?.playerId ?? ""
             const horseId = request.add?.horseId ?? request.change?.toHorseId ?? request.withdraw?.horseId ?? ""
             const competitionId = request.add?.competitionId ?? request.change?.toCompetitionId ?? request.withdraw?.competitionId ?? ""
@@ -70,6 +102,7 @@ export function SettlementPanel() {
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5">
         <p className="text-lg font-semibold">団体を選ぶと、通常エントリー料金と反映済みの追加・変更料金を確認できます。</p>
+        {excludedLegacyCount > 0 && <p className="mt-2 text-sm font-semibold text-muted-foreground">旧テストデータ {excludedLegacyCount}件は正式データへ紐付けできないため、精算金額から除外しています。</p>}
         <div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 合計</span><span className="text-3xl font-bold text-primary">{formatYen(grandTotal)}</span></div>
       </div>
       <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">
