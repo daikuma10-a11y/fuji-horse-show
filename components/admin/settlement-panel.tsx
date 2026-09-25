@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useStore } from "@/lib/store"
 import { calcSettlement } from "@/lib/settlement"
 import { formatYen } from "@/lib/fees"
@@ -7,51 +8,38 @@ import { startEntries as seedEntries } from "@/lib/mock-data"
 
 export function SettlementPanel() {
   const { organizations, horses, competitions, requests } = useStore()
-
-  const rows = calcSettlement({
-    organizations,
-    seedEntries,
-    horses,
-    competitions,
-    requests,
-    payments: [],
-  })
-
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
+  const rows = calcSettlement({ organizations, seedEntries, horses, competitions, requests, payments: [] })
   const grandTotal = rows.reduce((sum, row) => sum + row.total, 0)
+  const selected = rows.find((row) => row.orgId === selectedOrgId)
+
+  if (selected) return (
+    <div className="flex flex-col gap-5">
+      <button type="button" onClick={() => setSelectedOrgId(null)} className="w-fit rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button>
+      <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
+        <h3 className="text-3xl font-bold text-foreground">{selected.orgName}</h3>
+        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
+          <Cell label="通常エントリー料金" value={formatYen(selected.normalEntry)} />
+          <Cell label="追加料金" value={formatYen(selected.additional)} />
+          <Cell label="変更料金" value={formatYen(selected.change)} />
+          <Cell label="競技変更の差額" value={formatYen(selected.competitionDiff)} />
+        </dl>
+        <div className="mt-6 border-t-2 border-border pt-5"><p className="text-lg font-semibold text-muted-foreground">現在の合計金額</p><p className="mt-1 text-4xl font-bold text-primary">{formatYen(selected.total)}</p></div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5">
-        <p className="text-lg font-semibold text-muted-foreground">現在のエントリー・反映済み受付をもとにした請求予定額です。</p>
-        <p className="mt-2 text-base text-muted-foreground">事前振込額の差引計算は後から追加します。現在はエントリー料金の合計確認を優先しています。</p>
+        <p className="text-lg font-semibold">団体を選ぶと料金の内訳を確認できます。</p>
+        <div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 合計</span><span className="text-3xl font-bold text-primary">{formatYen(grandTotal)}</span></div>
       </div>
-
-      {rows.map((r) => (
-        <div key={r.orgId} className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
-          <h3 className="text-2xl font-bold text-foreground">{r.orgName}</h3>
-          <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-            <Cell label="通常エントリー料金" value={formatYen(r.normalEntry)} />
-            <Cell label="追加料金" value={formatYen(r.additional)} />
-            <Cell label="変更料金" value={formatYen(r.change)} />
-            <Cell label="競技変更の差額" value={formatYen(r.competitionDiff)} />
-            <Cell label="現在の合計金額" value={formatYen(r.total)} strong />
-          </dl>
-        </div>
-      ))}
-
-      <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5">
-        <h3 className="text-2xl font-bold text-foreground">全団体 合計</h3>
-        <p className="mt-3 text-4xl font-bold text-primary">{formatYen(grandTotal)}</p>
+      <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">
+        {rows.map((row, index) => <button key={row.orgId} type="button" onClick={() => setSelectedOrgId(row.orgId)} className={`flex w-full items-center justify-between gap-4 px-5 py-5 text-left ${index ? "border-t border-border" : ""}`}><span className="min-w-0 text-xl font-bold text-foreground">{row.orgName}</span><span className="flex shrink-0 items-center gap-3"><span className="text-xl font-bold text-primary">{formatYen(row.total)}</span><span className="text-2xl text-muted-foreground">›</span></span></button>)}
       </div>
     </div>
   )
 }
 
-function Cell({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div>
-      <dt className="text-base font-semibold text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 font-bold ${strong ? "text-3xl text-primary" : "text-2xl text-foreground"}`}>{value}</dd>
-    </div>
-  )
-}
+function Cell({ label, value }: { label: string; value: string }) { return <div><dt className="text-base font-semibold text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-bold text-foreground">{value}</dd></div> }
