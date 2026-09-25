@@ -8,4 +8,5 @@ const nextConfig = {
   },
 }
 
+// Redeploy marker: verified start-order fix
 export default nextConfig
