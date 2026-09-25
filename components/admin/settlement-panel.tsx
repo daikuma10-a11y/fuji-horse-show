@@ -11,9 +11,10 @@ export function SettlementPanel() {
   const { organizations, players, horses, competitions, startEntries, requests } = useStore()
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
 
-  // 正式DB反映後は entryId がUUIDになるため、現在の正式出番表も照合対象にする。
-  // 旧テスト時代の解決不能なIDだけを精算から除外する。
-  const entryExists = (id: string) => startEntries.some((e) => e.id === id) || originalEntries.some((e) => e.id === id)
+  // 正式DB反映後の entryId はUUID。正式出番表のローカル解決に失敗した行でも、
+  // 反映済み受付履歴に保存されたUUIDなら精算対象として扱う。
+  const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+  const entryExists = (id: string) => startEntries.some((e) => e.id === id) || originalEntries.some((e) => e.id === id) || isUuid(id)
   const isResolvableRequest = (request: AppRequest) => {
     if (request.status !== "reflected") return false
     const orgExists = organizations.some((org) => org.id === request.orgId)
