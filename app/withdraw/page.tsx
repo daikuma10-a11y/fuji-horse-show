@@ -6,7 +6,6 @@ import { StepShell } from "@/components/step-shell"
 import { DateSelect } from "@/components/date-select"
 import { CompetitionList } from "@/components/competition-list"
 import { StartList } from "@/components/start-list"
-import { EntryOrganizationPicker } from "@/components/organization-picker"
 import { ActionButton } from "@/components/action-button"
 import { SummaryCard, SummaryRow, CompletionScreen } from "@/components/summary"
 import { useStore } from "@/lib/store"
@@ -16,15 +15,14 @@ type Step = "date" | "competition" | "entry" | "confirm" | "done"
 
 export default function WithdrawPage() {
   const { getPlayer, getHorse, getOrg, submitWithdraw } = useStore()
-  const [step,setStep]=useState<Step>("date"); const [date,setDate]=useState<CompetitionDate|null>(null); const [competition,setCompetition]=useState<Competition|null>(null); const [entry,setEntry]=useState<StartEntry|null>(null); const [entryOrgId,setEntryOrgId]=useState<string|null>(null)
+  const [step,setStep]=useState<Step>("date"); const [date,setDate]=useState<CompetitionDate|null>(null); const [competition,setCompetition]=useState<Competition|null>(null); const [entry,setEntry]=useState<StartEntry|null>(null)
   const subtitle="棄権のお申し込み"
   if(step==="done")return <CompletionScreen subtitle={subtitle} message="棄権の受付が完了しました。" />
-  if(step==="date")return <StepShell subtitle={subtitle} title="大会日を選んでください" onBack={()=>history.back()} backLabel="やめる"><DateSelect onSelect={d=>{setDate(d);setCompetition(null);setEntry(null);setEntryOrgId(null);setStep("competition")}}/></StepShell>
-  if(step==="competition"&&date)return <StepShell subtitle={subtitle} title="競技を選んでください" description="棄権する競技を選びます" onBack={()=>setStep("date")}><CompetitionList date={date} onSelect={c=>{setCompetition(c);setEntry(null);setEntryOrgId(null);setStep("entry")}}/></StepShell>
-  if(step==="entry"&&competition&&!entryOrgId)return <StepShell subtitle={subtitle} title="団体を選んでください" description={`競技 ${competition.number}：${competition.name}`} onBack={()=>setStep("competition")}><EntryOrganizationPicker competitionId={competition.id} onSelect={setEntryOrgId}/></StepShell>
-  if(step==="entry"&&competition)return <StepShell subtitle={subtitle} title="棄権する選手・馬を選んでください" description={`競技 ${competition.number}：${competition.name}`} onBack={()=>{setEntry(null);setEntryOrgId(null)}} footer={<ActionButton variant="danger" disabled={!entry} onClick={()=>setStep("confirm")}>確認画面へすすむ</ActionButton>}>
+  if(step==="date")return <StepShell subtitle={subtitle} title="大会日を選んでください" onBack={()=>history.back()} backLabel="やめる"><DateSelect onSelect={d=>{setDate(d);setCompetition(null);setEntry(null);setStep("competition")}}/></StepShell>
+  if(step==="competition"&&date)return <StepShell subtitle={subtitle} title="競技を選んでください" description="棄権する競技を選びます" onBack={()=>setStep("date")}><CompetitionList date={date} onSelect={c=>{setCompetition(c);setEntry(null);setStep("entry")}}/></StepShell>
+  if(step==="entry"&&competition)return <StepShell subtitle={subtitle} title="出番表から棄権する選手・馬を選んでください" description={`競技 ${competition.number}：${competition.name}`} onBack={()=>{setEntry(null);setStep("competition")}} footer={<ActionButton variant="danger" disabled={!entry} onClick={()=>setStep("confirm")}>確認画面へすすむ</ActionButton>}>
     {entry&&<button type="button" onClick={()=>setEntry(null)} className="mb-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-border bg-card px-4 text-xl font-bold text-foreground"><RotateCcw className="size-6"/>選択を解除して選び直す</button>}
-    <StartList competitionId={competition.id} organizationId={entryOrgId??undefined} hideWithdrawn selectedId={entry?.id} onSelect={e=>setEntry(current=>current?.id===e.id?null:e)}/>
+    <StartList competitionId={competition.id} hideWithdrawn selectedId={entry?.id} onSelect={e=>setEntry(current=>current?.id===e.id?null:e)}/>
   </StepShell>
   if(step==="confirm"&&competition&&entry){const player=getPlayer(entry.playerId),horse=getHorse(entry.horseId),org=entry.organizationId?getOrg(entry.organizationId):horse?getOrg(horse.orgId):undefined;return <StepShell subtitle={subtitle} title="この内容で棄権します" description="よろしければ「棄権を確定する」を押してください" onBack={()=>setStep("entry")} footer={<ActionButton variant="danger" onClick={()=>{submitWithdraw({entryId:entry.id,competitionId:competition.id,playerId:entry.playerId,horseId:entry.horseId,organizationId:entry.organizationId});setStep("done")}}>棄権を確定する</ActionButton>}>
     <button type="button" onClick={()=>{setEntry(null);setStep("entry")}} className="mb-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-border bg-card px-4 text-xl font-bold text-foreground"><RotateCcw className="size-6"/>人馬を選び直す</button>
