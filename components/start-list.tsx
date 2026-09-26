@@ -43,8 +43,8 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
     const timer = window.setInterval(() => {
       const point = pointer.current
       if (!point) return
-      if (point.y < 100) window.scrollBy(0, -18)
-      if (point.y > window.innerHeight - 100) window.scrollBy(0, 18)
+      if (point.y < 48) window.scrollBy(0, -6)
+      if (point.y > window.innerHeight - 48) window.scrollBy(0, 6)
       updateTarget(point.x, point.y)
     }, 70)
     return () => {
