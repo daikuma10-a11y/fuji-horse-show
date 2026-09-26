@@ -5,6 +5,7 @@ import { useStore } from "@/lib/store"
 import { calcSettlement } from "@/lib/settlement"
 import { formatYen } from "@/lib/fees"
 import { startEntries as originalEntries } from "@/lib/mock-data"
+import { players as sourcePlayers } from "@/lib/autumn-data"
 import type { AppRequest } from "@/lib/types"
 
 export function SettlementPanel() {
@@ -34,7 +35,15 @@ export function SettlementPanel() {
   const rows = calcSettlement({ organizations, seedEntries: originalEntries, horses, competitions, requests: settlementRequests, payments: [] })
   const grandTotal = rows.reduce((sum, row) => sum + row.total, 0)
   const selected = rows.find((row) => row.orgId === selectedOrgId)
-  const playerName = (id: string) => players.find((p) => p.id === id)?.name ?? "選手不明"
+  const playerName = (id: string) => {
+    const direct = players.find((p) => p.id === id)?.name
+    if (direct) return direct
+    const source = sourcePlayers.find((p) => p.id === id)
+    if (!source) return "選手不明"
+    const normalize = (name: string) => name.normalize("NFKC").replace(/[\s　]+/g, "").toLocaleLowerCase("ja-JP")
+    const canonical = players.filter((p) => p.orgId === source.orgId && normalize(p.name) === normalize(source.name))
+    return canonical.length === 1 ? source.name : "選手不明"
+  }
   const horseName = (id: string) => horses.find((h) => h.id === id)?.name ?? "馬匹不明"
   const competition = (id: string) => competitions.find((c) => c.id === id)
   const requestRiderName = (request: AppRequest) => {
