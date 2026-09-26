@@ -52,7 +52,7 @@ export interface StartEntry {
 }
 
 export type RequestType = "add" | "change" | "withdraw"
-export type RequestStatus = "pending" | "reflected"
+export type RequestStatus = "pending" | "reflected" | "cancelled"
 
 export interface AddPayload {
   competitionId: string
@@ -89,6 +89,7 @@ export interface AppRequest {
   id: string
   /** DB entry linked by the reflected request; absent before reflection. */
   officialEntryId?: string
+  cancelledSeedEntryId?: string
   type: RequestType
   status: RequestStatus
   createdAt: string
