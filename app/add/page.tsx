@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { ChevronRight, Info, RotateCcw } from "lucide-react"
 import { StepShell } from "@/components/step-shell"
 import { DateSelect } from "@/components/date-select"
@@ -8,25 +9,23 @@ import { CompetitionList } from "@/components/competition-list"
 import { PlayerPicker, HorsePicker } from "@/components/entity-picker"
 import { OrganizationChoice, canonicalOrgId } from "@/components/organization-choice"
 import { ActionButton } from "@/components/action-button"
-import { SummaryCard, SummaryRow, CompletionScreen } from "@/components/summary"
+import { SummaryCard, SummaryRow } from "@/components/summary"
 import { OfficialBadge } from "@/components/official-badge"
 import { useStore } from "@/lib/store"
 import { calcAddFee, formatYen } from "@/lib/fees"
 import type { Competition, CompetitionDate } from "@/lib/types"
 
-type Step="date"|"competition"|"input"|"confirm"|"done"; type Picker=null|"player"|"horse"
+type Step="date"|"competition"|"input"|"confirm"; type Picker=null|"player"|"horse"
 export default function AddPage(){
  const [submitting,setSubmitting]=useState(false),[submitError,setSubmitError]=useState("");
- const {getPlayer,getHorse,getOrg,submitAdd}=useStore(); const [step,setStep]=useState<Step>("date"),[date,setDate]=useState<CompetitionDate|null>(null),[competition,setCompetition]=useState<Competition|null>(null),[playerId,setPlayerId]=useState(""),[horseId,setHorseId]=useState(""),[note,setNote]=useState(""),[orgChoiceId,setOrgChoiceId]=useState(""),[picker,setPicker]=useState<Picker>(null); const subtitle="追加のお申し込み"; const player=getPlayer(playerId),horse=getHorse(horseId),playerOrg=player?getOrg(canonicalOrgId(player.orgId)):undefined,horseOrg=horse?getOrg(canonicalOrgId(horse.orgId)):undefined,crossClub=!!playerOrg&&!!horseOrg&&playerOrg.id!==horseOrg.id,selectedOrgId=crossClub?(orgChoiceId===playerOrg?.id||orgChoiceId===horseOrg?.id?orgChoiceId:""):horseOrg?.id??"",org=getOrg(selectedOrgId),fee=competition?calcAddFee(competition):null
+ const router=useRouter(); const {getPlayer,getHorse,getOrg,stageAdd}=useStore(); const [step,setStep]=useState<Step>("date"),[date,setDate]=useState<CompetitionDate|null>(null),[competition,setCompetition]=useState<Competition|null>(null),[playerId,setPlayerId]=useState(""),[horseId,setHorseId]=useState(""),[note,setNote]=useState(""),[orgChoiceId,setOrgChoiceId]=useState(""),[picker,setPicker]=useState<Picker>(null); const subtitle="追加のお申し込み"; const player=getPlayer(playerId),horse=getHorse(horseId),playerOrg=player?getOrg(canonicalOrgId(player.orgId)):undefined,horseOrg=horse?getOrg(canonicalOrgId(horse.orgId)):undefined,crossClub=!!playerOrg&&!!horseOrg&&playerOrg.id!==horseOrg.id,selectedOrgId=crossClub?(orgChoiceId===playerOrg?.id||orgChoiceId===horseOrg?.id?orgChoiceId:""):horseOrg?.id??"",org=getOrg(selectedOrgId),fee=competition?calcAddFee(competition):null
  async function confirmAdd(){
   if(submitting||!competition)return
   setSubmitting(true);setSubmitError("")
-  try {await submitAdd({competitionId:competition.id,playerId,horseId,organizationId:crossClub?selectedOrgId:undefined,note});setStep("done")}
-  catch(error){setSubmitError(error instanceof Error?error.message:"受付データを保存できませんでした")}
+  try {stageAdd({competitionId:competition.id,playerId,horseId,organizationId:crossClub?selectedOrgId:undefined,note});router.push("/reception-review")}
+  catch(error){setSubmitError(error instanceof Error?error.message:"受付一覧に追加できませんでした")}
   finally{setSubmitting(false)}
  }
- function continueAdd(){setDate(null);setCompetition(null);setPlayerId("");setHorseId("");setOrgChoiceId("");setNote("");setPicker(null);setSubmitError("");setStep("date")}
- if(step==="done")return <CompletionScreen subtitle={subtitle} message="追加エントリーの受付が完了しました。" currentType="add" onContinue={continueAdd}/>
  if(step==="date")return <StepShell subtitle={subtitle} title="大会日を選んでください" onBack={()=>history.back()} backLabel="やめる"><DateSelect onSelect={d=>{setDate(d);setStep("competition")}}/></StepShell>
  if(step==="competition"&&date)return <StepShell subtitle={subtitle} title="競技を選んでください" description="追加でエントリーする競技を選びます" onBack={()=>setStep("date")}><CompetitionList date={date} onSelect={c=>{setCompetition(c);setPlayerId("");setHorseId("");setOrgChoiceId("");setStep("input")}}/></StepShell>
  if(step==="input"&&competition&&picker==="player")return <StepShell subtitle={subtitle} title="選手を選んでください" onBack={()=>setPicker(null)}><PlayerPicker selectedId={playerId} onSelect={id=>{setPlayerId(id);setOrgChoiceId("");setPicker(null)}}/></StepShell>
@@ -38,7 +37,7 @@ export default function AddPage(){
   <div className="mt-6"><label htmlFor="note" className="mb-2 block text-2xl font-bold">要望（任意）</label><p className="mb-3 text-lg text-muted-foreground">例：「○番の選手の前に入れてほしい」「別競技にも出場するため間隔を空けてほしい」</p><textarea id="note" value={note} onChange={e=>setNote(e.target.value)} rows={4} placeholder="ご要望があればご記入ください" className="w-full rounded-2xl border-2 border-border bg-card p-4 text-xl"/></div>
   <div className="mt-5 flex items-start gap-3 rounded-2xl border-2 border-primary/40 bg-primary/5 p-4 text-lg"><Info className="size-7 shrink-0 text-primary"/><span>{competition.official?<><strong>公認競技</strong>のため、原則として出番表の<strong>上側</strong>に追加します。</>:<><strong>非公認競技</strong>のため、原則として出番表の<strong>後ろ側</strong>に追加し、要望を考慮します。</>}</span></div>
  </StepShell>
- if(step==="confirm"&&competition&&player&&horse&&org&&fee)return <StepShell subtitle={subtitle} title="この内容で追加します" description="よろしければ「追加を確定する」を押してください" onBack={()=>setStep("input")} footer={<ActionButton disabled={submitting} onClick={()=>void confirmAdd()}>{submitting?"受付データを保存中…":"追加を確定する"}</ActionButton>}>
+ if(step==="confirm"&&competition&&player&&horse&&org&&fee)return <StepShell subtitle={subtitle} title="この内容で追加します" description="内容を確認して受付一覧に追加します。確定と保存は一覧画面で行います。" onBack={()=>setStep("input")} footer={<ActionButton disabled={submitting} onClick={()=>void confirmAdd()}>{submitting?"一覧に追加中…":"受付一覧に追加"}</ActionButton>}>
   {submitError&&<p role="alert" className="mb-4 rounded-xl bg-destructive/10 p-4 font-bold text-destructive">{submitError}</p>}
   <button type="button" onClick={()=>{setPlayerId("");setHorseId("");setOrgChoiceId("");setStep("input")}} className="mb-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-border bg-card px-4 text-xl font-bold"><RotateCcw className="size-6"/>人馬を選び直す</button>
   <SummaryCard tone="primary" title="追加する内容"><SummaryRow label="競技" value={<span className="inline-flex items-center gap-2">{`${competition.number}. ${competition.name}`}{competition.official&&<OfficialBadge/>}</span>}/><SummaryRow label="選手" value={player.name}/><SummaryRow label="馬" value={horse.name}/><SummaryRow label="所属団体" value={org?.name??"―"}/>{note.trim()&&<SummaryRow label="要望" value={<span className="text-xl">{note}</span>}/>}</SummaryCard><div className="mt-5"><SummaryCard title="料金"><SummaryRow label="追加基本料金" value={formatYen(fee.addBase)}/><SummaryRow label="エントリー料金" value={formatYen(fee.addEntry)}/><SummaryRow label="合計" value={<span className="text-primary">{formatYen(fee.total)}</span>}/></SummaryCard></div>
