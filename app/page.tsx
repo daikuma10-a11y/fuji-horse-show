@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { PlusCircle, RefreshCw, XCircle, ClipboardList } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
+import { ReceptionDraftLink } from "@/components/reception-draft-link"
 
 const actions = [
   {
@@ -54,6 +55,8 @@ export default function HomePage() {
             )
           })}
         </div>
+
+        <ReceptionDraftLink />
 
         <Link
           href="/admin"
