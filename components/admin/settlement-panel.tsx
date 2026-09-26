@@ -7,6 +7,7 @@ import { formatYen } from "@/lib/fees"
 import { startEntries as originalEntries } from "@/lib/mock-data"
 import { players as sourcePlayers } from "@/lib/autumn-data"
 import type { AppRequest } from "@/lib/types"
+import { compareOrganizations } from "@/lib/organization-order"
 
 // Autumn原本の同一団体として確認済みの別表記。精算表示だけ集約し、元の人馬IDは維持する。
 const confirmedOrgAliases: Record<string, string> = {
@@ -48,7 +49,10 @@ export function SettlementPanel() {
     competitions,
     requests: settlementRequests.map((request) => ({ ...request, orgId: settlementOrgId(request.orgId) })),
     payments: [],
-  })
+  }).sort((a, b) => compareOrganizations(
+    organizations.find(org => org.id === a.orgId) ?? { id: a.orgId, name: a.orgName },
+    organizations.find(org => org.id === b.orgId) ?? { id: b.orgId, name: b.orgName },
+  ))
   const grandTotal = rows.reduce((sum, row) => sum + row.total, 0)
   const selected = rows.find((row) => row.orgId === selectedOrgId)
   const playerName = (id: string) => {

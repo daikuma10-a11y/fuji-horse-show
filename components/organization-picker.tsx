@@ -2,9 +2,8 @@
 
 import { useStore } from "@/lib/store"
 import { canonicalOrgId } from "@/lib/organization-aliases"
-import type { Organization } from "@/lib/types"
+import { compareOrganizations } from "@/lib/organization-order"
 
-const compare = (a: Organization, b: Organization) => a.name.localeCompare(b.name, "ja", { sensitivity: "base", numeric: true })
 
 export function OrganizationPicker({ counts, onSelect, description }: {
   counts: Map<string, number>
@@ -12,7 +11,7 @@ export function OrganizationPicker({ counts, onSelect, description }: {
   description?: string
 }) {
   const { organizations } = useStore()
-  const groups = organizations.filter(org => canonicalOrgId(org.id) === org.id && (counts.get(org.id) ?? 0) > 0).sort(compare)
+  const groups = organizations.filter(org => canonicalOrgId(org.id) === org.id && (counts.get(org.id) ?? 0) > 0).sort(compareOrganizations)
   return <div className="flex flex-col gap-3">
     {description && <p className="text-base font-semibold text-muted-foreground">{description}</p>}
     {groups.length === 0 && <p className="rounded-xl border border-border p-5 text-lg">選べる団体がありません。</p>}

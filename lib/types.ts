@@ -89,6 +89,9 @@ export interface WithdrawPayload {
 
 export interface AppRequest {
   id: string
+  /** 受付に来た方。出場エントリーの所属とは別に保持する。 */
+  visitorOrgId?: string
+  visitorName?: string
   /** DB entry linked by the reflected request; absent before reflection. */
   officialEntryId?: string
   cancelledSeedEntryId?: string

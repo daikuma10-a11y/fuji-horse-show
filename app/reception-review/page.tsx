@@ -8,7 +8,9 @@ import {ActionButton} from "@/components/action-button"
 import {SummaryCard,SummaryRow} from "@/components/summary"
 import {formatYen} from "@/lib/fees"
 import {useStore} from "@/lib/store"
+import {ReceptionVisitor} from "@/components/reception-visitor"
 import type {AppRequest} from "@/lib/types"
+import {canonicalOrgId} from "@/lib/organization-aliases"
 
 const actions=[
  {href:"/add",label:"続けて追加",className:"bg-[oklch(0.46_0.1_155)] text-white"},
@@ -19,7 +21,9 @@ export default function ReceptionReviewPage(){
  const router=useRouter()
  const {draftRequests,draftReady,draftSaving,submitDrafts,removeDraft,getCompetition,getPlayer,getHorse,getOrg}=useStore()
  const [error,setError]=useState("")
- const [completed,setCompleted]=useState<{count:number,total:number}|null>(null)
+ const [visitorOrgId,setVisitorOrgId]=useState("")
+ const [visitorName,setVisitorName]=useState("")
+ const [completed,setCompleted]=useState<{count:number,total:number,at:string}|null>(null)
  const total=draftRequests.reduce((sum,request)=>sum+request.fee.total,0)
  const detail=(request:AppRequest)=>{
   if(request.add)return{competition:request.add.competitionId,player:request.add.playerId,horse:request.add.horseId,note:request.add.note}
@@ -30,13 +34,14 @@ export default function ReceptionReviewPage(){
   if(draftSaving||!draftRequests.length)return
   setError("")
   const summary={count:draftRequests.length,total}
-  try{await submitDrafts();setCompleted(summary)}catch(cause){setError(cause instanceof Error?cause.message:"受付を保存できませんでした。内容を確認してもう一度お試しください")}
+  try{await submitDrafts({visitorOrgId:visitorOrgId||canonicalOrgId(draftRequests[0].orgId),visitorName:visitorName.trim()});setCompleted({...summary,at:new Date().toISOString()})}catch(cause){setError(cause instanceof Error?cause.message:"受付を保存できませんでした。内容を確認してもう一度お試しください")}
  }
  return <div className="min-h-dvh bg-background"><AppHeader subtitle="受付内容のご確認"/>
   <main className="mx-auto max-w-3xl px-4 py-8">
    {completed?<div className="rounded-2xl border-2 border-primary bg-card p-6 text-center">
     <h1 className="text-3xl font-bold">受付が完了しました</h1>
     <p className="mt-5 text-xl">全{completed.count}件を保存しました。申請料金合計：<strong>{formatYen(completed.total)}</strong></p>
+    <p className="mt-2 text-base">受付日時：{new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(completed.at))}</p>
     <p className="mt-3 text-lg">大会本部で確認後、正式出番表に反映します。料金は所属団体ごとに精算します。</p>
     <Link href="/" className="mt-8 inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-primary px-4 text-xl font-bold text-primary-foreground">最初の画面へ</Link>
    </div>:<>
@@ -61,8 +66,9 @@ export default function ReceptionReviewPage(){
     </>}
     <h2 className="mt-8 text-xl font-bold">確定前に申請を続ける</h2>
     <div className="mt-3 grid gap-3">{actions.map(action=><Link key={action.href} href={action.href} className={"flex min-h-14 items-center justify-center rounded-xl px-4 text-xl font-bold "+action.className}>{action.label}</Link>)}</div>
+    {draftRequests.length>0&&<ReceptionVisitor organizationId={visitorOrgId||canonicalOrgId(draftRequests[0].orgId)} onOrganizationChange={setVisitorOrgId} name={visitorName} onNameChange={setVisitorName}/>}
     {error&&<p role="alert" className="mt-5 rounded-xl bg-destructive/10 p-4 text-lg font-bold text-destructive">{error}</p>}
-    {draftRequests.length>0&&<div className="mt-8"><p className="mb-3 text-center text-lg font-bold">お客様と全件の内容を確認後に押してください</p><ActionButton disabled={draftSaving||!draftReady} onClick={()=>void confirmAll()}>{draftSaving?"全件を保存して確認中…":"まとめて受付を確定する"}</ActionButton></div>}
+    {draftRequests.length>0&&<div className="mt-8"><p className="mb-3 text-center text-lg font-bold">お客様と全件の内容を確認後に押してください</p><ActionButton disabled={draftSaving||!draftReady||!visitorName.trim()} onClick={()=>void confirmAll()}>{draftSaving?"全件を保存して確認中…":"まとめて受付を確定する"}</ActionButton></div>}
     <button type="button" onClick={()=>router.push("/")} className="mt-6 min-h-12 w-full text-lg font-semibold underline">最初の画面へ戻る</button>
    </>}
   </main>
