@@ -132,7 +132,7 @@ begin
       if v_before is not null and v_before->>'id' is not null then
         v_original_id:=(v_before->>'id')::uuid;
       elsif v_req.request_type='change' and v_req.treated_as_withdraw_add then
-        if coalesce(v_req.payload#>>'{change,entryId}','') !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12} then
+        if coalesce(v_req.payload#>>'{change,entryId}','') !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then
           raise exception '変更前の正式エントリーが不明です。本部で確認してください';
         end if;
         v_original_id:=(v_req.payload#>>'{change,entryId}')::uuid;
@@ -161,116 +161,6 @@ begin
       select * into v_entry from public.entries
         where id=v_original_id and event_id=v_req.event_id for update;
       if not found then raise exception '変更前のエントリーが見つかりません。本部で確認してください'; end if;
-      v_rider:=v_entry.rider_id; v_horse:=v_entry.horse_id;
-      v_org:=v_entry.organization_id; v_source:=v_entry.source;
-      v_note:=v_entry.request_note; v_status:='active';
-      v_from_comp:=v_entry.competition_id;
-      if v_before is not null and v_before->>'id' is not null then
-        v_from_comp:=(v_before->>'competition_id')::uuid;
-        v_rider:=(v_before->>'rider_id')::uuid;
-        v_horse:=(v_before->>'horse_id')::uuid;
-        v_org:=(v_before->>'organization_id')::uuid;
-        v_order:=(v_before->>'start_order')::integer;
-        v_status:=coalesce(v_before->>'status','active');
-        v_source:=v_before->>'source'; v_note:=v_before->>'request_note';
-      elsif v_req.request_type='change' then
-        -- Historical changes have no snapshot. Resolve only unambiguous original names.
-        v_name:=nullif(v_req.payload#>>'{change,fromPlayerName}','');
-        if v_name is null then raise exception '変更前の選手が不明です。本部で確認してください'; end if;
-        if regexp_replace((select name from public.riders where id=v_rider),'[[:space:]　]','','g')
-           is distinct from regexp_replace(v_name,'[[:space:]　]','','g') then
-          if (select count(*) from public.riders where event_id=v_req.event_id
-            and regexp_replace(name,'[[:space:]　]','','g')=regexp_replace(v_name,'[[:space:]　]','','g'))<>1
-          then raise exception '変更前の選手を一意に特定できません。本部で確認してください'; end if;
-          select id into v_rider from public.riders where event_id=v_req.event_id
-            and regexp_replace(name,'[[:space:]　]','','g')=regexp_replace(v_name,'[[:space:]　]','','g');
-        end if;
-        v_name:=nullif(v_req.payload#>>'{change,fromHorseName}','');
-        if v_name is null then raise exception '変更前の馬が不明です。本部で確認してください'; end if;
-        if regexp_replace((select name from public.horses where id=v_horse),'[[:space:]　]','','g')
-           is distinct from regexp_replace(v_name,'[[:space:]　]','','g') then
-          if (select count(*) from public.horses where event_id=v_req.event_id
-            and regexp_replace(name,'[[:space:]　]','','g')=regexp_replace(v_name,'[[:space:]　]','','g'))<>1
-          then raise exception '変更前の馬を一意に特定できません。本部で確認してください'; end if;
-          select id into v_horse from public.horses where event_id=v_req.event_id
-            and regexp_replace(name,'[[:space:]　]','','g')=regexp_replace(v_name,'[[:space:]　]','','g');
-        end if;
-        if nullif(v_req.payload#>>'{change,fromCompetitionNo}','') is null
-        then raise exception '変更前の競技が不明です。本部で確認してください'; end if;
-        select id into v_from_comp from public.competitions where event_id=v_req.event_id
-          and competition_no=(v_req.payload#>>'{change,fromCompetitionNo}');
-        if v_from_comp is null then raise exception '変更前の競技を特定できません'; end if;
-      end if;
-      if v_order is null then
-        select count(*)+1 into v_order from public.entries
-          where event_id=v_req.event_id and competition_id=v_from_comp
-            and id<>v_original_id and lower(coalesce(status,'active')) not in ('withdrawn','wd');
-      end if;
-      v_order:=greatest(1,v_order);
-      -- Make room at the original position; old records without a snapshot go last.
-      update public.entries set start_order=start_order+1,updated_at=now()
-        where event_id=v_req.event_id and competition_id=v_from_comp
-          and id<>v_original_id and lower(coalesce(status,'active')) not in ('withdrawn','wd')
-          and start_order>=v_order;
-      update public.entries set competition_id=v_from_comp,rider_id=v_rider,horse_id=v_horse,
-        organization_id=v_org,start_order=v_order,status=v_status,source=v_source,
-        request_note=v_note,updated_at=now()
-        where id=v_original_id and event_id=v_req.event_id;
-      if v_entry_id is distinct from v_original_id then
-        update public.entries set status='withdrawn',updated_at=now()
-          where id=v_entry_id and event_id=v_req.event_id;
-      end if;
-    end if;
-  end if;
-  update public.reception_requests
-    set status='cancelled',payload=coalesce(payload,'{}'::jsonb)||jsonb_build_object(
-      '_cancellation',jsonb_build_object('reason',v_reason,'at',now(),
-        'seedEntryId',nullif(btrim(p_seed_entry_id),''),
-        'restoredOriginal',v_req.status='reflected' and v_req.request_type in ('change','withdraw'))
-    )
-    where id=v_req.id and event_id=v_req.event_id;
-  for v_comp in select distinct x.id from unnest(array[v_comp,v_from_comp]) x(id) where x.id is not null loop
-    perform 1 from public.entries where event_id=v_req.event_id and competition_id=v_comp for update;
-    with ranked as (select id,row_number() over (
-      order by case when lower(coalesce(status,'active')) in ('wd','withdrawn') then 1 else 0 end,
-        start_order,id)::integer as new_order from public.entries
-      where event_id=v_req.event_id and competition_id=v_comp)
-    update public.entries e set start_order=ranked.new_order,updated_at=now()
-      from ranked where e.id=ranked.id and e.start_order is distinct from ranked.new_order;
-  end loop;
-  return jsonb_build_object('status','cancelled','entry_id',v_entry_id,
-    'restored_original',v_req.request_type in ('change','withdraw'));
-end $$;
-revoke all on function public.cancel_autumn_reception_request(uuid,text,text) from public,anon;
-grant execute on function public.cancel_autumn_reception_request(uuid,text,text) to authenticated; then
-          raise exception '変更前の正式エントリーが不明です。本部で確認してください';
-        end if;
-        v_original_id:=(v_req.payload#>>'{change,entryId}')::uuid;
-      else v_original_id:=v_entry_id;
-      end if;
-      if v_req.request_type='withdraw' and v_original_id is distinct from v_entry_id then
-        raise exception '棄権元のエントリーを確認できません';
-      end if;
-    end if;
-    if exists (
-      select 1 from public.reception_requests later
-      where later.event_id=v_req.event_id and later.id<>v_req.id
-        and later.status in ('pending','reflected')
-        and later.created_at>v_req.created_at
-        and (later.original_entry_id in (v_entry_id,v_original_id)
-          or later.entry_id in (v_entry_id,v_original_id)
-          or later.payload->'change'->>'entryId' in (v_entry_id::text,v_original_id::text,coalesce(p_seed_entry_id,''))
-          or later.payload->'withdraw'->>'entryId' in (v_entry_id::text,v_original_id::text,coalesce(p_seed_entry_id,'')))
-    ) then raise exception '後続の申請があります。先に後続申請を確認してください'; end if;
-    if v_req.request_type='add' then
-      update public.entries set status='withdrawn',updated_at=now()
-        where id=v_entry_id and event_id=v_req.event_id;
-      v_comp:=v_entry.competition_id;
-    else
-      select * into v_entry from public.entries
-        where id=v_original_id and event_id=v_req.event_id for update;
-      if not found then raise exception '変更前のエントリーが見つかりません。本部で確認してください'; end if;
-      v_comp:=v_entry.competition_id;
       v_rider:=v_entry.rider_id; v_horse:=v_entry.horse_id;
       v_org:=v_entry.organization_id; v_source:=v_entry.source;
       v_note:=v_entry.request_note; v_status:='active';
