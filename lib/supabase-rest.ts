@@ -65,12 +65,12 @@ export async function reorderEntries(competitionId:string,entryIds:string[],acce
  const rows=await current.json() as {id:string;status:string|null;start_order:number}[]
  const activeRows=rows.filter(row=>!["WD","withdrawn"].includes(row.status??"active"))
  const activeIds=new Set(activeRows.map(row=>row.id))
- const requested=entryIds.filter(id=>activeIds.has(id))
- const requestedSet=new Set(requested)
- const missing=activeRows.map(row=>row.id).filter(id=>!requestedSet.has(id))
- const canonical=[...requested,...missing]
- if(canonical.length!==activeRows.length||new Set(canonical).size!==activeRows.length)throw new Error("出番順の保存に失敗しました: 出番表IDの整合性を確認できません")
- const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/reorder_entries`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({p_competition_id:dbCompetitionId,p_entry_ids:canonical})});if(!response.ok){let detail="";try{const body=await response.json() as {message?:string};detail=body.message?`: ${body.message}`:""}catch{}throw new Error(`出番順の保存に失敗しました (${response.status})${detail}`)}
+ if(entryIds.length!==activeRows.length||new Set(entryIds).size!==entryIds.length||entryIds.some(id=>!activeIds.has(id)))throw new Error("正式出番表が更新されています。画面を再読み込みしてから並べ直してください")
+ const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/reorder_entries`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({p_competition_id:dbCompetitionId,p_entry_ids:entryIds})});if(!response.ok){let detail="";try{const body=await response.json() as {message?:string};detail=body.message?`: ${body.message}`:""}catch{}throw new Error(`出番順の保存に失敗しました (${response.status})${detail}`)}
+ const check=await fetch(`${SUPABASE_URL}/rest/v1/entries?competition_id=eq.${dbCompetitionId}&select=id,status,start_order&order=start_order.asc`,{headers,cache:"no-store"})
+ if(!check.ok)throw new Error("保存後の正式DBを確認できません。再読み込みして出番順を確認してください")
+ const confirmed=(await check.json() as {id:string;status:string|null}[]).filter(row=>!["WD","withdrawn"].includes(row.status??"active"))
+ if(confirmed.length!==entryIds.length||confirmed.some((row,index)=>row.id!==entryIds[index]))throw new Error("保存後の出番順が画面と一致しません。再読み込みして確認してください")
 }
 export async function markReceptionRequestReflected(request:AppRequest):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?id=eq.${request.id}&event_id=eq.${AUTUMN_EVENT_ID}`,{method:"PATCH",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify({status:"reflected",reflected_at:new Date().toISOString(),payload:{...enrichedPayload(request),status:"reflected"}})});if(!response.ok)throw new Error(`受付反映状態の保存失敗: ${response.status}`)}
 export async function loadAutumnMasterOrganizations():Promise<{riders:Map<string,string>;horses:Map<string,string>}>{
