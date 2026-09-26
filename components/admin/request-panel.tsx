@@ -14,7 +14,7 @@ const typeLabel: Record<AppRequest["type"], { text: string; cls: string }> = {
   withdraw: { text: "棄権", cls: "bg-destructive text-white" },
 }
 
-export function RequestPanel() {
+export function RequestPanel({canManage = true}:{canManage?:boolean}) {
   const { requests, reflectRequest, getCompetition, getPlayer, getHorse, getOrg, entriesByCompetition } = useStore()
   const [positions, setPositions] = useState<Record<string, string>>({})
   const [applyingId, setApplyingId] = useState<string | null>(null)
@@ -53,7 +53,7 @@ export function RequestPanel() {
       </div>
       <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t-2 border-border pt-4">
         <span className="text-xl font-bold text-foreground">料金：<span className="text-primary">{formatYen(r.fee.total)}</span></span>
-        {r.status==="pending"&&<div className="w-full space-y-3 sm:w-auto sm:min-w-72">{targetId&&<label className="block text-lg font-bold">反映する出番位置<select disabled={isApplying} value={positions[r.id]??""} onChange={e=>setPositions(prev=>({...prev,[r.id]:e.target.value}))} className="mt-1 min-h-12 w-full rounded-xl border-2 border-border bg-background px-3 text-lg disabled:opacity-50"><option value="">自動配置</option>{Array.from({length:maxPosition},(_,i)=><option key={i+1} value={i+1}>{i+1}番</option>)}</select></label>}{applyErrors[r.id]&&<p className="rounded-xl bg-destructive/10 p-3 font-semibold text-destructive">{applyErrors[r.id]}</p>}<ActionButton disabled={applyingId!==null} onClick={()=>void handleReflect(r.id,positions[r.id]?Number(positions[r.id]):undefined)}>{isApplying?"正式出番表へ反映中…":"出番表へ反映"}</ActionButton></div>}
+        {r.status==="pending"&&canManage&&<div className="w-full space-y-3 sm:w-auto sm:min-w-72">{targetId&&<label className="block text-lg font-bold">反映する出番位置<select disabled={isApplying} value={positions[r.id]??""} onChange={e=>setPositions(prev=>({...prev,[r.id]:e.target.value}))} className="mt-1 min-h-12 w-full rounded-xl border-2 border-border bg-background px-3 text-lg disabled:opacity-50"><option value="">自動配置</option>{Array.from({length:maxPosition},(_,i)=><option key={i+1} value={i+1}>{i+1}番</option>)}</select></label>}{applyErrors[r.id]&&<p className="rounded-xl bg-destructive/10 p-3 font-semibold text-destructive">{applyErrors[r.id]}</p>}<ActionButton disabled={applyingId!==null} onClick={()=>void handleReflect(r.id,positions[r.id]?Number(positions[r.id]):undefined)}>{isApplying?"正式出番表へ反映中…":"出番表へ反映"}</ActionButton></div>}
       </div>
     </div>})}
   </div>
