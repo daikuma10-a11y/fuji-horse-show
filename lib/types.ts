@@ -80,6 +80,7 @@ export interface WithdrawPayload {
   competitionId: string
   playerId: string
   horseId: string
+  organizationId?: string
 }
 
 export interface AppRequest {
