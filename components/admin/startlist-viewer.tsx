@@ -27,7 +27,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
 
   useEffect(() => {
     try {
-      setSavedOrders(JSON.parse(sessionStorage.getItem(SAVED_ORDERS_KEY) || "{}"))
+      setSavedOrders(JSON.parse(localStorage.getItem(SAVED_ORDERS_KEY) || "{}"))
     } catch {
       setSavedOrders({})
     }
@@ -77,7 +77,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
       await reorderEntries(competitionId, orderedIds, session.accessToken, draft?.base ?? officialIds)
       applySavedEntryOrder(competitionId, orderedIds)
       const next = { ...savedOrders, [competitionId]: { ids: orderedIds, savedAt: new Date().toISOString() } }
-      sessionStorage.setItem(SAVED_ORDERS_KEY, JSON.stringify(next))
+      localStorage.setItem(SAVED_ORDERS_KEY, JSON.stringify(next))
       setSavedOrders(next)
       setDrafts(previous => {
         const updated = { ...previous }
