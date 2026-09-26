@@ -16,14 +16,16 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
   const consecutiveRiderEntries = new Set<string>()
   const closeHorseEntries = new Set<string>()
   const activeEntries = entries.filter(entry => !entry.withdrawn)
+  const previousByRider = new Map<string, StartEntry>()
   const previousByHorse = new Map<string, StartEntry>()
-  for (let index = 0; index < activeEntries.length; index++) {
-    const current = activeEntries[index]
-    const previous = activeEntries[index - 1]
-    if (previous?.playerId === current.playerId && current.order === previous.order + 1) {
-      consecutiveRiderEntries.add(previous.id)
+  for (const current of activeEntries) {
+    const previousRider = previousByRider.get(current.playerId)
+    // 間に別の選手が一組入っても、同じ選手の出番が近いことを知らせる。
+    if (previousRider && current.order - previousRider.order <= 2) {
+      consecutiveRiderEntries.add(previousRider.id)
       consecutiveRiderEntries.add(current.id)
     }
+    previousByRider.set(current.playerId, current)
     const previousHorse = previousByHorse.get(current.horseId)
     if (previousHorse && current.order - previousHorse.order <= 5) {
       closeHorseEntries.add(previousHorse.id)
