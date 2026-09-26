@@ -117,7 +117,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
           <button type="button" disabled={!canReorder || saving || changedSinceDraft} onClick={() => void saveOrder()} className="min-h-12 rounded-lg bg-primary px-5 font-bold text-primary-foreground disabled:opacity-40">{saving ? "正式DBへ保存中…" : "出番順を保存"}</button>
         </div>}
       </div>
-      <StartList competitionId={selected.id} readOnly showAdminChanges adminReorder={canEdit} compact dense={wideView} orderedIds={orderedIds} onReorder={moveDraft} />
+      <StartList competitionId={selected.id} readOnly showAdminChanges adminReorder={canEdit} compact dense orderedIds={orderedIds} onReorder={moveDraft} />
       {dirty && canReorder && <div className="fixed inset-x-4 bottom-4 z-30 mx-auto max-w-lg rounded-xl border-2 border-primary bg-card p-2 shadow-xl"><button type="button" disabled={saving || changedSinceDraft} onClick={() => void saveOrder()} className="min-h-14 w-full rounded-lg bg-primary px-4 text-lg font-bold text-primary-foreground disabled:opacity-40">{saving ? "正式DBへ保存中…" : "未保存：出番順を保存"}</button></div>}
     </div> : <p className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-5 text-center text-base text-muted-foreground">競技を選んでください。</p>}
   </div>
