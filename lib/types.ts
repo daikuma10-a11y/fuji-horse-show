@@ -40,6 +40,8 @@ export interface StartEntry {
   order: number
   playerId: string
   horseId: string
+  /** 正式DBのエントリー所属に対応するローカル団体ID */
+  organizationId?: string
   withdrawn?: boolean
   /** 追加・変更申請から反映されたことを本部出番表で識別するための印 */
   adminChangeMark?: EntryChangeMark
@@ -52,6 +54,8 @@ export interface AddPayload {
   competitionId: string
   playerId: string
   horseId: string
+  /** 出番表・精算に使用する団体（選手と馬の所属が異なる場合は明示選択） */
+  organizationId?: string
   note: string
 }
 
@@ -63,6 +67,8 @@ export interface ChangePayload {
   toCompetitionId: string
   toPlayerId: string
   toHorseId: string
+  /** 出番表・精算に使用する団体 */
+  organizationId?: string
   changedFields: Array<"competition" | "player" | "horse">
   treatedAsWithdrawAdd: boolean
 }
