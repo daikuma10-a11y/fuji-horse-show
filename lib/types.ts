@@ -76,6 +76,8 @@ export interface WithdrawPayload {
 
 export interface AppRequest {
   id: string
+  /** DB entry linked by the reflected request; absent before reflection. */
+  officialEntryId?: string
   type: RequestType
   status: RequestStatus
   createdAt: string
