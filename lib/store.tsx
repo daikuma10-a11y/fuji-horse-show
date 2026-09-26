@@ -42,7 +42,7 @@ const resolveMaster=<T extends {name:string;orgId:string}>(items:T[],name:string
  const canonical=matches.filter(item=>item.orgId===canonicalOrgId(item.orgId))
  return canonical.length===1?canonical[0]:undefined
 }
-const cancelledOfficialIds=new Set(rows.filter(req=>req.status==="cancelled"&&req.officialEntryId).map(req=>req.officialEntryId!));const visibleDbEntries=dbEntries.filter(row=>!cancelledOfficialIds.has(row.entry_id));const dbStartEntries=visibleDbEntries.map(row=>{
+const cancelledOfficialIds=new Set(rows.filter(req=>req.status==="cancelled"&&req.cancelledByAdmin&&req.officialEntryId).map(req=>req.officialEntryId!));const visibleDbEntries=dbEntries.filter(row=>!cancelledOfficialIds.has(row.entry_id));const dbStartEntries=visibleDbEntries.map(row=>{
  const competitionId=competitions.find(c=>c.number===Number(row.competition_no))?.id
  const player=resolveMaster(players,row.rider_name,officialMasters.riders.get(row.rider_id)??"")
  const horse=resolveMaster(horses,row.horse_name,officialMasters.horses.get(row.horse_id)??"")
