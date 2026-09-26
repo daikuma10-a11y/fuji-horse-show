@@ -77,7 +77,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
       await reorderEntries(competitionId, orderedIds, session.accessToken, draft?.base ?? officialIds)
       applySavedEntryOrder(competitionId, orderedIds)
       const next = { ...savedOrders, [competitionId]: { ids: orderedIds, savedAt: new Date().toISOString() } }
-      localStorage.setItem(SAVED_ORDERS_KEY, JSON.stringify(next))
+      try { localStorage.setItem(SAVED_ORDERS_KEY, JSON.stringify(next)) } catch { /* 保存時刻はこの画面内には表示する */ }
       setSavedOrders(next)
       setDrafts(previous => {
         const updated = { ...previous }
