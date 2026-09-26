@@ -8,6 +8,9 @@ import { startEntries as originalEntries } from "@/lib/mock-data"
 import { players as sourcePlayers } from "@/lib/autumn-data"
 import type { AppRequest } from "@/lib/types"
 
+// Autumn原本で重複した同一団体。人馬のIDは維持し、精算表示上の所属だけを統一する。
+const settlementOrgId = (id: string) => id === "org-2" ? "org-4" : id
+
 export function SettlementPanel() {
   const { organizations, players, horses, competitions, startEntries, requests } = useStore()
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
@@ -32,7 +35,14 @@ export function SettlementPanel() {
 
   const settlementRequests = requests.filter(isResolvableRequest)
   const excludedLegacyCount = requests.filter((request) => request.status === "reflected" && !isResolvableRequest(request)).length
-  const rows = calcSettlement({ organizations, seedEntries: originalEntries, horses, competitions, requests: settlementRequests, payments: [] })
+  const rows = calcSettlement({
+    organizations: organizations.filter((org) => org.id !== "org-2"),
+    seedEntries: originalEntries,
+    horses: horses.map((horse) => ({ ...horse, orgId: settlementOrgId(horse.orgId) })),
+    competitions,
+    requests: settlementRequests.map((request) => ({ ...request, orgId: settlementOrgId(request.orgId) })),
+    payments: [],
+  })
   const grandTotal = rows.reduce((sum, row) => sum + row.total, 0)
   const selected = rows.find((row) => row.orgId === selectedOrgId)
   const playerName = (id: string) => {
@@ -60,8 +70,8 @@ export function SettlementPanel() {
   }
 
   if (selected) {
-    const normalDetails = originalEntries.filter((entry) => horses.find((h) => h.id === entry.horseId)?.orgId === selected.orgId).map((entry) => ({ id: entry.id, rider: playerName(entry.playerId), horse: horseName(entry.horseId), competition: competition(entry.competitionId) }))
-    const requestDetails = settlementRequests.filter((request) => request.orgId === selected.orgId)
+    const normalDetails = originalEntries.filter((entry) => settlementOrgId(horses.find((h) => h.id === entry.horseId)?.orgId ?? "") === selected.orgId).map((entry) => ({ id: entry.id, rider: playerName(entry.playerId), horse: horseName(entry.horseId), competition: competition(entry.competitionId) }))
+    const requestDetails = settlementRequests.filter((request) => settlementOrgId(request.orgId) === selected.orgId)
 
     return <div className="flex flex-col gap-5">
       <button type="button" onClick={() => setSelectedOrgId(null)} className="w-fit rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button>
