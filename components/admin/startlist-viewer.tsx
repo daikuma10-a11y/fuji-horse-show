@@ -99,7 +99,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
 
   return <div className="flex flex-col gap-3">
     <div className={`rounded-lg border px-3 py-2 text-sm font-bold ${verificationClass}`}>DB照合状況：{reconciliation.message}</div>
-    <p className="text-sm text-muted-foreground">人馬の右にある移動マークを押したまま上下に動かせます。↑↓でも調整できます。最後に「出番順を保存」を押してください。</p>
+    <p className="text-sm text-muted-foreground">人馬の行を少し長押しすると持ち上がります。そのまま上下に動かし、入れたい位置で指を離してください。右の移動マークならすぐに動かせます。最後に「出番順を保存」を押してください。</p>
     <div className="flex flex-wrap gap-2">{COMPETITION_DATES.map(d => <button key={d.value} type="button" disabled={saving} onClick={() => { setDate(d.value); setCompId(null) }} className={`min-h-10 rounded-lg border-2 px-3 text-base font-bold transition ${date === d.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}>{d.label}</button>)}</div>
     <div className="flex flex-wrap gap-1.5">{comps.map(c => <button key={c.id} type="button" disabled={saving} onClick={() => { setCompId(c.id); setSaveError("") }} className={`flex min-h-10 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-bold transition ${compId === c.id ? "border-primary bg-primary/10" : "border-border bg-card"}`}><span className="flex size-6 items-center justify-center rounded bg-secondary text-xs text-secondary-foreground">{c.number}</span><span className="max-w-48 truncate">{c.name}</span>{c.official && <OfficialBadge />}</button>)}</div>
     {selected ? <div>
