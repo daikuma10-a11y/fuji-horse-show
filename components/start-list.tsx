@@ -20,28 +20,32 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
   useEffect(() => {
     if (!draggingId || !onReorder) return
     // iPhone では行の入れ替え時にボタンの pointer capture が外れるため、移動は画面全体で追跡する。
+    const updateTarget = (x: number, y: number) => {
+      const target = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-start-entry-id]")?.dataset.startEntryId
+      if (target && target !== dragId.current) onReorder(draggingId, target)
+    }
     const moveTouch = (event: TouchEvent) => {
       if (event.cancelable) event.preventDefault()
       const touch = event.touches[0]
-      if (touch) pointer.current = { x: touch.clientX, y: touch.clientY }
+      if (touch) { pointer.current = { x: touch.clientX, y: touch.clientY }; updateTarget(touch.clientX, touch.clientY) }
     }
     const movePointer = (event: PointerEvent) => {
-      if (event.pointerType !== "touch") pointer.current = { x: event.clientX, y: event.clientY }
+      if (event.pointerType !== "touch") { pointer.current = { x: event.clientX, y: event.clientY }; updateTarget(event.clientX, event.clientY) }
     }
     const finish = () => { dragId.current = null; pointer.current = null; setDraggingId(null) }
     window.addEventListener("touchmove", moveTouch, { passive: false })
     window.addEventListener("touchend", finish)
     window.addEventListener("touchcancel", finish)
     window.addEventListener("pointermove", movePointer)
-    window.addEventListener("pointerup", finish)
-    window.addEventListener("pointercancel", finish)
+    const finishPointer = (event: PointerEvent) => { if (event.pointerType !== "touch") finish() }
+    window.addEventListener("pointerup", finishPointer)
+    window.addEventListener("pointercancel", finishPointer)
     const timer = window.setInterval(() => {
       const point = pointer.current
       if (!point) return
       if (point.y < 100) window.scrollBy(0, -18)
       if (point.y > window.innerHeight - 100) window.scrollBy(0, 18)
-      const target = document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>("[data-start-entry-id]")?.dataset.startEntryId
-      if (target && target !== dragId.current) onReorder(draggingId, target)
+      updateTarget(point.x, point.y)
     }, 70)
     return () => {
       window.clearInterval(timer)
@@ -49,8 +53,8 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
       window.removeEventListener("touchend", finish)
       window.removeEventListener("touchcancel", finish)
       window.removeEventListener("pointermove", movePointer)
-      window.removeEventListener("pointerup", finish)
-      window.removeEventListener("pointercancel", finish)
+      window.removeEventListener("pointerup", finishPointer)
+      window.removeEventListener("pointercancel", finishPointer)
     }
   }, [draggingId, onReorder])
   const orderIndex = new Map(orderedIds?.map((id, index) => [id, index]) ?? [])
