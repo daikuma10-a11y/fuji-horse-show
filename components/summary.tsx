@@ -41,9 +41,13 @@ export function SummaryRow({ label, value }: { label: string; value: ReactNode }
 export function CompletionScreen({
   subtitle,
   message,
+  currentType,
+  onContinue,
 }: {
   subtitle: string
   message: string
+  currentType: "add" | "change" | "withdraw"
+  onContinue: () => void
 }) {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -55,12 +59,19 @@ export function CompletionScreen({
         <p className="mt-2 text-xl text-muted-foreground">
           料金は大会本部にて所属団体ごとにまとめて精算します。
         </p>
-        <Link
-          href="/"
-          className="mt-10 inline-flex min-h-16 w-full max-w-md items-center justify-center rounded-2xl bg-primary px-6 text-2xl font-bold text-primary-foreground shadow-sm active:scale-[0.98]"
-        >
-          最初の画面にもどる
-        </Link>
+        <h2 className="mt-8 text-xl font-bold text-foreground">次の受付を続ける</h2>
+        <div className="mt-3 grid w-full max-w-md gap-3">
+          {([
+            { type: "add" as const, label: "続けて追加", href: "/add", color: "bg-[oklch(0.46_0.1_155)] text-white" },
+            { type: "change" as const, label: "続けて変更", href: "/change", color: "bg-accent text-accent-foreground" },
+            { type: "withdraw" as const, label: "続けて棄権", href: "/withdraw", color: "bg-destructive text-white" },
+          ]).map(action => action.type === currentType ? (
+            <button key={action.type} type="button" onClick={onContinue} className={`flex min-h-14 items-center justify-center rounded-xl px-4 text-xl font-bold ${action.color}`}>{action.label}</button>
+          ) : (
+            <Link key={action.type} href={action.href} className={`flex min-h-14 items-center justify-center rounded-xl px-4 text-xl font-bold ${action.color}`}>{action.label}</Link>
+          ))}
+        </div>
+        <Link href="/" className="mt-7 inline-flex min-h-14 w-full max-w-md items-center justify-center rounded-xl border-2 border-border bg-card px-5 text-lg font-bold text-foreground">最初の画面にもどる</Link>
       </main>
     </div>
   )
