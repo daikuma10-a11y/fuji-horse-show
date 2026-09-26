@@ -14,9 +14,9 @@ const normalized = (value: string) => value.normalize("NFKC").replace(/[\s　]+/
 
 export function PlayerPicker({ selectedId, onSelect }: { selectedId?: string; onSelect: (playerId: string) => void }) {
   const { players, organizations } = useStore()
-  // Autumn原本の p-122 は名前にフリガナが連結され、正式出番表に出番がない。
-  // 元データとIDは保持し、この誤記の候補だけ選択画面から除外する。
-  const selectablePlayers = players.filter(player => player.id !== "p-122")
+  // Autumn原本の p-119 と p-122 は名前にフリガナが連結された出番のない誤記。
+  // 本人確認済みの候補だけ除外し、元データと正式DBの行は保持する。
+  const selectablePlayers = players.filter(player => player.id !== "p-119" && player.id !== "p-122")
   const [orgId, setOrgId] = useState<string | null>(null)
   const counts = new Map<string, number>()
   for (const player of selectablePlayers) {
