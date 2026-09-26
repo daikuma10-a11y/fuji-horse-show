@@ -8,8 +8,14 @@ import { startEntries as originalEntries } from "@/lib/mock-data"
 import { players as sourcePlayers } from "@/lib/autumn-data"
 import type { AppRequest } from "@/lib/types"
 
-// Autumn原本で重複した同一団体。人馬のIDは維持し、精算表示上の所属だけを統一する。
-const settlementOrgId = (id: string) => id === "org-2" ? "org-4" : id
+// Autumn原本の同一団体として確認済みの別表記。精算表示だけ集約し、元の人馬IDは維持する。
+const confirmedOrgAliases: Record<string, string> = {
+  "org-2": "org-4",   // Horse'sNewStage → Horses' New Stage
+  "org-6": "org-8",   // RIDING TEAM REGROUP → riding team Regroup
+  "org-23": "org-17", // 乗馬クラブリバーサイドステーブル浜北 → 乗馬クラブ リバーサイドステーブル浜北
+  "org-24": "org-25", // 八王子乗馬俱楽部 → 八王子乗馬倶楽部
+}
+const settlementOrgId = (id: string) => confirmedOrgAliases[id] ?? id
 
 export function SettlementPanel() {
   const { organizations, players, horses, competitions, startEntries, requests } = useStore()
@@ -36,7 +42,7 @@ export function SettlementPanel() {
   const settlementRequests = requests.filter(isResolvableRequest)
   const excludedLegacyCount = requests.filter((request) => request.status === "reflected" && !isResolvableRequest(request)).length
   const rows = calcSettlement({
-    organizations: organizations.filter((org) => org.id !== "org-2"),
+    organizations: organizations.filter((org) => !confirmedOrgAliases[org.id]),
     seedEntries: originalEntries,
     horses: horses.map((horse) => ({ ...horse, orgId: settlementOrgId(horse.orgId) })),
     competitions,
