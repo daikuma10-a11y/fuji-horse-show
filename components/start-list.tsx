@@ -19,6 +19,22 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
   const [draggingId, setDraggingId] = useState<string | null>(null)
   useEffect(() => {
     if (!draggingId || !onReorder) return
+    // iPhone では行の入れ替え時にボタンの pointer capture が外れるため、移動は画面全体で追跡する。
+    const moveTouch = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault()
+      const touch = event.touches[0]
+      if (touch) pointer.current = { x: touch.clientX, y: touch.clientY }
+    }
+    const movePointer = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") pointer.current = { x: event.clientX, y: event.clientY }
+    }
+    const finish = () => { dragId.current = null; pointer.current = null; setDraggingId(null) }
+    window.addEventListener("touchmove", moveTouch, { passive: false })
+    window.addEventListener("touchend", finish)
+    window.addEventListener("touchcancel", finish)
+    window.addEventListener("pointermove", movePointer)
+    window.addEventListener("pointerup", finish)
+    window.addEventListener("pointercancel", finish)
     const timer = window.setInterval(() => {
       const point = pointer.current
       if (!point) return
@@ -27,7 +43,15 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
       const target = document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>("[data-start-entry-id]")?.dataset.startEntryId
       if (target && target !== dragId.current) onReorder(draggingId, target)
     }, 70)
-    return () => window.clearInterval(timer)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener("touchmove", moveTouch)
+      window.removeEventListener("touchend", finish)
+      window.removeEventListener("touchcancel", finish)
+      window.removeEventListener("pointermove", movePointer)
+      window.removeEventListener("pointerup", finish)
+      window.removeEventListener("pointercancel", finish)
+    }
   }, [draggingId, onReorder])
   const orderIndex = new Map(orderedIds?.map((id, index) => [id, index]) ?? [])
   const entries = orderedIds
@@ -63,7 +87,7 @@ export function StartList({ competitionId, selectedId, onSelect, readOnly = fals
     <span className={`flex shrink-0 items-center justify-center bg-secondary font-bold text-secondary-foreground ${compact?"size-8 rounded-md text-base":"size-14 rounded-xl text-2xl"}`}>{displayOrder}</span>
     <span className={`flex min-w-0 flex-1 ${compact?"flex-col gap-1 sm:flex-row sm:items-center sm:gap-2":"flex-col"}`}><span className={`${compact?"flex min-w-0 flex-wrap items-center gap-1":"mb-1 flex flex-wrap items-center gap-2"}`}><span className={`font-bold ${compact?"truncate text-base":"text-2xl"} ${e.withdrawn?"text-destructive":"text-foreground"}`}>{player?.name??"—"} {e.withdrawn&&"【棄権】"}</span>{riderGaps.has(e.id)&&<span className={`shrink-0 rounded-md bg-amber-100 font-bold text-amber-950 ${compact?"px-1.5 py-0.5 text-xs":"px-2.5 py-1 text-base"}`}>選手：間に{riderGaps.get(e.id)}頭（要確認）</span>}{horseGaps.has(e.id)&&<span className={`shrink-0 rounded-md bg-sky-100 font-bold text-sky-950 ${compact?"px-1.5 py-0.5 text-xs":"px-2.5 py-1 text-base"}`}>馬：間に{horseGaps.get(e.id)}頭（要確認）</span>}{e.needsAffiliationReview&&<span className={`shrink-0 rounded-md bg-amber-100 font-bold text-amber-950 ${compact?"px-1.5 py-0.5 text-xs":"px-2.5 py-1 text-base"}`}>所属要確認</span>}{showAdminChanges&&e.adminChangeMark&&<span className={`shrink-0 rounded-md font-bold ${compact?"px-1.5 py-0.5 text-xs":"px-2.5 py-1 text-base"} ${e.adminChangeMark==="added"?"bg-primary text-primary-foreground":"bg-amber-100 text-amber-900"}`}>{e.adminChangeMark==="added"?"追加":"変更"}</span>}</span><span className={`${compact?"min-w-0 flex-1 truncate text-sm":"text-xl"} ${e.withdrawn?"text-destructive":"text-foreground"}`}>{compact?horse?.name??"—":`馬：${horse?.name??"—"}`}</span><span className={`${compact?"hidden xl:block max-w-48 truncate text-xs":"text-lg"} text-muted-foreground`}>{org?.name??"—"}</span></span>
     {adminReorder&&<span className={`flex shrink-0 items-center ${compact?"gap-1":"gap-2"}`}>
-      {!e.withdrawn&&onReorder&&<button type="button" aria-label={`${displayOrder}番 ${player?.name??""}を長押しして移動`} title="ここを押して上下に動かす" onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);dragId.current=e.id;pointer.current={x:event.clientX,y:event.clientY};setDraggingId(e.id)}} onPointerMove={event=>{if(dragId.current===e.id)pointer.current={x:event.clientX,y:event.clientY}}} onPointerUp={()=>{dragId.current=null;pointer.current=null;setDraggingId(null)}} onPointerCancel={()=>{dragId.current=null;pointer.current=null;setDraggingId(null)}} className={`flex touch-none items-center justify-center rounded-md border-2 border-primary/50 bg-primary/10 text-primary ${draggingId===e.id?"ring-2 ring-primary":""} ${compact?"size-11":"size-12"}`}><GripVertical className="size-6"/></button>}
+      {!e.withdrawn&&onReorder&&<button type="button" aria-label={`${displayOrder}番 ${player?.name??""}を押したまま移動`} title="押したまま上下に動かす" onTouchStart={event=>{const touch=event.touches[0];if(!touch)return;dragId.current=e.id;pointer.current={x:touch.clientX,y:touch.clientY};setDraggingId(e.id)}} onPointerDown={event=>{if(event.pointerType==="touch"||event.button!==0)return;event.preventDefault();dragId.current=e.id;pointer.current={x:event.clientX,y:event.clientY};setDraggingId(e.id)}} onContextMenu={event=>event.preventDefault()} className={`flex touch-none select-none items-center justify-center rounded-md border-2 border-primary/50 bg-primary/10 text-primary ${draggingId===e.id?"ring-2 ring-primary":""} ${compact?"size-11":"size-12"}`}><GripVertical className="size-6"/></button>}
       <span className={`flex ${compact?"gap-1":"flex-col gap-2"}`}><button type="button" disabled={reorderSaving||e.withdrawn||index===0} onClick={()=>onReorder?onReorder(e.id,entries[index-1].id):void moveEntry(e.id,"up")} className={`flex items-center justify-center border-2 border-border bg-background disabled:opacity-25 ${compact?"size-8 rounded-md":"size-11 rounded-xl"}`} aria-label={`${displayOrder}番を上へ`}><ArrowUp className={compact?"size-4":"size-6"}/></button><button type="button" disabled={reorderSaving||e.withdrawn||index===activeEntries.length-1} onClick={()=>onReorder?onReorder(e.id,entries[index+1].id):void moveEntry(e.id,"down")} className={`flex items-center justify-center border-2 border-border bg-background disabled:opacity-25 ${compact?"size-8 rounded-md":"size-11 rounded-xl"}`} aria-label={`${displayOrder}番を下へ`}><ArrowDown className={compact?"size-4":"size-6"}/></button></span>
     </span>}
     {!readOnly&&<span className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 ${selected?"border-primary bg-primary text-primary-foreground":"border-border"}`} aria-hidden="true">{selected&&<Check className="size-6"/>}</span>}
