@@ -2,11 +2,17 @@
 
 import { ArrowDown, ArrowUp, Check } from "lucide-react"
 import { useStore } from "@/lib/store"
+import { canonicalOrgId } from "@/lib/organization-aliases"
 import type { StartEntry } from "@/lib/types"
 
-export function StartList({ competitionId, selectedId, onSelect, readOnly = false, showAdminChanges = false, adminReorder = false, compact = false }: { competitionId: string; selectedId?: string; onSelect?: (entry: StartEntry) => void; readOnly?: boolean; showAdminChanges?: boolean; adminReorder?: boolean; compact?: boolean }) {
+export function StartList({ competitionId, selectedId, onSelect, readOnly = false, showAdminChanges = false, adminReorder = false, compact = false, organizationId, hideWithdrawn = false }: { competitionId: string; selectedId?: string; onSelect?: (entry: StartEntry) => void; readOnly?: boolean; showAdminChanges?: boolean; adminReorder?: boolean; compact?: boolean; organizationId?: string; hideWithdrawn?: boolean }) {
   const { entriesByCompetition, getPlayer, getHorse, getOrg, moveEntry, reorderSaving } = useStore()
-  const entries = entriesByCompetition(competitionId)
+  const entries = entriesByCompetition(competitionId).filter(entry => {
+    if (hideWithdrawn && entry.withdrawn) return false
+    if (!organizationId) return true
+    const orgId = entry.organizationId ?? getHorse(entry.horseId)?.orgId
+    return !!orgId && canonicalOrgId(orgId) === organizationId
+  })
   if (!entries.length) return <p className={`rounded-2xl border-2 border-dashed border-border bg-card text-center text-muted-foreground ${compact?"px-3 py-4 text-base":"px-5 py-8 text-xl"}`}>この競技の出番はまだありません。</p>
   return <div className={`flex flex-col ${compact?"gap-1":"gap-3"}`}>{entries.map((e,index)=>{const displayOrder=e.order,player=getPlayer(e.playerId),horse=getHorse(e.horseId),org=e.organizationId?getOrg(e.organizationId):horse?getOrg(horse.orgId):undefined,selected=selectedId===e.id,Tag=readOnly?"div":"button";return <Tag key={e.id} {...(readOnly?{}:{type:"button" as const,onClick:()=>onSelect?.(e),"aria-pressed":selected})} className={`flex items-center text-left transition ${readOnly?"":"active:scale-[0.99]"} ${compact?"min-h-12 gap-2 rounded-lg border px-2 py-1":"min-h-24 gap-4 rounded-2xl border-2 px-5 py-3 shadow-sm"} ${selected?"border-primary bg-primary/10 ring-4 ring-primary/25":"border-border bg-card"} ${readOnly?"":"hover:border-primary"}`}>
     <span className={`flex shrink-0 items-center justify-center bg-secondary font-bold text-secondary-foreground ${compact?"size-8 rounded-md text-base":"size-14 rounded-xl text-2xl"}`}>{displayOrder}</span>
