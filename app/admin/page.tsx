@@ -11,6 +11,9 @@ import { useStore } from "@/lib/store"
 import { ADMIN_SESSION_KEY, refreshAdminSession, signInAdmin, type AdminSession } from "@/lib/supabase-rest"
 
 type Tab = "requests" | "settlement" | "startlist"
+// Autumn test build: allow read-only inspection without signing in.
+// Turn this off before the Winter release.
+const TEMP_TEST_ADMIN_VIEW = true
 
 const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
   { id: "requests", label: "申請一覧", icon: ClipboardList },
@@ -21,6 +24,7 @@ const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("requests")
   const [session, setSession] = useState<AdminSession | null>(null)
+  const [preview, setPreview] = useState(TEMP_TEST_ADMIN_VIEW)
   const [checking, setChecking] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -67,11 +71,12 @@ export default function AdminPage() {
     sessionStorage.removeItem(ADMIN_SESSION_KEY)
     setSession(null)
     setPassword("")
+    setPreview(TEMP_TEST_ADMIN_VIEW)
   }
 
   if (checking) return <div className="flex min-h-dvh flex-col bg-background"><AppHeader subtitle="大会本部 管理画面" /><main className="mx-auto w-full max-w-xl flex-1 px-5 py-10 text-center text-xl font-semibold">本部ログインを確認しています…</main></div>
 
-  if (!session) return (
+  if (!session && !preview) return (
     <div className="flex min-h-dvh flex-col bg-background">
       <AppHeader subtitle="大会本部 管理画面" />
       <main className="mx-auto w-full max-w-xl flex-1 px-5 py-8">
@@ -83,6 +88,7 @@ export default function AdminPage() {
           {loginError && <p className="mb-4 rounded-xl bg-destructive/10 p-4 font-semibold text-destructive">{loginError}</p>}
           <button type="submit" disabled={loggingIn} className="min-h-16 w-full rounded-xl bg-primary px-5 text-xl font-bold text-primary-foreground disabled:opacity-50">{loggingIn ? "ログイン中…" : "本部へログイン"}</button>
         </form>
+        {TEMP_TEST_ADMIN_VIEW && <button type="button" onClick={() => setPreview(true)} className="mt-5 min-h-14 w-full rounded-xl border-2 border-border bg-card px-5 text-lg font-bold">ログインせず閲覧に戻る</button>}
       </main>
     </div>
   )
@@ -93,14 +99,15 @@ export default function AdminPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-xl font-semibold"><ArrowLeft className="size-6" />受付画面へ</Link>
-          <button type="button" onClick={logout} className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-lg font-semibold"><LogOut className="size-5" />ログアウト</button>
+          {session ? <button type="button" onClick={logout} className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-lg font-semibold"><LogOut className="size-5" />ログアウト</button> : <button type="button" onClick={() => setPreview(false)} className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-lg font-semibold"><LogIn className="size-5" />管理者ログイン</button>}
         </div>
+        {!session && <p className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-base font-bold text-amber-950">テスト用の閲覧モードです。申請の反映と出番順の保存には管理者ログインが必要です。</p>}
         <div className="mb-6 flex gap-2 rounded-2xl border-2 border-border bg-card p-2">
           {tabs.map((t) => { const Icon=t.icon, active=tab===t.id; return <button key={t.id} type="button" onClick={()=>setTab(t.id)} className={`flex min-h-16 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-xl font-bold transition ${active?"bg-primary text-primary-foreground shadow-sm":"text-muted-foreground"}`}><Icon className="size-6" /><span>{t.label}</span>{t.id==="requests"&&pendingCount>0&&<span className="flex size-7 items-center justify-center rounded-full bg-destructive text-base text-white">{pendingCount}</span>}</button> })}
         </div>
-        {tab === "requests" && <RequestPanel />}
+        {tab === "requests" && <RequestPanel canManage={!!session} />}
         {tab === "settlement" && <SettlementPanel />}
-        {tab === "startlist" && <StartListViewer />}
+        {tab === "startlist" && <StartListViewer canReorder={!!session} />}
       </main>
     </div>
   )
