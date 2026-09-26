@@ -91,7 +91,7 @@ begin
   end loop;
   return v_result;
 end
-$function$
+$function$;
 
 create or replace function public.cancel_autumn_reception_request(p_request_id uuid, p_reason text, p_seed_entry_id text default null)
 returns jsonb language plpgsql security definer set search_path = ''
