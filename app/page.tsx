@@ -8,7 +8,7 @@ const actions = [
     label: "追加",
     description: "競技にエントリーを追加します",
     icon: PlusCircle,
-    className: "bg-primary text-primary-foreground",
+    className: "bg-[oklch(0.46_0.1_155)] text-white",
   },
   {
     href: "/change",
