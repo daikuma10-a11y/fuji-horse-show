@@ -39,13 +39,11 @@ export function SettlementPanel() {
     return false
   }
 
-  const cancelledSeedIds = new Set(requests.filter(request=>request.status==="cancelled"&&request.cancelledSeedEntryId).map(request=>request.cancelledSeedEntryId!))
-  const billableOriginalEntries = originalEntries.filter(entry=>!cancelledSeedIds.has(entry.id))
   const settlementRequests = requests.filter(isResolvableRequest)
   const excludedLegacyCount = requests.filter((request) => request.status === "reflected" && !isResolvableRequest(request)).length
   const rows = calcSettlement({
     organizations: organizations.filter((org) => !confirmedOrgAliases[org.id]),
-    seedEntries: billableOriginalEntries,
+    seedEntries: originalEntries,
     horses: horses.map((horse) => ({ ...horse, orgId: settlementOrgId(horse.orgId) })),
     competitions,
     requests: settlementRequests.map((request) => ({ ...request, orgId: settlementOrgId(request.orgId) })),
@@ -78,14 +76,14 @@ export function SettlementPanel() {
   }
 
   if (selected) {
-    const normalDetails = billableOriginalEntries.filter((entry) => settlementOrgId(horses.find((h) => h.id === entry.horseId)?.orgId ?? "") === selected.orgId).map((entry) => ({ id: entry.id, rider: playerName(entry.playerId), horse: horseName(entry.horseId), competition: competition(entry.competitionId) }))
+    const normalDetails = originalEntries.filter((entry) => settlementOrgId(horses.find((h) => h.id === entry.horseId)?.orgId ?? "") === selected.orgId).map((entry) => ({ id: entry.id, rider: playerName(entry.playerId), horse: horseName(entry.horseId), competition: competition(entry.competitionId) }))
     const requestDetails = settlementRequests.filter((request) => settlementOrgId(request.orgId) === selected.orgId)
 
     return <div className="flex flex-col gap-5">
       <button type="button" onClick={() => setSelectedOrgId(null)} className="w-fit rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button>
       <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
         <h3 className="text-3xl font-bold text-foreground">{selected.orgName}</h3>
-        <p className="mt-2 text-base font-semibold text-muted-foreground">通常の棄権では元の競技料金を維持します。申請を取り消した人馬の料金は0円とし、追加・変更の確定料金を加算しています。</p>
+        <p className="mt-2 text-base font-semibold text-muted-foreground">変更・棄権の取り消しでは変更前のエントリーと通常料金を維持します。追加の取り消しは出番と追加料金から除外します。</p>
         <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5"><Cell label="通常エントリー料金" value={formatYen(selected.normalEntry)} /><Cell label="追加料金" value={formatYen(selected.additional)} /><Cell label="変更料金" value={formatYen(selected.change)} /><Cell label="競技変更の差額" value={formatYen(selected.competitionDiff)} /></dl>
         <div className="mt-6 border-t-2 border-border pt-5"><p className="text-lg font-semibold text-muted-foreground">現在の合計金額</p><p className="mt-1 text-4xl font-bold text-primary">{formatYen(selected.total)}</p></div>
       </div>
