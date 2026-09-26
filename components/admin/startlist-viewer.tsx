@@ -74,7 +74,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
       if (!raw) throw new Error("保存には管理者ログインが必要です")
       const session = await refreshAdminSession(JSON.parse(raw) as AdminSession)
       sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session))
-      await reorderEntries(competitionId, orderedIds, session.accessToken)
+      await reorderEntries(competitionId, orderedIds, session.accessToken, draft?.base ?? officialIds)
       applySavedEntryOrder(competitionId, orderedIds)
       const next = { ...savedOrders, [competitionId]: { ids: orderedIds, savedAt: new Date().toISOString() } }
       sessionStorage.setItem(SAVED_ORDERS_KEY, JSON.stringify(next))
