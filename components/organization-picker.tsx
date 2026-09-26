@@ -36,5 +36,5 @@ export function EntryOrganizationPicker({ competitionId, onSelect }: {
     const canonical = canonicalOrgId(orgId)
     counts.set(canonical, (counts.get(canonical) ?? 0) + 1)
   }
-  return <OrganizationPicker counts={counts} onSelect={onSelect} description="出番表の所属団体から対象を絞り込みます。" />
+  return <OrganizationPicker counts={counts} onSelect={onSelect} description="選んだ競技に出番がある団体だけ表示しています。団体が見つからない場合は競技を選び直してください。" />
 }
