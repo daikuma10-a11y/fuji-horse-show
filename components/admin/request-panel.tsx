@@ -15,7 +15,7 @@ const typeLabel: Record<AppRequest["type"], { text: string; cls: string }> = {
 }
 
 export function RequestPanel({canManage = true}:{canManage?:boolean}) {
-  const { requests, reflectRequest, getCompetition, getPlayer, getHorse, getOrg, entriesByCompetition } = useStore()
+  const { requests, getCompetition, getPlayer, getHorse, getOrg, entriesByCompetition } = useStore()
   const [positions, setPositions] = useState<Record<string, string>>({})
   const [applyingId, setApplyingId] = useState<string | null>(null)
   const [applyErrors, setApplyErrors] = useState<Record<string, string>>({})
@@ -36,7 +36,9 @@ export function RequestPanel({canManage = true}:{canManage?:boolean}) {
       const session=await refreshAdminSession(saved)
       sessionStorage.setItem(ADMIN_SESSION_KEY,JSON.stringify(session))
       await applyReceptionRequest(requestId,targetOrder,session.accessToken)
-      reflectRequest(requestId,targetOrder)
+      // The RPC writes the request and official entry atomically. Reload both from
+      // the database instead of making a second client-side PATCH or mock entry.
+      window.location.reload()
     }catch(error){
       setApplyErrors(prev=>({...prev,[requestId]:error instanceof Error?error.message:"正式出番表への反映に失敗しました"}))
     }finally{setApplyingId(null)}
