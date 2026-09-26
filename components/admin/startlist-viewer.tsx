@@ -13,7 +13,7 @@ export function StartListViewer({canReorder = true}:{canReorder?:boolean}) {
   const [compId, setCompId] = useState<string | null>(null)
   const comps = competitionsByDate(date)
   const selected = comps.find(c=>c.id===compId)??null
-  const verificationClass=reconciliation.state==="verified"?"border-green-300 bg-green-50 text-green-900":reconciliation.state==="loading"?"border-border bg-muted text-muted-foreground":"border-amber-300 bg-amber-50 text-amber-950"
+  const verificationClass=reconciliation.state==="verified"?"border-blue-300 bg-blue-50 text-blue-900":reconciliation.state==="loading"?"border-border bg-muted text-muted-foreground":"border-amber-300 bg-amber-50 text-amber-950"
   return <div className="flex flex-col gap-3">
     <div className={`rounded-lg border px-3 py-2 text-sm font-bold ${verificationClass}`}>DB照合状況：{reconciliation.message}</div>
     {reorderSaving&&<div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm font-bold text-muted-foreground">出番順を正式DBへ保存中…</div>}
