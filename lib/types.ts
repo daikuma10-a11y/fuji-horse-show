@@ -47,6 +47,8 @@ export interface StartEntry {
   withdrawn?: boolean
   /** 追加・変更申請から反映されたことを本部出番表で識別するための印 */
   adminChangeMark?: EntryChangeMark
+  /** 反映した変更申請で実際に変更された項目 */
+  adminChangeFields?: Array<"competition" | "player" | "horse">
 }
 
 export type RequestType = "add" | "change" | "withdraw"
