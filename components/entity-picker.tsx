@@ -14,15 +14,18 @@ const normalized = (value: string) => value.normalize("NFKC").replace(/[\s　]+/
 
 export function PlayerPicker({ selectedId, onSelect }: { selectedId?: string; onSelect: (playerId: string) => void }) {
   const { players, organizations } = useStore()
+  // Autumn原本の p-122 は名前にフリガナが連結され、正式出番表に出番がない。
+  // 元データとIDは保持し、この誤記の候補だけ選択画面から除外する。
+  const selectablePlayers = players.filter(player => player.id !== "p-122")
   const [orgId, setOrgId] = useState<string | null>(null)
   const counts = new Map<string, number>()
-  for (const player of players) {
+  for (const player of selectablePlayers) {
     const id = canonicalOrgId(player.orgId)
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
   if (!orgId) return <OrganizationPicker counts={counts} onSelect={setOrgId} description="選手の所属団体を選んでください。" />
   const orgName = organizations.find(org => org.id === orgId)?.name
-  const items = players.filter(player => canonicalOrgId(player.orgId) === orgId).sort(compare<Player>)
+  const items = selectablePlayers.filter(player => canonicalOrgId(player.orgId) === orgId).sort(compare<Player>)
   return <div className="flex flex-col gap-4">
     <button type="button" onClick={() => setOrgId(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
     <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{orgName}の選手</h3>
