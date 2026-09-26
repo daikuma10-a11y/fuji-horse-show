@@ -45,6 +45,8 @@ export interface StartEntry {
   /** 異なる登録団体の人馬で、エントリー所属の選択履歴が未確認 */
   needsAffiliationReview?: boolean
   withdrawn?: boolean
+  /** OP: 先乗りとして出場し、正式成績から除外する */
+  isOp?: boolean
   /** 追加・変更申請から反映されたことを本部出番表で識別するための印 */
   adminChangeMark?: EntryChangeMark
   /** 反映した変更申請で実際に変更された項目 */
