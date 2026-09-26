@@ -45,7 +45,17 @@ function normalizeRequestRow(row:RequestRow):AppRequest|null{
 }
 export async function signInAdmin(email:string,password:string):Promise<AdminSession>{const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},body:JSON.stringify({email,password})});const body=await response.json() as {access_token?:string;refresh_token?:string;expires_in?:number;user?:{email?:string;app_metadata?:{role?:string}};msg?:string;error_description?:string};if(!response.ok||!body.access_token||!body.refresh_token)throw new Error(body.error_description||body.msg||"ログインに失敗しました");if(body.user?.app_metadata?.role!=="admin")throw new Error("このアカウントには本部管理者権限がありません");return{accessToken:body.access_token,refreshToken:body.refresh_token,expiresAt:Date.now()+(body.expires_in??3600)*1000,email:body.user.email??email}}
 export async function refreshAdminSession(session:AdminSession):Promise<AdminSession>{if(session.expiresAt>Date.now()+60000)return session;const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:session.refreshToken})});const body=await response.json() as {access_token?:string;refresh_token?:string;expires_in?:number;user?:{email?:string;app_metadata?:{role?:string}}};if(!response.ok||!body.access_token||!body.refresh_token||body.user?.app_metadata?.role!=="admin")throw new Error("本部ログインの有効期限が切れました。再ログインしてください");return{accessToken:body.access_token,refreshToken:body.refresh_token,expiresAt:Date.now()+(body.expires_in??3600)*1000,email:body.user.email??session.email}}
-export async function verifyAdminSession(session:AdminSession):Promise<AdminSession>{
+let verifyingAdminSession:Promise<AdminSession>|null=null
+let verifyingRefreshToken:string|null=null
+export function verifyAdminSession(session:AdminSession):Promise<AdminSession>{
+ if(verifyingAdminSession&&verifyingRefreshToken===session.refreshToken)return verifyingAdminSession
+ verifyingRefreshToken=session.refreshToken
+ const task=verifyAdminSessionOnce(session)
+ verifyingAdminSession=task
+ void task.finally(()=>{if(verifyingAdminSession===task){verifyingAdminSession=null;verifyingRefreshToken=null}}).catch(()=>{})
+ return task
+}
+async function verifyAdminSessionOnce(session:AdminSession):Promise<AdminSession>{
  const refreshed=await refreshAdminSession(session)
  const response=await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${refreshed.accessToken}`},cache:"no-store"})
  if(!response.ok)throw new Error("本部ログインを確認できません")
@@ -53,7 +63,8 @@ export async function verifyAdminSession(session:AdminSession):Promise<AdminSess
  if(user.app_metadata?.role!=="admin")throw new Error("本部管理者権限を確認できません")
  return {...refreshed,email:user.email??refreshed.email}
 }
-export async function loadReceptionRequests():Promise<AppRequest[]>{const select="id,request_type,status,created_at,fee,fee_amount,organization_id,original_entry_id,entry_id,target_competition_id,from_competition_id,to_competition_id,rider_id,horse_id,treated_as_withdraw_add,note,request_note,payload";const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?event_id=eq.${AUTUMN_EVENT_ID}&select=${select}&order=created_at.desc`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`受付データ取得失敗: ${response.status}`);const rows=await response.json() as RequestRow[];return rows.map(normalizeRequestRow).filter((row):row is AppRequest=>row!==null)}
+export async function loadReceptionRequests(accessToken:string):Promise<AppRequest[]>{const select="id,request_type,status,created_at,fee,fee_amount,organization_id,original_entry_id,entry_id,target_competition_id,from_competition_id,to_competition_id,rider_id,horse_id,treated_as_withdraw_add,note,request_note,payload";const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?event_id=eq.${AUTUMN_EVENT_ID}&select=${select}&order=created_at.desc`,{headers:{...headers,Authorization:`Bearer ${accessToken}`},cache:"no-store"});if(!response.ok)throw new Error(`受付データ取得失敗: ${response.status}`);const rows=await response.json() as RequestRow[];return rows.map(normalizeRequestRow).filter((row):row is AppRequest=>row!==null)}
+export async function loadCancelledReceptionEntryIds():Promise<Set<string>>{const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_cancelled_entry_ids?event_id=eq.${AUTUMN_EVENT_ID}&select=entry_id`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`取り消し済み出番の取得失敗: ${response.status}`);const rows=await response.json() as {entry_id:string}[];return new Set(rows.map(row=>row.entry_id))}
 export async function loadCompetitionFees():Promise<Map<number,number>>{const response=await fetch(`${SUPABASE_URL}/rest/v1/competitions?event_id=eq.${AUTUMN_EVENT_ID}&select=competition_no,fee`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`競技料金取得失敗: ${response.status}`);const rows=await response.json() as CompetitionFeeRow[];return new Map(rows.map(row=>[Number(row.competition_no),Number(row.fee??0)]))}
 function requestInsertBody(request:AppRequest){return{id:request.id,event_id:AUTUMN_EVENT_ID,request_type:request.type,fee_amount:request.fee.total,fee:request.fee.total,status:request.status,source:"fuji-horse-show-web",treated_as_withdraw_add:request.change?.treatedAsWithdrawAdd??false,note:request.add?.note||null,payload:enrichedPayload(request)}}
 export async function saveReceptionRequest(request:AppRequest):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests`,{method:"POST",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify(requestInsertBody(request))});if(!response.ok)throw new Error(`受付データ保存失敗: ${response.status}`)}
@@ -61,17 +72,10 @@ export async function saveReceptionRequests(requests:AppRequest[]):Promise<void>
  if(!requests.length)throw new Error("受付内容がありません")
  const ids=new Set(requests.map(request=>request.id))
  if(ids.size!==requests.length)throw new Error("受付番号が重複しています")
- const savedIds=async()=>new Set((await loadReceptionRequests()).map(request=>request.id))
- const before=await savedIds()
- const existing=requests.filter(request=>before.has(request.id)).length
- if(existing===requests.length)return
- if(existing)throw new Error("一部だけ保存済みの受付があります。本部で受付番号を確認してください")
- let response:Response
- try{response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests`,{method:"POST",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify(requests.map(requestInsertBody))})}
- catch(error){const after=await savedIds().catch(()=>new Set<string>());if(requests.every(request=>after.has(request.id)))return;throw error}
- if(!response.ok){const after=await savedIds().catch(()=>new Set<string>());if(requests.every(request=>after.has(request.id)))return;throw new Error(`受付の一括保存に失敗しました (${response.status})`)}
- const confirmed=await savedIds()
- if(!requests.every(request=>confirmed.has(request.id)))throw new Error("保存結果を確認できません。受付一覧を再読み込みして確認してください")
+ // UUIDs are generated for this batch. Repeating the same POST after a lost response
+ // must never overwrite a request that the office has already processed.
+ const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_requests?on_conflict=id`,{method:"POST",headers:{...headers,Prefer:"resolution=ignore-duplicates,return=minimal,count=exact"},body:JSON.stringify(requests.map(requestInsertBody))})
+ if(!response.ok)throw new Error(`受付の一括保存に失敗しました (${response.status})。同じ受付一覧から再試行してください`)
 }
 export async function cancelReceptionRequest(requestId:string,reason:string,seedEntryId:string|undefined,accessToken:string):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/cancel_autumn_reception_request`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({p_request_id:requestId,p_reason:reason,p_seed_entry_id:seedEntryId??null})});if(!response.ok){let detail="";try{const body=await response.json() as {message?:string};detail=body.message?body.message:""}catch{}throw new Error(detail||`受付の取り消しに失敗しました (${response.status})`)}}
 export async function applyReceptionRequest(requestId:string,targetOrder:number|undefined,accessToken:string):Promise<void>{const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/resolve_and_apply_reception_request_with_affiliation`,{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({p_request_id:requestId,p_start_order:targetOrder??null})});if(!response.ok){let detail="";try{const body=await response.json() as {message?:string};detail=body.message?`: ${body.message}`:""}catch{}throw new Error(`正式出番表への反映に失敗しました (${response.status})${detail}`)}}

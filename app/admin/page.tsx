@@ -54,7 +54,7 @@ export default function AdminPage() {
     try {
       const next = await signInAdmin(email.trim(), password)
       sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(next))
-      setSession(next)
+      window.location.reload()
       setPassword("")
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "ログインに失敗しました")
@@ -65,7 +65,7 @@ export default function AdminPage() {
 
   function logout() {
     sessionStorage.removeItem(ADMIN_SESSION_KEY)
-    setSession(null)
+    window.location.reload()
     setPassword("")
   }
 
