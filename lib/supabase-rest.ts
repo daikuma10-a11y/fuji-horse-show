@@ -1,5 +1,5 @@
 import type { AppRequest, Competition, FeeBreakdown, Horse, Player, StartEntry } from "./types"
-import { competitions as seedCompetitions, horses as seedHorses, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
+import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrganizations, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 
 const SUPABASE_URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
@@ -25,9 +25,10 @@ const horseName=(id:string)=>seedHorses.find(h=>h.id===id)?.name??""
 const competitionNo=(id:string)=>seedCompetitions.find(c=>c.id===id)?.number??null
 const entryOrder=(id:string)=>seedStartEntries.find(e=>e.id===id)?.order??null
 function enrichedPayload(request:AppRequest){
- if(request.add)return {...request,add:{...request.add,playerName:playerName(request.add.playerId),horseName:horseName(request.add.horseId),competitionNo:competitionNo(request.add.competitionId)}}
+ const organizationName=seedOrganizations.find(org=>org.id===request.orgId)?.name
+ if(request.add)return {...request,organizationName,add:{...request.add,playerName:playerName(request.add.playerId),horseName:horseName(request.add.horseId),competitionNo:competitionNo(request.add.competitionId)}}
  if(request.withdraw)return {...request,withdraw:{...request.withdraw,playerName:playerName(request.withdraw.playerId),horseName:horseName(request.withdraw.horseId),competitionNo:competitionNo(request.withdraw.competitionId),entryOrder:entryOrder(request.withdraw.entryId)}}
- if(request.change)return {...request,change:{...request.change,fromPlayerName:playerName(request.change.fromPlayerId),fromHorseName:horseName(request.change.fromHorseId),toPlayerName:playerName(request.change.toPlayerId),toHorseName:horseName(request.change.toHorseId),fromCompetitionNo:competitionNo(request.change.fromCompetitionId),toCompetitionNo:competitionNo(request.change.toCompetitionId),entryOrder:entryOrder(request.change.entryId)}}
+ if(request.change)return {...request,organizationName,change:{...request.change,fromPlayerName:playerName(request.change.fromPlayerId),fromHorseName:horseName(request.change.fromHorseId),toPlayerName:playerName(request.change.toPlayerId),toHorseName:horseName(request.change.toHorseId),fromCompetitionNo:competitionNo(request.change.fromCompetitionId),toCompetitionNo:competitionNo(request.change.toCompetitionId),entryOrder:entryOrder(request.change.entryId)}}
  return request
 }
 function normalizeRequestRow(row:RequestRow):AppRequest|null{
