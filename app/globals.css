@@ -81,6 +81,13 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* 受付画面だけ青を主色にする。本部管理画面は従来の配色を使う。 */
+.reception-theme {
+  --primary: #205f9e;
+  --primary-foreground: #ffffff;
+  --ring: #205f9e;
+}
+
 .dark {
   color-scheme: dark;
   --background: oklch(0.145 0 0);
