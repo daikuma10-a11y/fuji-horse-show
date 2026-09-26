@@ -90,6 +90,7 @@ export interface AppRequest {
   /** DB entry linked by the reflected request; absent before reflection. */
   officialEntryId?: string
   cancelledSeedEntryId?: string
+  cancelledByAdmin?: boolean
   type: RequestType
   status: RequestStatus
   createdAt: string
