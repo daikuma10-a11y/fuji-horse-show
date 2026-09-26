@@ -42,6 +42,8 @@ export interface StartEntry {
   horseId: string
   /** 正式DBのエントリー所属に対応するローカル団体ID */
   organizationId?: string
+  /** 異なる登録団体の人馬で、エントリー所属の選択履歴が未確認 */
+  needsAffiliationReview?: boolean
   withdrawn?: boolean
   /** 追加・変更申請から反映されたことを本部出番表で識別するための印 */
   adminChangeMark?: EntryChangeMark
