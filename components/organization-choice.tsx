@@ -2,14 +2,8 @@
 
 import type { Organization } from "@/lib/types"
 
-const confirmedAliases: Record<string, string> = {
-  "org-2": "org-4",
-  "org-6": "org-8",
-  "org-23": "org-17",
-  "org-24": "org-25",
-}
-
-export const canonicalOrgId = (id: string) => confirmedAliases[id] ?? id
+import { canonicalOrgId } from "@/lib/organization-aliases"
+export { canonicalOrgId } from "@/lib/organization-aliases"
 
 export function OrganizationChoice({ playerOrg, horseOrg, selectedId, onSelect }: {
   playerOrg: Organization
