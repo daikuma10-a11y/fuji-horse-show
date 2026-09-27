@@ -38,7 +38,12 @@ export function StoreProvider({children}:{children:ReactNode}){
    const localOrgNames=organizations.filter(org=>canonicalOrgId(org.id)===canonical).map(org=>norm(org.name))
    const sameLocal=items.filter(other=>canonicalOrgId(other.orgId)===canonical&&norm(other.name)===norm(item.name))
    const matches=registered.filter(row=>norm(row.name)===norm(item.name)&&localOrgNames.includes(norm(row.organizationName)))
-   return sameLocal.length===1&&matches.length===1?{...item,officialId:matches[0].id,jefRegistered:matches[0].registered}:item
+   // A source workbook can create several DB rows for the same rider/horse.
+   // Merge only when the registered number is identical; a different number needs manual review.
+   const verified=matches.filter(row=>row.registered&&row.registryNumber)
+   const numbers=new Set(verified.map(row=>norm(row.registryNumber)))
+   const chosen=numbers.size===1?[...verified].sort((a,b)=>b.entryCount-a.entryCount||a.id.localeCompare(b.id))[0]:matches.length===1?matches[0]:undefined
+   return sameLocal.length===1&&chosen?{...item,officialId:chosen.id,jefRegistered:chosen.registered}:item
   })
   setPlayers(match(seedPlayers,masters.registeredRiders));setHorses(match(seedHorses,masters.registeredHorses))
  }).catch(error=>console.error("日馬連登録情報の読み込みに失敗",error));return()=>{active=false}},[organizations])
