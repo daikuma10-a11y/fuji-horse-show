@@ -12,18 +12,18 @@ const compare = <T extends { name: string; reading?: string }>(a: T, b: T) =>
   a.name.localeCompare(b.name, "ja")
 const normalized = (value: string) => value.normalize("NFKC").replace(/[\s　]+/g, "").toLocaleLowerCase("ja-JP")
 
-export function PlayerPicker({ selectedId, onSelect }: { selectedId?: string; onSelect: (playerId: string) => void }) {
+export function PlayerPicker({ selectedId, onSelect, registeredOnly = false }: { selectedId?: string; onSelect: (playerId: string) => void; registeredOnly?: boolean }) {
   const { players, organizations } = useStore()
   // Autumn原本の p-119 と p-122 は名前にフリガナが連結された出番のない誤記。
   // 本人確認済みの候補だけ除外し、元データと正式DBの行は保持する。
-  const selectablePlayers = players.filter(player => player.id !== "p-119" && player.id !== "p-122")
+  const selectablePlayers = players.filter(player => player.id !== "p-119" && player.id !== "p-122" && (!registeredOnly || (player.jefRegistered && player.officialId)))
   const [orgId, setOrgId] = useState<string | null>(null)
   const counts = new Map<string, number>()
   for (const player of selectablePlayers) {
     const id = canonicalOrgId(player.orgId)
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
-  if (!orgId) return <OrganizationPicker counts={counts} onSelect={setOrgId} description="選手の所属団体を選んでください。" />
+  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた選手のみ表示しています。" : ""}</p><OrganizationPicker counts={counts} onSelect={setOrgId} description="選手の所属団体を選んでください。" /></>
   const orgName = organizations.find(org => org.id === orgId)?.name
   const items = selectablePlayers.filter(player => canonicalOrgId(player.orgId) === orgId).sort(compare<Player>)
   return <div className="flex flex-col gap-4">
@@ -37,17 +37,18 @@ export function PlayerPicker({ selectedId, onSelect }: { selectedId?: string; on
   </div>
 }
 
-export function HorsePicker({ selectedId, onSelect }: { selectedId?: string; onSelect: (horseId: string) => void }) {
+export function HorsePicker({ selectedId, onSelect, registeredOnly = false }: { selectedId?: string; onSelect: (horseId: string) => void; registeredOnly?: boolean }) {
   const { horses, organizations } = useStore()
   const [orgId, setOrgId] = useState<string | null>(null)
   const counts = new Map<string, number>()
-  for (const horse of horses) {
+  const selectableHorses = horses.filter(horse => !registeredOnly || (horse.jefRegistered && horse.officialId))
+  for (const horse of selectableHorses) {
     const id = canonicalOrgId(horse.orgId)
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
-  if (!orgId) return <OrganizationPicker counts={counts} onSelect={setOrgId} description="馬の所属団体を選んでください。" />
+  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた馬のみ表示しています。" : ""}</p><OrganizationPicker counts={counts} onSelect={setOrgId} description="馬の所属団体を選んでください。" /></>
   const orgName = organizations.find(org => org.id === orgId)?.name
-  const items = horses.filter(horse => canonicalOrgId(horse.orgId) === orgId).sort(compare<Horse>)
+  const items = selectableHorses.filter(horse => canonicalOrgId(horse.orgId) === orgId).sort(compare<Horse>)
   return <div className="flex flex-col gap-4">
     <button type="button" onClick={() => setOrgId(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
     <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{orgName}の馬</h3>

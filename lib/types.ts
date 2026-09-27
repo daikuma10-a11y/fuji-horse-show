@@ -18,8 +18,8 @@ export interface MasterAuditFields {
 }
 
 export interface Organization extends MasterAuditFields { id: string; name: string }
-export interface Player extends MasterAuditFields { id: string; name: string; orgId: string }
-export interface Horse extends MasterAuditFields { id: string; name: string; orgId: string }
+export interface Player extends MasterAuditFields { id: string; name: string; orgId: string; officialId?: string; jefRegistered?: boolean }
+export interface Horse extends MasterAuditFields { id: string; name: string; orgId: string; officialId?: string; jefRegistered?: boolean }
 
 export interface Competition {
   id: string
@@ -50,13 +50,16 @@ export interface StartEntry {
   /** 追加・変更申請から反映されたことを本部出番表で識別するための印 */
   adminChangeMark?: EntryChangeMark
   /** 反映した変更申請で実際に変更された項目 */
-  adminChangeFields?: Array<"competition" | "player" | "horse">
+  adminChangeFields?: Array<"competition" | "player" | "horse" | "op">
 }
 
 export type RequestType = "add" | "change" | "withdraw"
 export type RequestStatus = "pending" | "reflected" | "cancelled"
 
 export interface AddPayload {
+  isOp?: boolean
+  officialPlayerId?: string
+  officialHorseId?: string
   competitionId: string
   playerId: string
   horseId: string
@@ -66,6 +69,10 @@ export interface AddPayload {
 }
 
 export interface ChangePayload {
+  fromIsOp?: boolean
+  toIsOp?: boolean
+  officialPlayerId?: string
+  officialHorseId?: string
   entryId: string
   fromCompetitionId: string
   fromPlayerId: string
@@ -75,7 +82,7 @@ export interface ChangePayload {
   toHorseId: string
   /** 出番表・精算に使用する団体 */
   organizationId?: string
-  changedFields: Array<"competition" | "player" | "horse">
+  changedFields: Array<"competition" | "player" | "horse" | "op">
   treatedAsWithdrawAdd: boolean
 }
 

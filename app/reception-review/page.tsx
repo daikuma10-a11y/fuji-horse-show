@@ -54,7 +54,7 @@ export default function ReceptionReviewPage(){
       const info=detail(request),competition=getCompetition(info.competition),name=request.type==="add"?"追加":request.type==="change"?"変更":"棄権"
       return <div key={request.id} className="rounded-2xl border-2 border-border bg-card p-4 shadow-sm">
        <div className="flex items-center justify-between gap-2"><h2 className="text-2xl font-bold">{index+1}件目　{name}</h2><span className="rounded-lg bg-accent/15 px-2 py-1 text-sm font-bold">確定前</span></div>
-       <div className="mt-3"><SummaryCard><SummaryRow label="競技" value={competition?String(competition.number)+". "+competition.name:"要確認"}/><SummaryRow label="選手" value={getPlayer(info.player)?.name??"要確認"}/><SummaryRow label="馬" value={getHorse(info.horse)?.name??"要確認"}/><SummaryRow label="団体" value={getOrg(request.orgId)?.name??"要確認"}/>
+       <div className="mt-3"><SummaryCard><SummaryRow label="競技" value={competition?String(competition.number)+". "+competition.name:"要確認"}/>{request.type!=="withdraw"&&<SummaryRow label="参加区分" value={request.add?.isOp||request.change?.toIsOp?"OP参加（正式成績対象外）":"通常参加"}/>}<SummaryRow label="選手" value={getPlayer(info.player)?.name??"要確認"}/><SummaryRow label="馬" value={getHorse(info.horse)?.name??"要確認"}/><SummaryRow label="団体" value={getOrg(request.orgId)?.name??"要確認"}/>
        {request.change&&<SummaryRow label="変更前" value={String(getCompetition(request.change.fromCompetitionId)?.number??"")+" / "+(getPlayer(request.change.fromPlayerId)?.name??"要確認")+" / "+(getHorse(request.change.fromHorseId)?.name??"要確認")}/>}
        {request.change?.treatedAsWithdrawAdd&&<SummaryRow label="扱い" value="棄権＋追加"/>}
        {request.add?.note&&<SummaryRow label="要望" value={request.add.note}/>}
