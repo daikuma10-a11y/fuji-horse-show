@@ -54,6 +54,7 @@ export function SettlementPanel() {
     organizations.find(org => org.id === b.orgId) ?? { id: b.orgId, name: b.orgName },
   ))
   const grandTotal = rows.reduce((sum, row) => sum + row.total, 0)
+  const receptionTotal = rows.reduce((sum, row) => sum + row.additional + row.change + row.competitionDiff, 0)
   const selected = rows.find((row) => row.orgId === selectedOrgId)
   const playerName = (id: string) => {
     const direct = players.find((p) => p.id === id)?.name
@@ -88,8 +89,8 @@ export function SettlementPanel() {
       <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
         <h3 className="text-3xl font-bold text-foreground">{selected.orgName}</h3>
         <p className="mt-2 text-base font-semibold text-muted-foreground">変更・棄権の取り消しでは変更前のエントリーと通常料金を維持します。追加の取り消しは出番と追加料金から除外します。</p>
-        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5"><Cell label="通常エントリー料金" value={formatYen(selected.normalEntry)} /><Cell label="追加料金" value={formatYen(selected.additional)} /><Cell label="変更料金" value={formatYen(selected.change)} /><Cell label="競技変更の差額" value={formatYen(selected.competitionDiff)} /></dl>
-        <div className="mt-6 border-t-2 border-border pt-5"><p className="text-lg font-semibold text-muted-foreground">現在の合計金額</p><p className="mt-1 text-4xl font-bold text-primary">{formatYen(selected.total)}</p></div>
+        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5"><Cell label="通常エントリー料金（原則事前払い）" value={formatYen(selected.normalEntry)} /><Cell label="追加料金" value={formatYen(selected.additional)} /><Cell label="変更料金" value={formatYen(selected.change)} /><Cell label="競技変更の差額" value={formatYen(selected.competitionDiff)} /></dl>
+        <div className="mt-6 border-t-2 border-border pt-5"><p className="text-lg font-semibold text-muted-foreground">今回の受付で発生した料金</p><p className="mt-1 text-4xl font-bold text-primary">{formatYen(selected.additional + selected.change + selected.competitionDiff)}</p><p className="mt-3 text-sm text-muted-foreground">事前支払い状況は未登録です。当日払いの特例がある団体は通常エントリー料金も別途確認してください。</p><p className="mt-3 text-base font-semibold text-muted-foreground">大会費用の合計（通常分を含む）：{formatYen(selected.total)}</p></div>
       </div>
       <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
         <h4 className="text-2xl font-bold">料金明細</h4><p className="mt-1 text-sm font-semibold text-muted-foreground">選手・馬・競技ごとに、合計金額の根拠を確認できます。</p>
@@ -99,7 +100,7 @@ export function SettlementPanel() {
     </div>
   }
 
-  return <div className="flex flex-col gap-5"><div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5"><p className="text-lg font-semibold">団体を選ぶと、通常エントリー料金と反映済みの追加・変更料金を確認できます。</p>{excludedLegacyCount>0&&<p className="mt-2 text-sm font-semibold text-muted-foreground">旧テストデータ {excludedLegacyCount}件は正式データへ紐付けできないため、精算金額から除外しています。</p>}<div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 合計</span><span className="text-3xl font-bold text-primary">{formatYen(grandTotal)}</span></div></div><div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">{rows.map((row,index)=><button key={row.orgId} type="button" onClick={()=>setSelectedOrgId(row.orgId)} className={`flex w-full items-center justify-between gap-4 px-5 py-5 text-left ${index?"border-t border-border":""}`}><span className="min-w-0 text-xl font-bold text-foreground">{row.orgName}</span><span className="flex shrink-0 items-center gap-3"><span className="text-xl font-bold text-primary">{formatYen(row.total)}</span><span className="text-2xl text-muted-foreground">›</span></span></button>)}</div></div>
+  return <div className="flex flex-col gap-5"><div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5"><p className="text-lg font-semibold">通常エントリー料金は原則事前払いです。団体を選ぶと通常分と今回の受付分を分けて確認できます。</p>{excludedLegacyCount>0&&<p className="mt-2 text-sm font-semibold text-muted-foreground">旧テストデータ {excludedLegacyCount}件は正式データへ紐付けできないため、精算金額から除外しています。</p>}<div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 受付追加分</span><span className="text-3xl font-bold text-primary">{formatYen(receptionTotal)}</span></div><p className="mt-2 text-sm text-muted-foreground">大会費用の合計（通常分を含む）：{formatYen(grandTotal)}。支払い済みかどうかは未反映です。</p></div><div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">{rows.map((row,index)=><button key={row.orgId} type="button" onClick={()=>setSelectedOrgId(row.orgId)} className={`flex w-full items-center justify-between gap-4 px-5 py-5 text-left ${index?"border-t border-border":""}`}><span className="min-w-0 text-xl font-bold text-foreground">{row.orgName}</span><span className="flex shrink-0 items-center gap-3"><span className="text-xl font-bold text-primary">{formatYen(row.additional + row.change + row.competitionDiff)}</span><span className="text-2xl text-muted-foreground">›</span></span></button>)}</div></div>
 }
 
 function Cell({label,value}:{label:string;value:string}){return <div><dt className="text-base font-semibold text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-bold text-foreground">{value}</dd></div>}
