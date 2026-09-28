@@ -8,6 +8,8 @@ import { startEntries as originalEntries } from "@/lib/mock-data"
 import { ActionButton } from "@/components/action-button"
 import { ADMIN_SESSION_KEY, applyReceptionRequest, cancelReceptionRequest, refreshAdminSession, type AdminSession } from "@/lib/supabase-rest"
 import type { AppRequest } from "@/lib/types"
+import { compareOrganizations } from "@/lib/organization-order"
+import { canonicalOrgId } from "@/lib/organization-aliases"
 
 const typeLabel: Record<AppRequest["type"], { text: string; cls: string }> = {
   add: { text: "追加", cls: "bg-primary text-primary-foreground" },
@@ -23,9 +25,23 @@ export function RequestPanel({canManage = true}:{canManage?:boolean}) {
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [restoreWait, setRestoreWait] = useState(true)
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   useEffect(()=>{const t=window.setTimeout(()=>setRestoreWait(false),2500);return()=>window.clearTimeout(t)},[])
   if (requests.length === 0 && restoreWait) return <p className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-10 text-center text-xl text-muted-foreground">前回の申請を復元しています…</p>
   if (requests.length === 0) return <p className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-10 text-center text-xl text-muted-foreground">まだ受付された申請はありません。受付タブレットから追加・変更・棄権を申請すると、ここに表示されます。</p>
+  // 申請の所属先を基準に集計する。受付に来た方の団体とは区別する。
+  const groups = Array.from(requests.reduce((map, request) => {
+    const id = canonicalOrgId(request.orgId)
+    const group = map.get(id) ?? { id, name: getOrg(id)?.name ?? getOrg(request.orgId)?.name ?? "団体不明", requests: [] as AppRequest[], pending: 0 }
+    group.requests.push(request)
+    if (request.status === "pending") group.pending++
+    map.set(id, group)
+    return map
+  }, new Map<string, { id: string; name: string; requests: AppRequest[]; pending: number }>()).values()).sort((a, b) => compareOrganizations(
+    getOrg(a.id) ?? { id: a.id, name: a.name },
+    getOrg(b.id) ?? { id: b.id, name: b.name },
+  ))
+  const selectedGroup = groups.find(group => group.id === selectedOrgId)
   function compText(id: string) { const c=getCompetition(id); return c?`競技${c.number}. ${c.name}${c.official?"（★公認）":""}`:"―" }
   function targetCompetitionId(r:AppRequest){if(r.add)return r.add.competitionId;if(r.change?.treatedAsWithdrawAdd)return r.change.toCompetitionId;return null}
   async function handleReflect(requestId:string,targetOrder?:number){
@@ -81,9 +97,24 @@ export function RequestPanel({canManage = true}:{canManage?:boolean}) {
     }finally{setApplyingId(null)}
   }
 
+  if (!selectedGroup) return <div className="flex flex-col gap-4">
+    <p className="text-lg text-muted-foreground">申請のある団体を表示しています。未反映がある団体は件数を表示します。</p>
+    <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">
+      {groups.map((group, index) => <button key={group.id} type="button" onClick={() => setSelectedOrgId(group.id)} className={`flex min-h-20 w-full items-center justify-between gap-3 px-5 py-4 text-left ${index ? "border-t border-border" : ""}`}>
+        <span className="min-w-0 text-xl font-bold text-foreground">{group.name}</span>
+        <span className="flex shrink-0 items-center gap-2">
+          {group.pending > 0 ? <span className="rounded-lg bg-destructive px-3 py-1 text-base font-bold text-white">未反映 {group.pending}件</span> : <span className="text-base font-semibold text-muted-foreground">未反映なし</span>}
+          <span className="text-xl text-muted-foreground" aria-hidden="true">›</span>
+        </span>
+      </button>)}
+    </div>
+  </div>
+
   return <div className="flex flex-col gap-4">
+    <button type="button" onClick={() => setSelectedOrgId(null)} className="w-fit min-h-12 rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button>
+    <div className="rounded-2xl border-2 border-border bg-card p-5"><h2 className="text-2xl font-bold">{selectedGroup.name}</h2><p className="mt-2 text-lg font-semibold">申請 {selectedGroup.requests.length}件 ／ {selectedGroup.pending > 0 ? <span className="text-destructive">未反映 {selectedGroup.pending}件</span> : "未反映なし"}</p></div>
     <p className="text-lg text-muted-foreground">追加と、棄権＋追加として扱う変更は出番位置を指定できます。自動配置では公認競技は先頭、非公認競技は末尾に入ります。通常の変更は元の出番位置を維持します。</p>
-    {requests.map(r=>{const label=typeLabel[r.type],org=getOrg(r.orgId),targetId=targetCompetitionId(r),maxPosition=targetId?entriesByCompetition(targetId).filter(e=>!e.withdrawn).length+1:0,isApplying=applyingId===r.id;return <div key={r.id} className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
+    {selectedGroup.requests.map(r=>{const label=typeLabel[r.type],org=getOrg(r.orgId),targetId=targetCompetitionId(r),maxPosition=targetId?entriesByCompetition(targetId).filter(e=>!e.withdrawn).length+1:0,isApplying=applyingId===r.id;return <div key={r.id} className="rounded-2xl border-2 border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center gap-3"><span className={`rounded-lg px-3 py-1 text-xl font-bold ${label.cls}`}>{label.text}</span><span className="text-xl font-bold text-foreground">{org?.name??"―"}</span><span className="ml-auto flex items-center gap-2 text-lg font-semibold">{r.status==="cancelled"?<span className="text-muted-foreground">取消済み</span>:r.status==="reflected"?<span className="flex items-center gap-1 text-primary"><CheckCircle2 className="size-6"/>反映済み</span>:<span className="flex items-center gap-1 text-muted-foreground"><Clock className="size-6"/>未反映</span>}</span></div>
       <p className="mt-2 text-base font-semibold text-muted-foreground">受付日時：{new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(r.createdAt))}</p>
       {r.visitorName&&<p className="mt-1 text-base font-semibold text-foreground">受付に来た方：{getOrg(r.visitorOrgId??"")?.name??"団体不明"} ／ {r.visitorName}</p>}
