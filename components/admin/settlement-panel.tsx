@@ -29,7 +29,11 @@ export function SettlementPanel() {
     const orgExists = organizations.some((org) => org.id === request.orgId)
     if (!orgExists) return false
     if (request.add) {
-      return competitions.some((c) => c.id === request.add!.competitionId) && players.some((p) => p.id === request.add!.playerId) && horses.some((h) => h.id === request.add!.horseId)
+      // Legacy requests can say "reflected" without ever creating an official
+      // entry. Do not charge for an addition that cannot be linked to the
+      // current official start list.
+      return !!request.officialEntryId && startEntries.some((entry) => entry.id === request.officialEntryId)
+        && competitions.some((c) => c.id === request.add!.competitionId) && players.some((p) => p.id === request.add!.playerId) && horses.some((h) => h.id === request.add!.horseId)
     }
     if (request.withdraw) {
       return entryExists(request.withdraw.entryId) && competitions.some((c) => c.id === request.withdraw!.competitionId) && horses.some((h) => h.id === request.withdraw!.horseId)
