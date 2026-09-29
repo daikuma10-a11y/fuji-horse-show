@@ -6,6 +6,7 @@ import type {
   Payment,
   StartEntry,
 } from "./types"
+import { feeOverrideKey, type FeeOverride } from "./settlement-fee-overrides"
 
 export interface OrgSettlement {
   orgId: string
@@ -32,8 +33,10 @@ export function calcSettlement(params: {
   competitions: Competition[]
   requests: AppRequest[]
   payments: Payment[]
+  feeOverrides?: FeeOverride[]
 }): OrgSettlement[] {
   const { organizations, seedEntries, horses, competitions, requests, payments } = params
+  const overrides = new Map((params.feeOverrides ?? []).map(row => [feeOverrideKey(row.source_type, row.source_id), row.corrected_fee]))
   const horseOrg = (id: string) => horses.find((h) => h.id === id)?.orgId
   const compFee = (id: string) => competitions.find((c) => c.id === id)?.entryFee ?? 0
 
@@ -42,7 +45,7 @@ export function calcSettlement(params: {
     // 棄権は申込済み競技料金を返金せず、棄権申請自体の手数料が0円という扱い。
     const normalEntry = seedEntries
       .filter((e) => horseOrg(e.horseId) === org.id)
-      .reduce((sum, e) => sum + compFee(e.competitionId), 0)
+      .reduce((sum, e) => sum + (overrides.get(feeOverrideKey("normal", e.id)) ?? compFee(e.competitionId)), 0)
 
     let additional = 0
     let change = 0
@@ -54,7 +57,9 @@ export function calcSettlement(params: {
 
       if (req.type === "add" || (req.type === "change" && req.change?.treatedAsWithdrawAdd)) {
         // 追加は3,000円＋追加先競技のエントリー料金。DBに内訳が残っていればそのまま使う。
-        additional += brokenDownTotal !== 0 ? req.fee.addBase + req.fee.addEntry : req.fee.total
+        const base = brokenDownTotal !== 0 ? req.fee.addBase : 0
+        const entryFee = brokenDownTotal !== 0 ? req.fee.addEntry : req.fee.total
+        additional += base + (overrides.get(feeOverrideKey("add", req.id)) ?? entryFee)
         continue
       }
 

@@ -96,6 +96,8 @@ export interface WithdrawPayload {
 
 export interface AppRequest {
   id: string
+  /** 本部が当日会場で事後登録した受付。 */
+  onSiteAdmin?: boolean
   /** 受付に来た方。出場エントリーの所属とは別に保持する。 */
   visitorOrgId?: string
   visitorName?: string
