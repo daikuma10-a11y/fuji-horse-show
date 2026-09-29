@@ -77,7 +77,7 @@ export function calcSettlement(params: {
       // withdraw は0円。元の通常エントリー料金は normalEntry に残す。
     }
 
-    const manual = (params.manualRecords ?? []).filter(row => row.organization_key === org.id && (row.request_id === null || requests.some(req => req.id === row.request_id && req.status === "reflected")))
+    const manual = (params.manualRecords ?? []).filter(row => row.organization_key === org.id)
     additional += manual.filter(row => row.request_id === null && row.action_type === "add").reduce((sum, row) => sum + row.bill_amount, 0)
     change += manual.filter(row => row.request_id === null && row.action_type === "change").reduce((sum, row) => sum + row.bill_amount, 0)
     const total = normalEntry + additional + change + competitionDiff
