@@ -60,6 +60,8 @@ export interface AddPayload {
   isOp?: boolean
   officialPlayerId?: string
   officialHorseId?: string
+  playerName?: string
+  horseName?: string
   competitionId: string
   playerId: string
   horseId: string
@@ -73,6 +75,8 @@ export interface ChangePayload {
   toIsOp?: boolean
   officialPlayerId?: string
   officialHorseId?: string
+  toPlayerName?: string
+  toHorseName?: string
   entryId: string
   fromCompetitionId: string
   fromPlayerId: string

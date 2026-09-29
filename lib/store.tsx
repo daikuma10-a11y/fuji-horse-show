@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrgs, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 import { players as sourcePlayers } from "./autumn-data"
 import { canonicalOrgId } from "./organization-aliases"
+import { loadPostDeadlineMasters } from "./post-deadline-masters"
 import type { AddPayload, AppRequest, ChangePayload, Competition, CompetitionDate, Horse, Organization, Payment, Player, StartEntry, EntryChangeMark, WithdrawPayload } from "./types"
 import { calcAddFee, calcChangeFee, calcWithdrawAddFee, calcWithdrawFee } from "./fees"
 import { ADMIN_SESSION_KEY, loadAutumnEntryRows, loadAutumnMasterOrganizations, loadCancelledReceptionEntryIds, loadCompetitionFees, loadReceptionRequests, markReceptionRequestReflected, reorderEntries, saveReceptionRequest, saveReceptionRequests, verifyAdminSession, type AdminSession, type RegisteredMaster } from "./supabase-rest"
@@ -31,7 +32,7 @@ export function StoreProvider({children}:{children:ReactNode}){
  useEffect(()=>{if(localReady)localStorage.setItem(TEST_PAYMENTS_KEY,JSON.stringify(payments))},[localReady,payments])
  useEffect(()=>{try{const raw=sessionStorage.getItem(RECEPTION_DRAFT_KEY);if(raw){const rows=JSON.parse(raw) as AppRequest[];setDraftRequests(Array.isArray(rows)?rows.filter(row=>row?.status==="pending"&&["add","change","withdraw"].includes(row.type)):[])}}catch{setDraftRequests([])}setDraftReady(true)},[])
  useEffect(()=>{if(draftReady)try{sessionStorage.setItem(RECEPTION_DRAFT_KEY,JSON.stringify(draftRequests))}catch(error){console.error("仮受付の一時保存に失敗",error)}},[draftReady,draftRequests])
- useEffect(()=>{let active=true;loadAutumnMasterOrganizations().then(masters=>{
+ useEffect(()=>{let active=true;Promise.all([loadAutumnMasterOrganizations(),loadPostDeadlineMasters(organizations)]).then(([masters,postDeadline])=>{
   if(!active)return
   const match=<T extends Player|Horse>(items:T[],registered:RegisteredMaster[]):T[]=>items.map(item=>{
    const canonical=canonicalOrgId(item.orgId)
@@ -45,8 +46,8 @@ export function StoreProvider({children}:{children:ReactNode}){
    const chosen=numbers.size===1?[...verified].sort((a,b)=>b.entryCount-a.entryCount||a.id.localeCompare(b.id))[0]:matches.length===1?matches[0]:undefined
    return sameLocal.length===1&&chosen?{...item,officialId:chosen.id,jefRegistered:chosen.registered}:item
   })
-  setPlayers(match(seedPlayers,masters.registeredRiders));setHorses(match(seedHorses,masters.registeredHorses))
- }).catch(error=>console.error("日馬連登録情報の読み込みに失敗",error));return()=>{active=false}},[organizations])
+  setPlayers([...match(seedPlayers,masters.registeredRiders),...postDeadline.players]);setHorses([...match(seedHorses,masters.registeredHorses),...postDeadline.horses])
+ }).catch(error=>console.error("人馬情報の読み込みに失敗",error));return()=>{active=false}},[organizations])
  useEffect(()=>{let active=true;loadCompetitionFees().then(fees=>{if(active)setCompetitions(prev=>prev.map(c=>fees.has(c.number)?{...c,entryFee:fees.get(c.number)!}:c))}).catch(error=>console.error("競技料金DBの読込に失敗",error));return()=>{active=false}},[])
  useEffect(()=>{if(!localReady)return;let active=true;const adminRequests=async()=>{try{const raw=sessionStorage.getItem(ADMIN_SESSION_KEY);if(!raw)return [];const session=await verifyAdminSession(JSON.parse(raw) as AdminSession);sessionStorage.setItem(ADMIN_SESSION_KEY,JSON.stringify(session));return await loadReceptionRequests(session.accessToken)}catch(error){console.error("本部ログインの確認に失敗",error);sessionStorage.removeItem(ADMIN_SESSION_KEY);return []}};Promise.all([adminRequests(),loadAutumnEntryRows(),loadAutumnMasterOrganizations(),loadCancelledReceptionEntryIds()]).then(([rows,dbEntries,officialMasters,cancelledIds])=>{if(!active)return;const byDbEntry=new Map(dbEntries.map(row=>[row.entry_id,row]));const reflectedMarks=new Map<string,EntryChangeMark>(),reflectedFields=new Map<string,ChangePayload["changedFields"]>();for(const req of rows){if(req.status!=="reflected"||!req.officialEntryId||!byDbEntry.has(req.officialEntryId)||reflectedMarks.has(req.officialEntryId))continue;if(req.type==="change"){reflectedMarks.set(req.officialEntryId,"changed");reflectedFields.set(req.officialEntryId,req.change?.changedFields??[])}else if(req.type==="add")reflectedMarks.set(req.officialEntryId,"added")}const mapCompetition=(id:string)=>{if(competitions.some(c=>c.id===id))return id;const db=dbEntries.find(row=>row.competition_id===id);return db?competitions.find(c=>c.number===Number(db.competition_no))?.id:undefined};const mapPlayer=(id:string)=>{if(players.some(p=>p.id===id))return id;const source=sourcePlayers.find(p=>p.id===id);const db=dbEntries.find(row=>row.rider_id===id);const name=source?.name??db?.rider_name;const orgId=source?.orgId??horses.find(h=>norm(h.name)===norm(db?.horse_name))?.orgId;if(!name||!orgId)return;const matches=players.filter(p=>p.orgId===orgId&&norm(p.name)===norm(name));return matches.length===1?matches[0].id:undefined};const mapHorse=(id:string)=>{if(horses.some(h=>h.id===id))return id;const db=dbEntries.find(row=>row.horse_id===id);if(!db)return;const matches=horses.filter(h=>norm(h.name)===norm(db.horse_name));return matches.length===1?matches[0].id:undefined};const localOrgIds=(name:string)=>organizations.filter(org=>norm(org.name)===norm(name)).map(org=>org.id)
 const resolveMaster=<T extends {name:string;orgId:string}>(items:T[],name:string,orgName:string):T|undefined=>{

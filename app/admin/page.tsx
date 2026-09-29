@@ -91,13 +91,13 @@ export default function AdminPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <AppHeader subtitle="大会本部 管理画面" />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="print-hide"><AppHeader subtitle="大会本部 管理画面" /></div>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-6 print:max-w-none print:p-0">
+        <div className="print-hide mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-xl font-semibold"><ArrowLeft className="size-6" />受付画面へ</Link>
           <button type="button" onClick={logout} className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-lg font-semibold"><LogOut className="size-5" />ログアウト</button>
         </div>
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border-2 border-border bg-card p-2 sm:grid-cols-4">
+        <div className="print-hide mb-6 grid grid-cols-2 gap-2 rounded-2xl border-2 border-border bg-card p-2 sm:grid-cols-4">
           {tabs.map((t) => { const Icon=t.icon, active=tab===t.id; return <button key={t.id} type="button" onClick={()=>setTab(t.id)} className={`flex min-h-16 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-xl font-bold transition ${active?"bg-primary text-primary-foreground shadow-sm":"text-muted-foreground"}`}><Icon className="size-6" /><span>{t.label}</span>{t.id==="requests"&&pendingCount>0&&<span className="flex size-7 items-center justify-center rounded-full bg-destructive text-base text-white">{pendingCount}</span>}</button> })}
         </div>
         {tab === "requests" && <RequestPanel canManage={!!session} />}

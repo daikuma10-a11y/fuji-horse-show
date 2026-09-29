@@ -5,13 +5,15 @@ import { useStore } from "@/lib/store"
 import { canonicalOrgId } from "@/lib/organization-aliases"
 import { calcAddFee, calcChangeFee, calcWithdrawAddFee, calcWithdrawFee, formatYen } from "@/lib/fees"
 import { applyReceptionRequest, saveReceptionRequests, verifyAdminSession, type AdminSession } from "@/lib/supabase-rest"
+import { registerPostDeadlineMaster } from "@/lib/post-deadline-masters"
+import { compareOrganizations } from "@/lib/organization-order"
 import { createManualRecord, loadManualRecords, type ManualRecord } from "@/lib/settlement-manual-records"
 import { PlayerPicker, HorsePicker } from "@/components/entity-picker"
 import { StartList } from "@/components/start-list"
 import type { AppRequest, RequestType, StartEntry } from "@/lib/types"
 
 export function OnSiteReception({ session }: { session: AdminSession }) {
-  const { competitions, startEntries, getCompetition, getPlayer, getHorse, getOrg } = useStore()
+  const { organizations, players, horses, competitions, startEntries, getCompetition, getPlayer, getHorse, getOrg } = useStore()
   const [type, setType] = useState<RequestType>("add")
   const [period, setPeriod] = useState<ManualRecord["period"]>("before_event")
   const [paymentPlan, setPaymentPlan] = useState<ManualRecord["payment_plan"]>("pay_at_venue")
@@ -29,6 +31,13 @@ export function OnSiteReception({ session }: { session: AdminSession }) {
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [error, setError] = useState("")
+  const [newKind, setNewKind] = useState<"rider" | "horse" | null>(null)
+  const [newName, setNewName] = useState("")
+  const [newOrgId, setNewOrgId] = useState("")
+  const [newJef, setNewJef] = useState("")
+  const [newJefChecked, setNewJefChecked] = useState(false)
+  const [newSaving, setNewSaving] = useState(false)
+  const [newError, setNewError] = useState("")
   const target = getCompetition(type === "change" ? toCompetitionId : competitionId)
   const rider = getPlayer(type === "withdraw" ? entry?.playerId ?? "" : playerId)
   const horse = getHorse(type === "withdraw" ? entry?.horseId ?? "" : horseId)
@@ -76,8 +85,8 @@ export function OnSiteReception({ session }: { session: AdminSession }) {
     const request: AppRequest = {
       id, type, status: "pending", onSiteAdmin: true, postDeadlinePeriod: period, createdAt: new Date().toISOString(),
       orgId: selectedOrg, visitorOrgId: selectedOrg, visitorName: operatorName.trim(), fee,
-      ...(type === "add" ? { add: { competitionId: target.id, playerId: rider.id, horseId: horse.id, organizationId: selectedOrg, officialPlayerId: rider.officialId, officialHorseId: horse.officialId, isOp, note: note.trim() } } : {}),
-      ...(type === "change" && entry ? { change: { entryId: entry.id, fromCompetitionId: entry.competitionId, fromPlayerId: entry.playerId, fromHorseId: entry.horseId, toCompetitionId: target.id, toPlayerId: rider.id, toHorseId: horse.id, fromIsOp: !!entry.isOp, toIsOp: isOp, organizationId: selectedOrg, officialPlayerId: rider.officialId, officialHorseId: horse.officialId, changedFields, treatedAsWithdrawAdd } } : {}),
+      ...(type === "add" ? { add: { competitionId: target.id, playerId: rider.id, horseId: horse.id, organizationId: selectedOrg, officialPlayerId: rider.officialId, officialHorseId: horse.officialId, playerName: rider.name, horseName: horse.name, isOp, note: note.trim() } } : {}),
+      ...(type === "change" && entry ? { change: { entryId: entry.id, fromCompetitionId: entry.competitionId, fromPlayerId: entry.playerId, fromHorseId: entry.horseId, toCompetitionId: target.id, toPlayerId: rider.id, toHorseId: horse.id, fromIsOp: !!entry.isOp, toIsOp: isOp, organizationId: selectedOrg, officialPlayerId: rider.officialId, officialHorseId: horse.officialId, toPlayerName: rider.name, toHorseName: horse.name, changedFields, treatedAsWithdrawAdd } } : {}),
       ...(type === "withdraw" && entry ? { withdraw: { entryId: entry.id, competitionId: entry.competitionId, playerId: entry.playerId, horseId: entry.horseId, organizationId: selectedOrg } } : {}),
     }
     setSaving(true)
@@ -112,9 +121,27 @@ export function OnSiteReception({ session }: { session: AdminSession }) {
     finally { setSaving(false) }
   }
 
+  async function registerMaster(event: FormEvent) {
+    event.preventDefault()
+    if (!newKind || newSaving) return
+    setNewError("")
+    const name = newName.trim()
+    const org = organizations.find(row => row.id === newOrgId)
+    if (!name || !org || (newJef.trim() && !newJefChecked)) { setNewError("名前・所属と日馬連番号の確認状況を入力してください"); return }
+    const norm = (value: string) => value.normalize("NFKC").replace(/[\s　]+/g, "").toLocaleLowerCase("ja-JP")
+    if ((newKind === "rider" ? players : horses).some(row => canonicalOrgId(row.orgId) === canonicalOrgId(org.id) && norm(row.name) === norm(name))) { setNewError("同じ団体に同名の人馬がいます。既存候補を確認してください"); return }
+    setNewSaving(true)
+    try {
+      await registerPostDeadlineMaster(session, { kind: newKind, name, orgName: org.name, jefNumber: newJef, jefChecked: newJefChecked })
+      window.location.reload()
+    } catch (cause) { setNewError(cause instanceof Error ? cause.message : "人馬を登録できませんでした") }
+    finally { setNewSaving(false) }
+  }
+
   return <div className="space-y-5">
-    <div className="rounded-2xl border-2 border-border bg-card p-5"><h2 className="text-2xl font-bold">締切後の追加・変更・棄権を記録</h2><p className="mt-2 text-base text-muted-foreground">大会前の追加・変更・棄権は出番表と精算に反映します。当日会場で直接受けた分は精算だけに記録し、出番表には追加しません。</p></div>
-    <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setPeriod("before_event"); setPaymentPlan("pay_at_venue"); setPaidAmount("0"); setSavedId(null); setError("") }} className={`min-h-14 rounded-xl border-2 font-bold ${period === "before_event" ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>締切後〜大会前</button><button type="button" onClick={() => { setPeriod("at_venue"); setPaymentPlan("pay_at_venue"); setPaidAmount("0"); setSavedId(null); setError("") }} className={`min-h-14 rounded-xl border-2 font-bold ${period === "at_venue" ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>当日会場（精算のみ）</button></div>
+    <div className="rounded-2xl border-2 border-border bg-card p-5"><h2 className="text-2xl font-bold">締切後の追加・変更・棄権を記録</h2><p className="mt-2 text-base text-muted-foreground">大会前の追加・変更・棄権は出番表と精算に反映します。大会期間中で直接受けた分は精算だけに記録し、出番表には追加しません。</p></div>
+    <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setPeriod("before_event"); setPaymentPlan("pay_at_venue"); setPaidAmount("0"); setSavedId(null); setError("") }} className={`min-h-14 rounded-xl border-2 font-bold ${period === "before_event" ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>締切後〜大会前</button><button type="button" onClick={() => { setPeriod("at_venue"); setPaymentPlan("pay_at_venue"); setPaidAmount("0"); setSavedId(null); setError("") }} className={`min-h-14 rounded-xl border-2 font-bold ${period === "at_venue" ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>大会期間中（精算のみ）</button></div>
+    <div className="rounded-2xl border-2 border-border bg-card p-4"><p className="font-bold">一覧にいない人馬を先に登録</p><p className="mt-1 text-sm text-muted-foreground">登録後に画面を更新します。追加・変更の候補に表示され、出番を作成すると棄権の対象にも表示されます。</p><div className="mt-3 flex gap-2"><button type="button" onClick={() => { setNewKind("rider"); setNewError("") }} className="min-h-12 rounded-lg border border-primary px-4 font-bold text-primary">新しい選手</button><button type="button" onClick={() => { setNewKind("horse"); setNewError("") }} className="min-h-12 rounded-lg border border-primary px-4 font-bold text-primary">新しい馬</button></div>{newKind && <form onSubmit={registerMaster} className="mt-4 space-y-3 rounded-xl bg-secondary p-4"><h3 className="font-bold">{newKind === "rider" ? "選手" : "馬"}の新規登録</h3><label className="block font-bold">{newKind === "rider" ? "選手名" : "馬名"}<input required maxLength={100} value={newName} onChange={e => setNewName(e.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3" /></label><label className="block font-bold">所属団体<select required value={newOrgId} onChange={e => setNewOrgId(e.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3"><option value="">団体を選択</option>{[...organizations].sort(compareOrganizations).map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="block font-bold">日馬連登録番号（任意）<input maxLength={40} value={newJef} onChange={e => { setNewJef(e.target.value); setNewJefChecked(false) }} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3" /></label>{newJef.trim() && <label className="flex items-center gap-2 font-semibold"><input type="checkbox" checked={newJefChecked} onChange={e => setNewJefChecked(e.target.checked)} className="size-6" />本部で日馬連登録番号を確認した</label>}{newError && <p role="alert" className="text-destructive">{newError}</p>}<div className="flex gap-2"><button type="submit" disabled={newSaving} className="min-h-12 flex-1 rounded-lg bg-primary px-3 font-bold text-primary-foreground">{newSaving ? "登録中…" : "人馬を登録"}</button><button type="button" onClick={() => setNewKind(null)} className="min-h-12 rounded-lg border px-3">閉じる</button></div></form>}</div>
     <div className="grid grid-cols-3 gap-2">{(["add", "change", "withdraw"] as const).map(value => <button key={value} type="button" onClick={() => selectType(value)} className={`min-h-14 rounded-xl border-2 font-bold ${type === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>{value === "add" ? "追加" : value === "change" ? "変更" : "棄権"}</button>)}</div>
     <form onSubmit={submit} className="space-y-4 rounded-2xl border-2 border-border bg-card p-5">
       <p className="rounded-xl bg-secondary p-3 font-bold">{period === "at_venue" ? "出番表は変更せず、精算だけに記録します。再走行など同じ人馬・競技の追加も記録できます。" : "正式出番表と精算へ反映します。"}</p>

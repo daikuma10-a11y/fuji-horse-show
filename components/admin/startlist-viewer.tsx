@@ -17,7 +17,7 @@ function sameOrder(a: string[], b: string[]) {
 }
 
 export function StartListViewer({ canReorder = true }: { canReorder?: boolean }) {
-  const { competitionsByDate, entriesByCompetition, applySavedEntryOrder, reconciliation } = useStore()
+  const { competitionsByDate, entriesByCompetition, getPlayer, getHorse, getOrg, applySavedEntryOrder, reconciliation } = useStore()
   const [date, setDate] = useState<CompetitionDate>(COMPETITION_DATES[0].value)
   const [compId, setCompId] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, DraftOrder>>({})
@@ -25,6 +25,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
   const [wideView, setWideView] = useState(false)
+  const [printScope, setPrintScope] = useState<"day" | "competition">("day")
 
   useEffect(() => {
     try {
@@ -98,8 +99,15 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
       ? "border-border bg-muted text-muted-foreground"
       : "border-amber-300 bg-amber-50 text-amber-950"
 
+  function printList(scope: "day" | "competition") {
+    if (dirty) { setSaveError("未保存の出番順があります。保存または取消後に印刷してください"); return }
+    setPrintScope(scope)
+    window.setTimeout(() => window.print(), 0)
+  }
+
   return <div className={wideView ? "fixed inset-0 z-50 flex flex-col gap-1 overflow-y-auto bg-background px-3 py-2 lg:px-5" : "flex flex-col gap-3"}>
-    <button type="button" onClick={() => setWideView(current => !current)} className={wideView ? "sticky top-0 z-20 self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary shadow" : "self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary"}>{wideView ? "通常画面へ戻る" : "出番表を一画面で見る"}</button>
+    <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" onClick={() => printList("day")} disabled={reconciliation.state === "loading" || reconciliation.state === "error"} className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50">この日の出番表を印刷</button>{selected && <button type="button" onClick={() => printList("competition")} disabled={dirty} className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50">この競技を印刷</button>}</div>
+    <div className="print-hide contents"><button type="button" onClick={() => setWideView(current => !current)} className={wideView ? "sticky top-0 z-20 self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary shadow" : "self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary"}>{wideView ? "通常画面へ戻る" : "出番表を一画面で見る"}</button>
     <div className={`rounded-lg border px-3 py-2 text-sm font-bold ${wideView ? "hidden" : ""} ${verificationClass}`}>DB照合状況：{reconciliation.message}</div>
     <p className={wideView ? "sr-only" : "text-sm text-muted-foreground"}>人馬の行を少し長押しすると持ち上がります。そのまま上下に動かし、入れたい位置で指を離してください。右の移動マークならすぐに動かせます。最後に「出番順を保存」を押してください。</p>
     <div className="flex flex-wrap gap-2">{COMPETITION_DATES.map(d => <button key={d.value} type="button" disabled={saving} onClick={() => { setDate(d.value); setCompId(null) }} className={`min-h-10 rounded-lg border-2 px-3 text-base font-bold transition ${wideView ? "lg:min-h-7 lg:px-2 lg:text-xs" : ""} ${date === d.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}>{d.label}</button>)}</div>
@@ -120,5 +128,11 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
       <StartList competitionId={selected.id} readOnly showAdminChanges adminReorder={canEdit} compact dense orderedIds={orderedIds} onReorder={moveDraft} />
       {dirty && canReorder && <div className="fixed inset-x-4 bottom-4 z-30 mx-auto max-w-lg rounded-xl border-2 border-primary bg-card p-2 shadow-xl"><button type="button" disabled={saving || changedSinceDraft} onClick={() => void saveOrder()} className="min-h-14 w-full rounded-lg bg-primary px-4 text-lg font-bold text-primary-foreground disabled:opacity-40">{saving ? "正式DBへ保存中…" : "未保存：出番順を保存"}</button></div>}
     </div> : <p className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-5 text-center text-base text-muted-foreground">競技を選んでください。</p>}
+    </div>
+    <div className="print-only hidden">
+      <h1 className="mb-2 text-xl font-bold">Fuji Horse Show 出番表</h1>
+      <p className="mb-4 font-bold">{COMPETITION_DATES.find(item => item.value === date)?.label} ／ 正式DBの出番順</p>
+      {(printScope === "competition" && selected ? [selected] : comps).map(comp => <section key={comp.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">競技{comp.number} {comp.name}{comp.official ? "（公認）" : ""}</h2><table className="w-full border-collapse text-sm"><thead><tr><th className="border p-1 text-left">出番</th><th className="border p-1 text-left">選手</th><th className="border p-1 text-left">馬</th><th className="border p-1 text-left">所属</th><th className="border p-1 text-left">備考</th></tr></thead><tbody>{entriesByCompetition(comp.id).sort((a,b) => a.order-b.order).map(entry => <tr key={entry.id}><td className="border p-1">{entry.order}</td><td className="border p-1">{getPlayer(entry.playerId)?.name ?? "要確認"}</td><td className="border p-1">{getHorse(entry.horseId)?.name ?? "要確認"}</td><td className="border p-1">{getOrg(entry.organizationId ?? "")?.name ?? "要確認"}</td><td className="border p-1">{entry.isOp ? "OP " : ""}{entry.withdrawn ? "棄権 " : ""}{entry.adminChangeMark === "added" ? "追加 " : entry.adminChangeMark === "changed" ? "変更 " : ""}</td></tr>)}</tbody></table></section>)}
+    </div>
   </div>
 }

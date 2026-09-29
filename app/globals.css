@@ -169,3 +169,15 @@
     user-select: none;
   }
 }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { color: #111 !important; background: white !important; font-size: 10pt !important; }
+  .print-hide { display: none !important; }
+  .print-only { display: block !important; }
+  .settlement-print button, .settlement-print form { display: none !important; }
+  .settlement-print, .settlement-print > div { box-shadow: none !important; border-color: #999 !important; }
+  .settlement-print > div, .print-competition tr { break-inside: avoid; }
+  .print-competition h2 { break-after: avoid; }
+  .print-competition thead { display: table-header-group; }
+}

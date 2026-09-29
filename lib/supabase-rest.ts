@@ -26,9 +26,9 @@ const competitionNo=(id:string)=>seedCompetitions.find(c=>c.id===id)?.number??nu
 const entryOrder=(id:string)=>seedStartEntries.find(e=>e.id===id)?.order??null
 function enrichedPayload(request:AppRequest){
  const organizationName=(request.add?.organizationId||request.change?.organizationId)?seedOrganizations.find(org=>org.id===request.orgId)?.name:undefined
- if(request.add)return {...request,organizationName,add:{...request.add,playerName:playerName(request.add.playerId),horseName:horseName(request.add.horseId),competitionNo:competitionNo(request.add.competitionId)}}
+ if(request.add)return {...request,organizationName,add:{...request.add,playerName:request.add.playerName||playerName(request.add.playerId),horseName:request.add.horseName||horseName(request.add.horseId),competitionNo:competitionNo(request.add.competitionId)}}
  if(request.withdraw)return {...request,withdraw:{...request.withdraw,playerName:playerName(request.withdraw.playerId),horseName:horseName(request.withdraw.horseId),competitionNo:competitionNo(request.withdraw.competitionId),entryOrder:entryOrder(request.withdraw.entryId)}}
- if(request.change)return {...request,organizationName,change:{...request.change,fromPlayerName:playerName(request.change.fromPlayerId),fromHorseName:horseName(request.change.fromHorseId),toPlayerName:playerName(request.change.toPlayerId),toHorseName:horseName(request.change.toHorseId),fromCompetitionNo:competitionNo(request.change.fromCompetitionId),toCompetitionNo:competitionNo(request.change.toCompetitionId),entryOrder:entryOrder(request.change.entryId)}}
+ if(request.change)return {...request,organizationName,change:{...request.change,fromPlayerName:playerName(request.change.fromPlayerId),fromHorseName:horseName(request.change.fromHorseId),toPlayerName:request.change.toPlayerName||playerName(request.change.toPlayerId),toHorseName:request.change.toHorseName||horseName(request.change.toHorseId),fromCompetitionNo:competitionNo(request.change.fromCompetitionId),toCompetitionNo:competitionNo(request.change.toCompetitionId),entryOrder:entryOrder(request.change.entryId)}}
  return request
 }
 function normalizeRequestRow(row:RequestRow):AppRequest|null{
