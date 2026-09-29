@@ -7,6 +7,7 @@ import type {
   StartEntry,
 } from "./types"
 import { feeOverrideKey, type FeeOverride } from "./settlement-fee-overrides"
+import type { ManualRecord } from "./settlement-manual-records"
 
 export interface OrgSettlement {
   orgId: string
@@ -34,6 +35,7 @@ export function calcSettlement(params: {
   requests: AppRequest[]
   payments: Payment[]
   feeOverrides?: FeeOverride[]
+  manualRecords?: ManualRecord[]
 }): OrgSettlement[] {
   const { organizations, seedEntries, horses, competitions, requests, payments } = params
   const overrides = new Map((params.feeOverrides ?? []).map(row => [feeOverrideKey(row.source_type, row.source_id), row.corrected_fee]))
@@ -75,8 +77,11 @@ export function calcSettlement(params: {
       // withdraw は0円。元の通常エントリー料金は normalEntry に残す。
     }
 
+    const manual = (params.manualRecords ?? []).filter(row => row.organization_key === org.id && (row.request_id === null || requests.some(req => req.id === row.request_id && req.status === "reflected")))
+    additional += manual.filter(row => row.request_id === null && row.action_type === "add").reduce((sum, row) => sum + row.bill_amount, 0)
+    change += manual.filter(row => row.request_id === null && row.action_type === "change").reduce((sum, row) => sum + row.bill_amount, 0)
     const total = normalEntry + additional + change + competitionDiff
-    const paid = payments.find((p) => p.orgId === org.id)?.paid ?? 0
+    const paid = (payments.find((p) => p.orgId === org.id)?.paid ?? 0) + manual.reduce((sum, row) => sum + row.paid_amount, 0)
     const unsettled = total - paid
 
     return {

@@ -98,6 +98,8 @@ export interface AppRequest {
   id: string
   /** 本部が当日会場で事後登録した受付。 */
   onSiteAdmin?: boolean
+  /** 本部が締切後に事後入力した時期。 */
+  postDeadlinePeriod?: "before_event" | "at_venue"
   /** 受付に来た方。出場エントリーの所属とは別に保持する。 */
   visitorOrgId?: string
   visitorName?: string
