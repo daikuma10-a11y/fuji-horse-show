@@ -17,7 +17,7 @@ const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
   { id: "requests", label: "申請一覧", icon: ClipboardList },
   { id: "settlement", label: "精算", icon: Calculator },
   { id: "startlist", label: "出番表", icon: ListOrdered },
-  { id: "on-site", label: "当日分登録", icon: ClipboardList },
+  { id: "on-site", label: "事後登録", icon: ClipboardList },
 ]
 
 export default function AdminPage() {
