@@ -43,11 +43,13 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   label(5, '事前エントリー合計', document.normalTotal)
   label(6, '事前エントリー入金済み', document.advancePaid)
   label(7, '事前入金の確認状況', document.advanceRecorded ? (document.advancePaid >= document.normalTotal ? '支払い済み' : '一部入金／不足あり') : '未登録・要確認')
-  const header = ['期間', '区分', '競技', '選手', '馬', '競技料金', '手数料', '差額', '合計', '入金済み']
+  const header = ['区分', '', '競技', '選手', '馬', '競技料金', '手数料', '差額', '合計', '入金済み']
   addRow(9, header.map((value, index) => textCell(`${String.fromCharCode(65 + index)}9`, value, 1)).join(''))
+  merges.push('A9:B9')
   document.lines.forEach((line, index) => {
     const row = 10 + index
-    addRow(row, [line.period, line.action, line.competition, line.rider, line.horse].map((value, col) => textCell(`${String.fromCharCode(65 + col)}${row}`, value)).join('') + numberCell(`F${row}`, line.entryFee) + numberCell(`G${row}`, line.serviceFee) + numberCell(`H${row}`, line.difference) + numberCell(`I${row}`, line.amount, `SUM(F${row}:H${row})`) + numberCell(`J${row}`, line.paid), 32)
+    merges.push(`A${row}:B${row}`)
+    addRow(row, [line.action, '', line.competition, line.rider, line.horse].map((value, col) => textCell(`${String.fromCharCode(65 + col)}${row}`, value)).join('') + numberCell(`F${row}`, line.entryFee) + numberCell(`G${row}`, line.serviceFee) + numberCell(`H${row}`, line.difference) + numberCell(`I${row}`, line.amount, `SUM(F${row}:H${row})`) + numberCell(`J${row}`, line.paid), 32)
   })
   let row = 10 + document.lines.length
   const totalRow = row, paidRow = row + 1, dueRow = row + 2
@@ -58,7 +60,7 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   label(row + 5, '振込先', document.bankDetails || '—')
   rows[rows.length - 1] = rows[rows.length - 1].replace('ht="25"', 'ht="65"')
   row += 7
-  for (const line of document.lines.filter(line => line.note)) { addRow(row, textCell(`A${row}`, `${line.action} ／ ${line.rider} ／ ${line.horse}：${line.note}`), 36); merges.push(`A${row}:J${row}`); row++ }
+  for (const line of document.lines.filter(line => line.note && !line.action.startsWith('棄権'))) { addRow(row, textCell(`A${row}`, `${line.action} ／ ${line.rider} ／ ${line.horse}：${line.note}`), 36); merges.push(`A${row}:J${row}`); row++ }
   addRow(row + 1, textCell(`A${row + 1}`, 'Excelで編集した内容はアプリには自動反映されません。')); merges.push(`A${row + 1}:J${row + 1}`)
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><sheetFormatPr defaultRowHeight="25"/><cols><col min="1" max="1" width="19" customWidth="1"/><col min="2" max="2" width="12" customWidth="1"/><col min="3" max="3" width="30" customWidth="1"/><col min="4" max="5" width="20" customWidth="1"/><col min="6" max="10" width="14" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData><mergeCells count="${merges.length}">${merges.map(ref => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>`
   return zip({
