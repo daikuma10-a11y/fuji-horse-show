@@ -4,14 +4,22 @@ const { settlementChoices, allocateSettlement, selectedSettlementDocument } = lo
 const document = { organization: 'Test', organizationKey: 'test', issuedDate: '2026/9/30', method: '現金', bankDetails: '', normalTotal: 10000, advancePaid: 10000, normalRemaining: 0, extraTotal: 13000, extraPaid: 2000, due: 11000, lines: [
   { key: 'request:a', action: '追加', competition: '競技1', rider: 'A', horse: 'B', amount: 11000, paid: 2000, entryFee: 8000, serviceFee: 3000, difference: 0, note: '' },
   { key: 'request:b', action: '変更', competition: '競技2', rider: 'C', horse: 'D', amount: 2000, paid: 0, entryFee: 0, serviceFee: 2000, difference: 0, note: '' },
+  { key: 'request:c', action: '棄権', competition: '競技3', rider: 'E', horse: 'F', amount: 0, paid: 0, entryFee: 0, serviceFee: 0, difference: 0, note: '' },
 ] }
 let choices = settlementChoices(document, [])
 assert.equal(choices[0].remaining, 0)
 assert.equal(choices[1].remaining, 9000)
+assert.equal(choices[3].freeWithdrawal, true)
+assert.equal(choices[3].remaining, 0)
 assert.throws(() => allocateSettlement(choices, [], 100))
 assert.throws(() => allocateSettlement(choices, ['request:b'], 2001))
 assert.throws(() => allocateSettlement(choices, ['request:a'], 0))
 assert.deepEqual(allocateSettlement(choices, ['request:a', 'request:b'], 10000).map(item => item.amount), [9000, 1000])
+assert.deepEqual(allocateSettlement(choices, ['request:b', 'request:c'], 2000).map(item => item.key), ['request:b'])
+assert.throws(() => allocateSettlement(choices, ['request:c'], 1))
+const withdrawalStatement = selectedSettlementDocument(document, choices, ['request:b', 'request:c'])
+assert.equal(withdrawalStatement.due, 2000)
+assert.deepEqual(withdrawalStatement.lines.map(line => [line.action, line.amount]), [['変更', 2000], ['棄権', 0]])
 const selected = selectedSettlementDocument(document, choices, ['request:b'])
 assert.equal(selected.due, 2000); assert.equal(selected.lines.length, 1); assert.equal(selected.normalTotal, 0)
 const receipt = { selected_items: [{ key: 'request:a', amount: 9000 }] }
