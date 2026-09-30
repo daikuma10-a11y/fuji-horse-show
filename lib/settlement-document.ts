@@ -1,10 +1,10 @@
 export type SettlementDocumentLine = {
-  competitionNumber?: number; period: string; action: string; competition: string; rider: string; horse: string
+  key?: string; competitionNumber?: number; period: string; action: string; competition: string; rider: string; horse: string
   entryFee: number; serviceFee: number; difference: number; amount: number; paid: number; note: string
 }
 export type SettlementDocument = {
   organization: string; organizationKey: string; issuedDate: string; normalTotal: number; advancePaid: number; advanceRecorded: boolean
-  extraTotal: number; extraPaid: number; due: number; method: string; bankDetails: string; lines: SettlementDocumentLine[]
+  normalRemaining?: number; extraTotal: number; extraPaid: number; due: number; method: string; bankDetails: string; lines: SettlementDocumentLine[]
 }
 
 // A dependency-free OOXML export keeps the download usable in Excel on the office PC.
@@ -37,32 +37,29 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   const textCell = (ref: string, value: string, style = 0) => `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`
   const numberCell = (ref: string, value: number, formula?: string) => `<c r="${ref}" s="2">${formula ? `<f>${xml(formula)}</f>` : ''}<v>${value}</v></c>`
   const addRow = (number: number, cells: string, height = 25) => rows.push(`<row r="${number}" ht="${height}" customHeight="1">${cells}</row>`)
-  const label = (row: number, title: string, value: string | number, formula?: string) => { merges.push(`A${row}:D${row}`, `E${row}:J${row}`); addRow(row, textCell(`A${row}`, title, 1) + (typeof value === 'number' ? numberCell(`E${row}`, value, formula) : textCell(`E${row}`, value))) }
-  addRow(1, textCell('A1', 'Fuji Horse Show 精算書', 3), 32); merges.push('A1:J1')
-  addRow(2, textCell('A2', `${document.organization} 御中`, 1)); merges.push('A2:G2'); addRow(3, textCell('A3', `発行日：${document.issuedDate}`)); merges.push('A3:J3')
+  const label = (row: number, title: string, value: string | number, formula?: string) => { merges.push(`A${row}:D${row}`, `E${row}:I${row}`); addRow(row, textCell(`A${row}`, title, 1) + (typeof value === 'number' ? numberCell(`E${row}`, value, formula) : textCell(`E${row}`, value))) }
+  addRow(1, textCell('A1', 'Fuji Horse Show 精算書', 3), 32); merges.push('A1:I1')
+  addRow(2, textCell('A2', `${document.organization} 御中`, 1)); merges.push('A2:G2'); addRow(3, textCell('A3', `発行日：${document.issuedDate}`)); merges.push('A3:I3')
   label(5, '事前エントリー合計', document.normalTotal)
   label(6, '事前エントリー入金済み', document.advancePaid)
   label(7, '事前入金の確認状況', document.advanceRecorded ? (document.advancePaid >= document.normalTotal ? '支払い済み' : '一部入金／不足あり') : '未登録・要確認')
-  const header = ['区分', '', '競技', '選手', '馬', '競技料金', '手数料', '差額', '合計', '入金済み']
+  const header = ['区分', '競技', '選手', '馬', '備考', '競技料金', '手数料', '差額', '合計']
   addRow(9, header.map((value, index) => textCell(`${String.fromCharCode(65 + index)}9`, value, 1)).join(''))
-  merges.push('A9:B9')
   document.lines.forEach((line, index) => {
     const row = 10 + index
-    merges.push(`A${row}:B${row}`)
-    addRow(row, [line.action, '', line.competition, line.rider, line.horse].map((value, col) => textCell(`${String.fromCharCode(65 + col)}${row}`, value)).join('') + numberCell(`F${row}`, line.entryFee) + numberCell(`G${row}`, line.serviceFee) + numberCell(`H${row}`, line.difference) + numberCell(`I${row}`, line.amount, `SUM(F${row}:H${row})`) + numberCell(`J${row}`, line.paid), 32)
+    addRow(row, [line.action, line.competition, line.rider, line.horse, line.action.startsWith('棄権') ? '' : line.note].map((value, col) => textCell(`${String.fromCharCode(65 + col)}${row}`, value)).join('') + numberCell(`F${row}`, line.entryFee) + numberCell(`G${row}`, line.serviceFee) + numberCell(`H${row}`, line.difference) + numberCell(`I${row}`, line.amount, `SUM(F${row}:H${row})`), 32)
   })
   let row = 10 + document.lines.length
   const totalRow = row, paidRow = row + 1, dueRow = row + 2
   label(totalRow, '締切後・大会期間中 合計', document.extraTotal, document.lines.length ? `SUM(I10:I${row - 1})` : '0')
-  label(paidRow, '締切後・大会期間中 入金済み', document.extraPaid, document.lines.length ? `SUM(J10:J${row - 1})` : '0')
+  label(paidRow, '締切後・大会期間中 入金済み', document.extraPaid)
   label(dueRow, '差引不足額（マイナスは過入金）', document.due, `E5-E6+E${totalRow}-E${paidRow}`)
   label(row + 4, '不足額の支払方法', document.method)
   label(row + 5, '振込先', document.bankDetails || '—')
   rows[rows.length - 1] = rows[rows.length - 1].replace('ht="25"', 'ht="65"')
   row += 7
-  for (const line of document.lines.filter(line => line.note && !line.action.startsWith('棄権'))) { addRow(row, textCell(`A${row}`, `${line.action} ／ ${line.rider} ／ ${line.horse}：${line.note}`), 36); merges.push(`A${row}:J${row}`); row++ }
-  addRow(row + 1, textCell(`A${row + 1}`, 'Excelで編集した内容はアプリには自動反映されません。')); merges.push(`A${row + 1}:J${row + 1}`)
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><sheetFormatPr defaultRowHeight="25"/><cols><col min="1" max="1" width="19" customWidth="1"/><col min="2" max="2" width="12" customWidth="1"/><col min="3" max="3" width="30" customWidth="1"/><col min="4" max="5" width="20" customWidth="1"/><col min="6" max="10" width="14" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData><mergeCells count="${merges.length}">${merges.map(ref => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>`
+  addRow(row + 1, textCell(`A${row + 1}`, 'Excelで編集した内容はアプリには自動反映されません。')); merges.push(`A${row + 1}:I${row + 1}`)
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><sheetFormatPr defaultRowHeight="25"/><cols><col min="1" max="1" width="10" customWidth="1"/><col min="2" max="2" width="35" customWidth="1"/><col min="3" max="4" width="24" customWidth="1"/><col min="5" max="5" width="32" customWidth="1"/><col min="6" max="9" width="12" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData><mergeCells count="${merges.length}">${merges.map(ref => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>`
   return zip({
     '[Content_Types].xml': '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
     '_rels/.rels': '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',

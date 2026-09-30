@@ -206,8 +206,8 @@
 .statement-paper .document-lines th:nth-child(1) { width: 12%; }
 .statement-paper .document-lines th:nth-child(2) { width: 21%; }
 .statement-paper .document-lines th:nth-child(3), .statement-paper .document-lines th:nth-child(4) { width: 16%; }
-.statement-paper .document-lines th:nth-child(5) { width: 17%; }
-.statement-paper .document-lines th:nth-child(6), .statement-paper .document-lines th:nth-child(7) { width: 9%; }
+.statement-paper .document-lines th:nth-child(5) { width: 23%; }
+.statement-paper .document-lines th:nth-child(6) { width: 12%; }
 .statement-paper td { overflow-wrap: anywhere; white-space: pre-line; }
 @media print {
   .statement-paper { font-size: 9pt; line-height: 1.2; }
