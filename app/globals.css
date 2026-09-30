@@ -177,7 +177,10 @@
   .print-only { display: block !important; }
   .settlement-print button, .settlement-print form { display: none !important; }
   .settlement-print, .settlement-print > div { box-shadow: none !important; border-color: #999 !important; }
-  .settlement-print > div, .print-competition tr { break-inside: avoid; }
+  .settlement-print > div { break-inside: auto; }
+  .settlement-print h3, .settlement-print h4, .settlement-print h5 { break-after: avoid; }
+  .settlement-detail-row, .print-competition tr { break-inside: avoid; }
+  .settlement-print .overflow-hidden { overflow: visible !important; }
   .print-competition h2 { break-after: avoid; }
   .print-competition thead { display: table-header-group; }
 }
