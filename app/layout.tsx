@@ -13,6 +13,12 @@ export const metadata: Metadata = {
   title: 'Fuji Horse Show 大会受付',
   description: 'Fuji Horse Show の大会受付システム。追加・変更・棄権の申請と大会本部の精算管理を行います。',
   generator: 'v0.app',
+  appleWebApp: {
+    capable: true,
+    title: 'Fuji Horse Show',
+    statusBarStyle: 'default',
+  },
+  icons: { apple: '/apple-icon.png' },
 }
 
 export const viewport: Viewport = {
