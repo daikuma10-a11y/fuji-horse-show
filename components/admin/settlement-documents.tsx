@@ -14,8 +14,8 @@ export function SettlementDocuments({ document, session, ready }: { document: Se
   const [mode, setMode] = useState<'settlement' | 'receipt'>('settlement')
   const [printTick, setPrintTick] = useState(0)
   const [recipient, setRecipient] = useState(document.organization)
-  const [amount, setAmount] = useState('')
-  const [tax, setTax] = useState('0')
+  const [amount, setAmount] = useState(String(Math.max(0, document.due)))
+  const [tax, setTax] = useState(String(Math.floor(Math.max(0, document.due) / 11)))
   const [date, setDate] = useState(today)
   const [purpose, setPurpose] = useState('2026 Fuji Horse Show Autumn Grand Prix エントリー代として')
   const [method, setMethod] = useState<'cash_at_venue' | 'bank_transfer'>('cash_at_venue')
@@ -26,6 +26,8 @@ export function SettlementDocuments({ document, session, ready }: { document: Se
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const receiptId = useRef<string | null>(null)
+  const amountEdited = useRef(false)
+  useEffect(() => { if (!amountEdited.current) { const due = Math.max(0, document.due); setAmount(String(due)); setTax(String(Math.floor(due / 11))); receiptId.current = null } }, [document.due])
   useEffect(() => { let active = true; loadSettlementReceipts(session, document.organizationKey).then(rows => { if (active) setReceipts(rows) }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : '領収書履歴を読み込めません') }); return () => { active = false } }, [session, document.organizationKey])
   useEffect(() => { if (!printTick) return; const timer = window.setTimeout(() => window.print(), 50); return () => window.clearTimeout(timer) }, [printTick])
   const print = (nextMode: 'settlement' | 'receipt') => { setMode(nextMode); setPrintTick(previous => previous + 1) }
@@ -49,9 +51,9 @@ export function SettlementDocuments({ document, session, ready }: { document: Se
       <details className="mt-3"><summary className="cursor-pointer font-bold">精算書のプレビュー</summary><div className="mt-3 overflow-x-auto rounded-lg border bg-white p-3 text-black"><StatementPrint document={document} /></div></details>
       {error && <p role="alert" className="mt-3 font-semibold text-destructive">{error}</p>}
       {showReceipt && <form onSubmit={issue} className="mt-4 space-y-3 border-t pt-4">
-        <h4 className="text-xl font-bold">領収書の発行</h4><p className="text-sm">実際に受領した金額を入力してください。領収書の発行だけでは精算の入金済み金額は変更しません。</p>
+        <h4 className="text-xl font-bold">領収書の発行</h4><p className="text-sm">未精算額を初期入力しています。実際に受領した金額に修正できます。領収書の発行だけでは精算の入金済み金額は変更しません。</p>
         <label className="block font-bold">宛名<input required maxLength={200} value={recipient} onChange={event => { setRecipient(event.target.value); change() }} className="document-input" /></label>
-        <div className="grid gap-3 sm:grid-cols-2"><label className="block font-bold">受領金額（円）<input required type="number" min="1" step="1" value={amount} onChange={event => { setAmount(event.target.value); setTax(String(Math.floor(Number(event.target.value) / 11))); change() }} className="document-input" /></label><label className="block font-bold">消費税額（10%内税・修正可）<input required type="number" min="0" step="1" value={tax} onChange={event => { setTax(event.target.value); change() }} className="document-input" /></label></div>
+        <div className="grid gap-3 sm:grid-cols-2"><label className="block font-bold">受領金額（円）<input required type="number" min="1" step="1" value={amount} onChange={event => { amountEdited.current = true; setAmount(event.target.value); setTax(String(Math.floor(Number(event.target.value) / 11))); change() }} className="document-input" /></label><label className="block font-bold">消費税額（10%内税・修正可）<input required type="number" min="0" step="1" value={tax} onChange={event => { setTax(event.target.value); change() }} className="document-input" /></label></div>
         <p className="text-xs text-muted-foreground">内税額は受領金額から計算し、1円未満を切り捨てた初期値です。発行前に確認してください。</p>
         <label className="block font-bold">受領日・発行日<input required type="date" value={date} onChange={event => { setDate(event.target.value); change() }} className="document-input" /></label>
         <label className="block font-bold">受領方法<select value={method} onChange={event => { setMethod(event.target.value as typeof method); change() }} className="document-input"><option value="cash_at_venue">当日現金</option><option value="bank_transfer">振込</option></select></label>
@@ -63,6 +65,7 @@ export function SettlementDocuments({ document, session, ready }: { document: Se
       </form>}
       {receipts.length > 0 && <details className="mt-4"><summary className="cursor-pointer font-bold">発行済み領収書（再印刷）</summary>{receipts.map(row => <div key={row.id} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t pt-2"><span>{row.issue_date} ／ {row.recipient} ／ {formatYen(row.amount)}</span><button type="button" onClick={() => { setReceipt(row); print('receipt') }} className="min-h-10 rounded-lg border px-3">再印刷</button></div>)}</details>}
     </div>
+    <style>{`@media print { @page { size: A4 ${mode === 'settlement' ? 'landscape' : 'portrait'}; margin: 8mm; } }`}</style>
     <div className="print-only hidden document-page">
       {mode === 'receipt' && receipt ? <ReceiptPrint receipt={receipt} /> : <StatementPrint document={document} />}
     </div>

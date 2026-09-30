@@ -200,3 +200,22 @@
   .print-competition h2 { break-after: avoid; }
   .print-competition thead { display: table-header-group; }
 }
+
+.statement-paper { font-size: 13px; line-height: 1.3; }
+.statement-paper .document-lines { table-layout: fixed; }
+.statement-paper .document-lines th:nth-child(1) { width: 12%; }
+.statement-paper .document-lines th:nth-child(2) { width: 21%; }
+.statement-paper .document-lines th:nth-child(3), .statement-paper .document-lines th:nth-child(4) { width: 16%; }
+.statement-paper .document-lines th:nth-child(5) { width: 17%; }
+.statement-paper .document-lines th:nth-child(6), .statement-paper .document-lines th:nth-child(7) { width: 9%; }
+.statement-paper td { overflow-wrap: anywhere; white-space: pre-line; }
+@media print {
+  .statement-paper { font-size: 9pt; line-height: 1.2; }
+  .statement-paper h2 { font-size: 16pt; }
+  .statement-paper h3, .statement-paper h4 { font-size: 11pt; }
+  .statement-paper .mt-5, .statement-paper .mt-3 { margin-top: 6px; }
+  .statement-paper .document-lines th, .statement-paper .document-lines td, .statement-paper .document-summary th, .statement-paper .document-summary td { padding: 3px 5px; }
+  .statement-paper .document-summary { width: 65%; }
+  .statement-dense { font-size: 8pt; }
+  .statement-dense .document-lines td { padding: 2px 4px; }
+}

@@ -159,6 +159,8 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
   const horseName = (id: string) => horses.find((h) => h.id === id)?.name ?? "馬匹不明"
   const competition = (id: string) => competitions.find((c) => c.id === id)
   const requestRiderName = (request: AppRequest) => {
+    if (request.change?.toPlayerName) return request.change.toPlayerName
+    if (request.add?.playerName) return request.add.playerName
     const riderId = request.add?.playerId ?? request.change?.toPlayerId ?? request.withdraw?.playerId ?? ""
     const direct = players.find((p) => p.id === riderId)?.name
     if (direct) return direct
@@ -186,18 +188,26 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
     const documentLines: SettlementDocumentLine[] = requestDetails.map(request => {
       const linked = manualDetails.find(record => record.request_id === request.id)
       const comp = competition(request.add?.competitionId ?? request.change?.toCompetitionId ?? request.withdraw?.competitionId ?? '')
+      const change = request.change
+      const compLabel = (id: string) => { const value = competition(id); return `競技${value?.number ?? '?'} ${value?.name ?? '要確認'}` }
+      const changed = (before: string, after: string) => before === after ? after : `${before} → ${after}`
+      const rider = change ? changed(playerName(change.fromPlayerId), requestRiderName(request)) : requestRiderName(request)
+      const horse = change ? changed(horseName(change.fromHorseId), change.toHorseName || horseName(change.toHorseId)) : horseName(request.add?.horseId ?? request.withdraw?.horseId ?? '')
+      const compText = change ? changed(compLabel(change.fromCompetitionId), compLabel(change.toCompetitionId)) : compLabel(request.add?.competitionId ?? request.withdraw?.competitionId ?? '')
+      const opNote = change && !!change.fromIsOp !== !!change.toIsOp ? `参加区分：${change.fromIsOp ? 'OP' : '通常'} → ${change.toIsOp ? 'OP' : '通常'}` : ''
       const parts = request.fee.addBase + request.fee.addEntry + request.fee.changeBase + request.fee.competitionDiff
       const addCharge = request.type === 'add' || request.type === 'change' && request.change?.treatedAsWithdrawAdd
       const entryFee = addCharge ? overrideFor('add', request.id)?.corrected_fee ?? (parts ? request.fee.addEntry : request.fee.total) : 0
       const serviceFee = request.type === 'withdraw' ? 0 : addCharge ? (parts ? request.fee.addBase : 0) : parts ? request.fee.changeBase : request.fee.total
       const difference = addCharge || request.type === 'withdraw' ? 0 : request.fee.competitionDiff
-      return { period: linked?.period === 'before_event' ? '締切後〜大会前' : '大会期間中', action: request.type === 'add' ? '追加' : request.type === 'change' ? '変更' : '棄権', competition: `競技${comp?.number ?? '?'} ${comp?.name ?? '要確認'}`, rider: requestRiderName(request), horse: horseName(request.add?.horseId ?? request.change?.toHorseId ?? request.withdraw?.horseId ?? ''), entryFee, serviceFee, difference, amount: entryFee + serviceFee + difference, paid: linked?.paid_amount ?? 0, note: [linked?.details, request.type === 'withdraw' ? '棄権申請0円・元エントリー料金は維持' : '', addCharge && overrideFor('add',request.id) ? `運営修正：${overrideFor('add',request.id)!.reason}` : ''].filter(Boolean).join(' ／ ') }
+      return { period: linked?.period === 'before_event' ? '締切後〜大会前' : '大会期間中', action: request.type === 'add' ? '追加' : request.type === 'change' ? '変更' : '棄権', competitionNumber: comp?.number, competition: compText, rider, horse, entryFee, serviceFee, difference, amount: entryFee + serviceFee + difference, paid: linked?.paid_amount ?? 0, note: [opNote, linked?.details, request.type === 'withdraw' ? '棄権申請0円・元エントリー料金は維持' : '', addCharge && overrideFor('add',request.id) ? `運営修正：${overrideFor('add',request.id)!.reason}` : ''].filter(Boolean).join(' ／ ') }
     })
     for (const record of manualDetails.filter(record => !requestDetails.some(request => request.id === record.request_id))) {
       const comp = competition(record.competition_key), linked = requests.find(request => request.id === record.request_id)
       const charge = record.request_id === null && record.action_type !== 'withdraw' ? record.bill_amount : 0
-      documentLines.push({ period: record.period === 'before_event' ? '締切後〜大会前' : '大会期間中', action: `${record.action_type === 'add' ? '追加' : record.action_type === 'change' ? '変更' : '棄権'}${linked?.status === 'cancelled' ? '取消済み' : record.request_id ? '未計上' : ''}`, competition: `競技${comp?.number ?? '?'} ${comp?.name ?? '要確認'}`, rider: playerName(record.rider_key), horse: horseName(record.horse_key), entryFee: charge, serviceFee: 0, difference: 0, amount: charge, paid: record.paid_amount, note: [record.request_id === null ? '会場からの事後連絡・精算のみ（手数料込み）' : linked?.status === 'cancelled' ? '取消済み・入金記録は維持。返金・充当を確認' : '申請未反映のため請求未計上', record.details].filter(Boolean).join(' ／ ') })
+      documentLines.push({ period: record.period === 'before_event' ? '締切後〜大会前' : '大会期間中', action: `${record.action_type === 'add' ? '追加' : record.action_type === 'change' ? '変更' : '棄権'}${linked?.status === 'cancelled' ? '取消済み' : record.request_id ? '未計上' : ''}`, competitionNumber: comp?.number, competition: `競技${comp?.number ?? '?'} ${comp?.name ?? '要確認'}`, rider: playerName(record.rider_key), horse: horseName(record.horse_key), entryFee: charge, serviceFee: 0, difference: 0, amount: charge, paid: record.paid_amount, note: [record.request_id === null ? '会場からの事後連絡・精算のみ（手数料込み）' : linked?.status === 'cancelled' ? '取消済み・入金記録は維持。返金・充当を確認' : '申請未反映のため請求未計上', record.details].filter(Boolean).join(' ／ ') })
     }
+    documentLines.sort((a, b) => (a.competitionNumber ?? Number.MAX_SAFE_INTEGER) - (b.competitionNumber ?? Number.MAX_SAFE_INTEGER))
     const printDocument: SettlementDocument = { organization: selected.orgName, organizationKey: selected.orgId, issuedDate: new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }), normalTotal: selected.normalEntry, advancePaid: advance?.paid_amount ?? 0, advanceRecorded: !!advance, extraTotal: selected.additional + selected.change + selected.competitionDiff, extraPaid: manualPaid, due, method: paymentInstruction?.payment_method === 'bank_transfer' ? '後日振込' : paymentInstruction?.payment_method === 'cash_at_venue' ? '当日現金' : '未設定', bankDetails: paymentInstruction?.payment_method === 'bank_transfer' ? paymentInstruction.bank_details : '', lines: documentLines }
 
     return <div className="flex flex-col gap-5">
