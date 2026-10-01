@@ -12,7 +12,7 @@ const compare = <T extends { name: string; reading?: string }>(a: T, b: T) =>
   a.name.localeCompare(b.name, "ja")
 const normalized = (value: string) => value.normalize("NFKC").replace(/[\s　]+/g, "").toLocaleLowerCase("ja-JP")
 
-export function PlayerPicker({ selectedId, onSelect, registeredOnly = false }: { selectedId?: string; onSelect: (playerId: string) => void; registeredOnly?: boolean }) {
+export function PlayerPicker({ selectedId, onSelect, registeredOnly = false, onNavigate }: { selectedId?: string; onSelect: (playerId: string) => void; registeredOnly?: boolean; onNavigate?: () => void }) {
   const { players, organizations } = useStore()
   // Autumn原本の p-119 と p-122 は名前にフリガナが連結された出番のない誤記。
   // 本人確認済みの候補だけ除外し、元データと正式DBの行は保持する。
@@ -23,11 +23,12 @@ export function PlayerPicker({ selectedId, onSelect, registeredOnly = false }: {
     const id = canonicalOrgId(player.orgId)
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
-  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた選手のみ表示しています。" : ""}</p><OrganizationPicker counts={counts} onSelect={setOrgId} description="選手の所属団体を選んでください。" /></>
+  const navigate = (id: string | null) => { setOrgId(id); onNavigate?.() }
+  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた選手のみ表示しています。" : ""}</p><OrganizationPicker counts={counts} onSelect={navigate} description="選手の所属団体を選んでください。" /></>
   const orgName = organizations.find(org => org.id === orgId)?.name
   const items = selectablePlayers.filter(player => canonicalOrgId(player.orgId) === orgId).sort(compare<Player>)
   return <div className="flex flex-col gap-4">
-    <button type="button" onClick={() => setOrgId(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
+    <button type="button" onClick={() => navigate(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
     <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{orgName}の選手</h3>
     {items.map(player => {
       const duplicate = items.filter(item => normalized(item.name) === normalized(player.name)).length > 1
@@ -37,7 +38,7 @@ export function PlayerPicker({ selectedId, onSelect, registeredOnly = false }: {
   </div>
 }
 
-export function HorsePicker({ selectedId, onSelect, registeredOnly = false }: { selectedId?: string; onSelect: (horseId: string) => void; registeredOnly?: boolean }) {
+export function HorsePicker({ selectedId, onSelect, registeredOnly = false, onNavigate }: { selectedId?: string; onSelect: (horseId: string) => void; registeredOnly?: boolean; onNavigate?: () => void }) {
   const { horses, organizations } = useStore()
   const [orgId, setOrgId] = useState<string | null>(null)
   const counts = new Map<string, number>()
@@ -46,11 +47,12 @@ export function HorsePicker({ selectedId, onSelect, registeredOnly = false }: { 
     const id = canonicalOrgId(horse.orgId)
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
-  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた馬のみ表示しています。" : ""}</p><OrganizationPicker counts={counts} onSelect={setOrgId} description="馬の所属団体を選んでください。" /></>
+  const navigate = (id: string | null) => { setOrgId(id); onNavigate?.() }
+  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた馬のみ表示しています。" : ""}</p><OrganizationPicker counts={counts} onSelect={navigate} description="馬の所属団体を選んでください。" /></>
   const orgName = organizations.find(org => org.id === orgId)?.name
   const items = selectableHorses.filter(horse => canonicalOrgId(horse.orgId) === orgId).sort(compare<Horse>)
   return <div className="flex flex-col gap-4">
-    <button type="button" onClick={() => setOrgId(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
+    <button type="button" onClick={() => navigate(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
     <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{orgName}の馬</h3>
     {items.map(horse => {
       const duplicate = items.filter(item => normalized(item.name) === normalized(horse.name)).length > 1

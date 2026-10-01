@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useStore } from "@/lib/store"
 import { canonicalOrgId } from "@/lib/organization-aliases"
 import { calcAddFee, calcChangeFee, calcWithdrawAddFee, calcWithdrawFee, formatYen } from "@/lib/fees"
@@ -34,6 +34,16 @@ export function OnSiteReception({ session }: { session: AdminSession }) {
   const [isOp, setIsOp] = useState(false)
   const [organizationId, setOrganizationId] = useState("")
   const [picker, setPicker] = useState<"player" | "horse" | null>(null)
+  const pickerDialog = useRef<HTMLDialogElement>(null)
+  const pickerScroll = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!picker) return
+    const dialog = pickerDialog.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    dialog?.showModal()
+    return () => { dialog?.close(); document.body.style.overflow = previousOverflow }
+  }, [picker])
   const [operatorName, setOperatorName] = useState("")
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
@@ -171,7 +181,17 @@ export function OnSiteReception({ session }: { session: AdminSession }) {
       {(type === "add" && competitionId || type === "change" && entry) && <>
         <button type="button" onClick={() => setPicker("player")} className="min-h-14 w-full rounded-xl border-2 border-border p-3 text-left font-bold">選手：{rider?.name ?? "選択してください"}　変更する</button>
         <button type="button" onClick={() => setPicker("horse")} className="min-h-14 w-full rounded-xl border-2 border-border p-3 text-left font-bold">馬：{horse?.name ?? "選択してください"}　変更する</button>
-        {picker && <div className="rounded-xl border border-border p-3"><button type="button" onClick={() => setPicker(null)} className="mb-3 min-h-12 rounded-lg border px-4 font-bold">← 戻る</button>{picker === "player" ? <PlayerPicker registeredOnly={!!target?.official} selectedId={playerId} onSelect={id => { setPlayerId(id); setOrganizationId(""); setPicker(null) }} /> : <HorsePicker registeredOnly={!!target?.official} selectedId={horseId} onSelect={id => { setHorseId(id); setOrganizationId(""); setPicker(null) }} />}</div>}
+        {picker && <dialog ref={pickerDialog} aria-labelledby="post-deadline-picker-title" onCancel={() => setPicker(null)} className="m-auto h-[90dvh] max-h-[90dvh] w-[calc(100%-1rem)] max-w-3xl overflow-hidden rounded-2xl border-2 border-border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/50">
+          <div className="flex h-full flex-col">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card p-4">
+              <div><h3 id="post-deadline-picker-title" className="text-xl font-bold">{picker === "player" ? "選手を選択" : "馬を選択"}</h3><p className="mt-1 text-sm text-muted-foreground">団体を選ぶ → 人馬を選ぶ</p></div>
+              <button type="button" autoFocus onClick={() => setPicker(null)} className="min-h-12 rounded-xl border-2 border-border px-5 font-bold">閉じる</button>
+            </div>
+            <div ref={pickerScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+              {picker === "player" ? <PlayerPicker onNavigate={() => { if (pickerScroll.current) pickerScroll.current.scrollTop = 0 }} registeredOnly={!!target?.official} selectedId={playerId} onSelect={id => { setPlayerId(id); setOrganizationId(""); setPicker(null) }} /> : <HorsePicker onNavigate={() => { if (pickerScroll.current) pickerScroll.current.scrollTop = 0 }} registeredOnly={!!target?.official} selectedId={horseId} onSelect={id => { setHorseId(id); setOrganizationId(""); setPicker(null) }} />}
+            </div>
+          </div>
+        </dialog>}
         {target && !target.official && <label className="flex min-h-12 items-center gap-3 font-bold"><input type="checkbox" checked={isOp} onChange={event => setIsOp(event.target.checked)} className="size-6" />OP参加（正式成績の対象外）</label>}
       </>}
       {crossClub && <label className="block font-bold">エントリーと精算の所属<select required value={selectedOrg} onChange={event => setOrganizationId(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3"><option value="">所属を選択</option><option value={riderOrg!.id}>{riderOrg!.name}（選手の所属）</option><option value={horseOrg!.id}>{horseOrg!.name}（馬の所属）</option></select></label>}
