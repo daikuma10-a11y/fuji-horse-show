@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { formatYen } from '@/lib/fees'
 import { ReceiptPrint, StatementPrint } from './settlement-print-layouts'
 import { RiderReceiptForm } from './rider-receipt-form'
@@ -11,7 +11,10 @@ import { createSettlementReceipt, type SettlementReceipt } from '@/lib/settlemen
 import { settlementChoices, allocateSettlement, selectedSettlementDocument } from '@/lib/settlement-selection'
 
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
-export function SettlementDocuments({ document, receiptSources, session, ready, receipts, onReceiptSaved, onBeforeIssue }: { document: SettlementDocument; receiptSources: ReceiptSourceItem[]; session: AdminSession; ready: boolean; receipts: SettlementReceipt[]; onReceiptSaved: (row: SettlementReceipt) => void; onBeforeIssue: () => Promise<void> }) {
+export function SettlementDocuments({ document, receiptSources, session, ready, receipts, onReceiptSaved, onBeforeIssue, paymentSettings }: { document: SettlementDocument; receiptSources: ReceiptSourceItem[]; session: AdminSession; ready: boolean; receipts: SettlementReceipt[]; onReceiptSaved: (row: SettlementReceipt) => void; onBeforeIssue: () => Promise<void>; paymentSettings?: ReactNode }) {
+  const [action, setAction] = useState<'settle' | 'receipt' | 'statement' | null>(null)
+  const [receiptBusy, setReceiptBusy] = useState(false)
+  const panelId = useId()
   const [showReceipt, setShowReceipt] = useState(false)
   const choices = settlementChoices(document, receipts)
   const [selected, setSelected] = useState<string[]>(() => choices.filter(item => item.key !== 'normal' && (item.remaining > 0 || item.freeWithdrawal)).map(item => item.key))
@@ -61,19 +64,19 @@ export function SettlementDocuments({ document, receiptSources, session, ready, 
   }
   return <>
     <div className="print-hide rounded-2xl border-2 border-primary/30 bg-card p-4">
-      <div className="flex flex-wrap gap-2"><button type="button" onClick={() => { if (!ready) { setError('支払案内の変更を保存してから印刷してください'); return } setPrintedDocument(document); print('settlement') }} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground">精算書を印刷</button><button type="button" onClick={() => { if (!ready) { setError('支払案内を保存してからダウンロードしてください'); return } downloadSettlementWorkbook(document) }} className="min-h-12 rounded-lg border border-primary px-4 font-bold text-primary">精算書をExcelで保存</button><button type="button" disabled={saving || selectedTotal <= 0 || document.due <= 0} onClick={beginReceipt} className="min-h-12 rounded-lg border border-primary px-4 font-bold text-primary">選択分を精算・領収書作成</button></div>
+      <h4 className="text-lg font-bold">行う操作を選んでください</h4>
+      <div className="mt-3 grid gap-3 md:grid-cols-3">{([
+        ['settle', '精算する', '未精算の分を選び、入金を記録'],
+        ['receipt', '領収書を作る', '入金済みの分を団体全体・選手別で発行'],
+        ['statement', '精算書を印刷・保存', '支払案内・プレビュー・Excel保存'],
+      ] as const).map(([key, title, description]) => <button key={key} type="button" disabled={saving || receiptBusy} aria-expanded={action === key} aria-controls={`${panelId}-${key}`} onClick={() => { setAction(action === key ? null : key); setError('') }} className={`min-h-24 rounded-xl border-2 p-4 text-left disabled:opacity-50 ${action === key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:border-primary'}`}><span className="block text-xl font-bold">{title}</span><span className="mt-1 block text-sm">{description}</span></button>)}</div>
 
-      <div className="mt-4 rounded-xl border-2 border-primary/30 p-3">
+      <section id={`${panelId}-settle`} hidden={action !== 'settle'} className="mt-4 rounded-xl border-2 border-primary/30 p-4">
         <h4 className="text-2xl font-bold">精算</h4>
         <p className="mt-1 text-sm">未精算の追加・変更と棄権はチェック済みです。個別に精算する場合は、対象外のチェックを外してください。実際に入金を受けてから「入金を記録して領収書を印刷」を押します。</p>
-        <div className="sticky top-0 z-10 mt-3 rounded-lg bg-white p-3 text-black shadow-sm"><p className="font-bold">未精算 {remainingCount}件 ／ 選択 {selected.length}件</p><p className="text-2xl font-bold text-primary">選択分：{formatYen(selectedTotal)}</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" disabled={saving} className="min-h-10 rounded-lg border px-3" onClick={() => { setSelected(choices.filter(item => item.remaining > 0 || item.freeWithdrawal).map(item => item.key)); setShowReceipt(false); change() }}>未精算と棄権をすべて選択</button><button type="button" disabled={saving} className="min-h-10 rounded-lg border px-3" onClick={() => { setSelected([]); setShowReceipt(false); change() }}>選択を解除</button><button type="button" disabled={!selected.length} className="min-h-10 rounded-lg border px-3" onClick={() => { if (!ready) { setError('支払案内を保存してください'); return } setPrintedDocument(selectedDocument); print('settlement') }}>選択分の精算書を印刷</button><button type="button" disabled={saving || selectedTotal <= 0 || document.due <= 0} className="min-h-10 rounded-lg bg-primary px-3 font-bold text-primary-foreground disabled:opacity-50" onClick={beginReceipt}>選択内容を確認・精算へ</button></div></div>
-        <details className="mt-2"><summary className="cursor-pointer py-3 font-bold">精算する明細を選ぶ（未精算 {remainingCount}件・棄権も選択可）</summary><div className="max-h-[55vh] overflow-y-auto">{choices.map(item => <label key={item.key} className={`flex cursor-pointer items-center gap-3 border-t p-3 ${item.remaining <= 0 && !item.freeWithdrawal ? 'text-muted-foreground' : ''}`}><input type="checkbox" className="size-6 shrink-0" disabled={saving || (item.remaining <= 0 && !item.freeWithdrawal)} checked={selected.includes(item.key)} onChange={event => { setSelected(previous => event.target.checked ? [...previous, item.key] : previous.filter(key => key !== item.key)); setShowReceipt(false); change() }} /><span className="flex-1 text-sm font-semibold">{item.label}</span><span className="shrink-0 font-bold">{formatYen(item.remaining)}{item.freeWithdrawal ? '（棄権・精算書に記載）' : item.remaining <= 0 ? '（残額なし）' : ''}</span></label>)}</div></details>
+        <div className="sticky top-0 z-10 mt-3 rounded-lg bg-white p-3 text-black shadow-sm"><p className="font-bold">未精算 {remainingCount}件 ／ 選択 {selected.length}件</p><p className="text-2xl font-bold text-primary">選択分：{formatYen(selectedTotal)}</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" disabled={saving} className="min-h-10 rounded-lg border px-3" onClick={() => { setSelected(choices.filter(item => item.remaining > 0 || item.freeWithdrawal).map(item => item.key)); setShowReceipt(false); change() }}>未精算と棄権をすべて選択</button><button type="button" disabled={saving} className="min-h-10 rounded-lg border px-3" onClick={() => { setSelected([]); setShowReceipt(false); change() }}>選択を解除</button><button type="button" disabled={!selected.length} className="min-h-10 rounded-lg border px-3" onClick={() => { if (!ready) { setAction('statement'); setError('支払方法・振込先を保存してから印刷してください'); return } setPrintedDocument(selectedDocument); print('settlement') }}>選択分の精算書を印刷</button><button type="button" disabled={saving || selectedTotal <= 0 || document.due <= 0} className="min-h-10 rounded-lg bg-primary px-3 font-bold text-primary-foreground disabled:opacity-50" onClick={beginReceipt}>選択内容を確認・精算へ</button></div></div>
+        <details open className="mt-2"><summary className="cursor-pointer py-3 font-bold">精算する明細を選ぶ（未精算 {remainingCount}件・棄権も選択可）</summary><div className="max-h-[55vh] overflow-y-auto">{choices.map(item => <label key={item.key} className={`flex cursor-pointer items-start gap-3 border-t p-3 ${item.remaining <= 0 && !item.freeWithdrawal ? 'text-muted-foreground' : ''}`}><input type="checkbox" className="mt-1 size-6 shrink-0" disabled={saving || (item.remaining <= 0 && !item.freeWithdrawal)} checked={selected.includes(item.key)} onChange={event => { setSelected(previous => event.target.checked ? [...previous, item.key] : previous.filter(key => key !== item.key)); setShowReceipt(false); change() }} /><span className="min-w-0 flex-1 text-sm font-semibold">{item.label}<span className="mt-1 block font-bold">{formatYen(item.remaining)}{item.freeWithdrawal ? '（棄権・精算書に記載）' : item.remaining <= 0 ? '（残額なし）' : ''}</span></span></label>)}</div></details>
         <p className="mt-2 text-xs text-muted-foreground">棄権は申請料0円で精算書に記載します。元のエントリー料金は返金せず、領収書には実際に受領した金額だけを記載します。</p>
-      </div>
-      <RiderReceiptForm organizationKey={document.organizationKey} organization={document.organization} sources={receiptSources} receipts={receipts} session={session} onBeforeIssue={onBeforeIssue} onSaved={row => { setReceipt(row); onReceiptSaved(row); print('receipt') }} />
-      <p className="mt-2 text-sm text-muted-foreground">精算書は事前エントリーの合計と追加・変更・棄権の人馬別明細を出力します。Excelで編集した内容はアプリには自動反映されません。</p>
-      <details className="mt-3"><summary className="cursor-pointer font-bold">精算書のプレビュー</summary><div className="mt-3 overflow-x-auto rounded-lg border bg-white p-3 text-black"><StatementPrint document={document} /></div></details>
-      {error && <p role="alert" className="mt-3 font-semibold text-destructive">{error}</p>}
       {showReceipt && <form onSubmit={issue} className="mt-4 border-t pt-4"><fieldset disabled={saving} className="space-y-3">
         <h4 className="text-xl font-bold">選択分の精算・領収書の発行</h4><div className="rounded-lg bg-primary/5 p-3"><p className="font-bold">確認：{selected.length}件 ／ {formatYen(selectedTotal)}</p>{choices.filter(item => selected.includes(item.key)).map(item => <p key={item.key} className="mt-1 text-sm">{item.label}：{formatYen(item.remaining)}</p>)}</div><p className="text-sm">選択分の未精算額を初期入力しています。実際に受領した金額に修正できます。保存すると、選択した明細の入金として記録され、差引残額が減ります。金額を減らした場合は表示順に充当します。</p>
         <label className="block font-bold">宛名<input required maxLength={200} value={recipient} onChange={event => { setRecipient(event.target.value); change() }} className="document-input" /></label>
@@ -82,12 +85,27 @@ export function SettlementDocuments({ document, receiptSources, session, ready, 
         <label className="block font-bold">受領日・発行日<input required type="date" value={date} onChange={event => { setDate(event.target.value); change() }} className="document-input" /></label>
         <label className="block font-bold">受領方法<select value={method} onChange={event => { setMethod(event.target.value as typeof method); change() }} className="document-input"><option value="cash_at_venue">当日現金</option><option value="bank_transfer">振込</option></select></label>
         <label className="block font-bold">但し書き<input required maxLength={500} value={purpose} onChange={event => { setPurpose(event.target.value); change() }} className="document-input" /></label>
-        <label className="block font-bold">発行者名<input required maxLength={200} value={issuer} onChange={event => { setIssuer(event.target.value); change() }} className="document-input" /></label>
+        <details><summary className="cursor-pointer py-2 font-bold">発行者情報</summary><label className="block font-bold">発行者名<input required maxLength={200} value={issuer} onChange={event => { setIssuer(event.target.value); change() }} className="document-input" /></label>
         <label className="block font-bold">発行者の住所・連絡先<textarea maxLength={1000} value={address} onChange={event => { setAddress(event.target.value); change() }} className="document-input min-h-28" /></label>
-        <label className="block font-bold">登録番号（記載する場合）<input maxLength={14} pattern="T[0-9]{13}" value={registration} placeholder="T＋13桁の数字" onChange={event => { setRegistration(event.target.value); change() }} className="document-input" /></label>
+        <label className="block font-bold">登録番号（記載する場合）<input maxLength={14} pattern="T[0-9]{13}" value={registration} placeholder="T＋13桁の数字" onChange={event => { setRegistration(event.target.value); change() }} className="document-input" /></label></details>
 <label className="flex items-start gap-3 rounded-lg border-2 border-primary/30 p-3 font-bold"><input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-1 size-6 shrink-0" />対象・金額・宛名を確認し、実際に入金を受けました。</label>
         <button type="submit" disabled={saving || !confirmed} className="min-h-12 rounded-lg bg-primary px-5 font-bold text-primary-foreground disabled:opacity-50">{saving ? '保存中…' : '入金を記録して領収書を印刷'}</button>
       </fieldset></form>}
+      </section>
+      <section id={`${panelId}-receipt`} hidden={action !== 'receipt'} className="mt-4 rounded-xl border-2 border-primary/30 p-4">
+        <h4 className="text-2xl font-bold">領収書を作る</h4>
+        <RiderReceiptForm embedded organizationKey={document.organizationKey} organization={document.organization} sources={receiptSources} receipts={receipts} session={session} onBusyChange={setReceiptBusy} onBeforeIssue={onBeforeIssue} onSaved={row => { setReceipt(row); onReceiptSaved(row); print('receipt') }} />
+      </section>
+      <section id={`${panelId}-statement`} hidden={action !== 'statement'} className="mt-4 rounded-xl border-2 border-primary/30 p-4">
+        <h4 className="text-2xl font-bold">精算書を印刷・保存</h4>
+        <p className="mt-2 text-sm text-muted-foreground">事前エントリーの合計と追加・変更・棄権の人馬別明細を出力します。Excelの編集内容はアプリには自動反映されません。</p>
+        {!ready && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 font-bold text-amber-950">印刷・保存の前に、下の支払方法・振込先を保存してください。</p>}
+        <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!ready} onClick={() => { setPrintedDocument(document); print('settlement') }} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50">団体全体の精算書を印刷</button><button type="button" disabled={!ready} onClick={() => downloadSettlementWorkbook(document)} className="min-h-12 rounded-lg border border-primary px-4 font-bold text-primary disabled:opacity-50">Excelで保存</button><button type="button" disabled={!ready || !selected.length} onClick={() => { setPrintedDocument(selectedDocument); print('settlement') }} className="min-h-12 rounded-lg border px-4 font-bold disabled:opacity-50">選択分の精算書を印刷</button></div>
+        <p className="mt-2 text-xs text-muted-foreground">選択分の対象は「精算する」で変更できます。現在 {selected.length}件 ／ {formatYen(selectedTotal)}</p>
+        <details className="mt-4"><summary className="cursor-pointer py-3 font-bold">精算書のプレビュー</summary><div className="overflow-x-auto rounded-lg border bg-white p-3 text-black"><StatementPrint document={document} /></div></details>
+        <div className="mt-4 border-t pt-4">{paymentSettings}</div>
+      </section>
+      {error && <p role="alert" className="mt-3 font-semibold text-destructive">{error}</p>}
       {receipts.length > 0 && <details className="mt-4"><summary className="cursor-pointer font-bold">発行済み領収書（再印刷）</summary>{receipts.map(row => <div key={row.id} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t pt-2"><span>{row.issue_date} ／ {row.recipient} ／ {formatYen(row.amount)} ／ {row.document_items?.length ? '領収書のみ・入金記録は追加なし' : row.selected_items?.length ? '精算済み' : '従来の領収書・入金記録は別管理'}</span><button type="button" onClick={() => { setReceipt(row); print('receipt') }} className="min-h-10 rounded-lg border px-3">再印刷</button></div>)}</details>}
     </div>
     <style>{`@media print { @page { size: A4 ${mode === 'settlement' ? 'landscape' : 'portrait'}; margin: 8mm; } }`}</style>

@@ -6,8 +6,8 @@ import { allocateSettlement } from '@/lib/settlement-selection'
 import { createSettlementReceipt, type SettlementReceipt } from '@/lib/settlement-receipts'
 import type { AdminSession } from '@/lib/supabase-rest'
 
-type Props = { organizationKey: string; organization: string; sources: ReceiptSourceItem[]; receipts: SettlementReceipt[]; session: AdminSession; onBeforeIssue: () => Promise<void>; onSaved: (receipt: SettlementReceipt) => void }
-export function RiderReceiptForm({ organizationKey, organization, sources, receipts, session, onBeforeIssue, onSaved }: Props) {
+type Props = { organizationKey: string; organization: string; sources: ReceiptSourceItem[]; receipts: SettlementReceipt[]; session: AdminSession; onBeforeIssue: () => Promise<void>; onSaved: (receipt: SettlementReceipt) => void; embedded?: boolean; onBusyChange?: (busy: boolean) => void }
+export function RiderReceiptForm({ organizationKey, organization, sources, receipts, session, onBeforeIssue, onSaved, embedded = false, onBusyChange }: Props) {
   const choices = riderReceiptChoices(sources, receipts)
   const riders = Array.from(new Map(sources.filter(item => item.riderId).map(item => [item.riderId, item.rider])).entries()).sort((a, b) => a[1].localeCompare(b[1], 'ja'))
   const [riderId, setRiderId] = useState('')
@@ -26,7 +26,7 @@ export function RiderReceiptForm({ organizationKey, organization, sources, recei
   const [error, setError] = useState('')
   const savingRef = useRef(false)
   const receiptId = useRef<string | null>(null)
-  const visible = choices.filter(item => item.riderId === riderId)
+  const visible = riderId === '__all__' ? choices : choices.filter(item => item.riderId === riderId)
   const selectedChoices = visible.filter(item => selected.includes(item.key))
   const selectedTotal = selectedChoices.reduce((sum, item) => sum + item.remaining, 0)
   const change = () => { setConfirmed(false); setError(''); receiptId.current = null }
@@ -42,20 +42,21 @@ export function RiderReceiptForm({ organizationKey, organization, sources, recei
     if (!/^\d+$/.test(amount) || !/^\d+$/.test(tax)) { setError('金額は整数で入力してください'); return }
     const documentItems = (() => { try { return allocateSettlement(visible, selected, Number(amount)) } catch (cause) { setError(cause instanceof Error ? cause.message : '対象と金額を確認してください'); return null } })()
     if (!documentItems) return
-    savingRef.current = true; setSaving(true); setError('')
+    savingRef.current = true; setSaving(true); onBusyChange?.(true); setError('')
     try {
       await onBeforeIssue()
       receiptId.current ??= crypto.randomUUID()
       const saved = await createSettlementReceipt(session, { organization_key: organizationKey, recipient: recipient.trim(), amount: Number(amount), tax_amount: Number(tax), issue_date: date, payment_method: method, purpose: purpose.trim(), issuer_name: issuer.trim(), issuer_address: address.trim(), registration_number: registration.trim(), selected_items: [], document_items: documentItems }, receiptId.current)
       onSaved(saved); setSelected([]); setAmount('0'); setTax('0'); setConfirmed(false)
     } catch (cause) { setError(cause instanceof Error ? cause.message : '領収書を保存できませんでした') }
-    finally { savingRef.current = false; setSaving(false) }
+    finally { savingRef.current = false; setSaving(false); onBusyChange?.(false) }
   }
-  return <details className="mt-4 rounded-xl border-2 border-primary/30 p-3">
-    <summary className="cursor-pointer py-2 text-lg font-bold">選手別・別宛名の領収書のみ作成</summary>
-    <p className="mt-2 text-sm">団体で精算した後、入金済みの選手の分だけ別の宛名で発行できます。団体の入金済み金額・差引残額は変わりません。</p>
+  const Wrapper = embedded ? 'div' : 'details'
+  return <Wrapper className={embedded ? '' : 'mt-4 rounded-xl border-2 border-primary/30 p-3'}>
+    {!embedded && <summary className="cursor-pointer py-2 text-lg font-bold">選手別・別宛名の領収書のみ作成</summary>}
+    <p className="mt-2 rounded-lg bg-sky-50 p-3 text-sm text-sky-950">入金済みの分から領収書だけを作成します。新しい入金は記録せず、団体の差引残額も変わりません。</p>
     <form onSubmit={submit} className="mt-3"><fieldset disabled={saving} className="space-y-3">
-      <label className="block font-bold">対象の選手<select required value={riderId} className="document-input" onChange={event => { const id = event.target.value; const next = choices.filter(item => item.riderId === id); setRiderId(id); choose(next.filter(item => item.remaining > 0).map(item => item.key), next) }}><option value="">選手を選んでください</option>{riders.map(([id, name]) => <option key={id} value={id}>{name}{riders.some(([otherId, otherName]) => otherId !== id && otherName === name) ? `（ID：${id}）` : ''}</option>)}</select></label>
+      <label className="block font-bold">{embedded ? '領収対象（団体全体・選手別）' : '対象の選手'}<select required value={riderId} className="document-input" onChange={event => { const id = event.target.value; const next = id === '__all__' ? choices : choices.filter(item => item.riderId === id); setRiderId(id); choose(next.filter(item => item.remaining > 0).map(item => item.key), next) }}><option value="">{embedded ? '団体全体または選手を選んでください' : '選手を選んでください'}</option>{embedded && <option value="__all__">団体全体 ／ {organization}</option>}{riders.map(([id, name]) => <option key={id} value={id}>{name}{riders.some(([otherId, otherName]) => otherId !== id && otherName === name) ? `（ID：${id}）` : ''}</option>)}</select></label>
       {riderId && <><div className="flex flex-wrap gap-2"><button type="button" onClick={() => choose(visible.filter(item => item.remaining > 0).map(item => item.key))} className="min-h-10 rounded-lg border px-3">発行できる明細をすべて選択</button><button type="button" onClick={() => choose([])} className="min-h-10 rounded-lg border px-3">選択を解除</button></div><div className="max-h-[45vh] overflow-y-auto rounded-lg border">{visible.map(item => <label key={item.key} className={`flex items-center gap-3 border-b p-3 ${item.remaining <= 0 ? 'text-muted-foreground' : ''}`}><input type="checkbox" className="size-6 shrink-0" disabled={item.remaining <= 0} checked={selected.includes(item.key)} onChange={event => choose(event.target.checked ? [...selected, item.key] : selected.filter(key => key !== item.key))} /><span className="flex-1 text-sm">{item.label}<span className="mt-1 block text-xs">{item.paid <= 0 ? item.amount === 0 ? '0円・領収対象外' : '入金の確認が必要' : item.remaining <= 0 ? '発行済み・履歴から再印刷できます' : `入金済み：${formatYen(item.paid)} ／ 発行できる金額：${formatYen(item.remaining)}`}</span></span></label>)}</div></>}
       <p className="rounded-lg bg-primary/5 p-3 font-bold">対象：{selectedChoices.length}件 ／ {formatYen(selectedTotal)}</p>
       <p className="text-xs text-muted-foreground">事前エントリーは、団体の事前料金が全額入金済みの場合に選手別に発行できます。一部入金では選手ごとの支払分を特定できないため、通常分は選択できません。追加・変更は各明細の入金済み分が対象です。</p>
@@ -69,5 +70,5 @@ export function RiderReceiptForm({ organizationKey, organization, sources, recei
       {error && <p role="alert" className="font-semibold text-destructive">{error}</p>}
       <button type="submit" disabled={saving || !confirmed || selectedTotal <= 0} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50">{saving ? '保存中…' : '領収書のみ保存して印刷'}</button>
     </fieldset></form>
-  </details>
+  </Wrapper>
 }
