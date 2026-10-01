@@ -9,7 +9,8 @@ import { players as sourcePlayers } from "@/lib/autumn-data"
 import type { AppRequest } from "@/lib/types"
 import { compareOrganizations } from "@/lib/organization-order"
 import { feeOverrideKey, loadFeeOverrides, loadPrepayments, saveFeeOverride, savePrepayment, type FeeOverride, type Prepayment } from "@/lib/settlement-fee-overrides"
-import type { AdminSession } from "@/lib/supabase-rest"
+import { AUTUMN_EVENT_ID, type AdminSession } from "@/lib/supabase-rest"
+import { bankDetailsForEvent } from '@/lib/event-payment-settings'
 import { loadManualRecords, type ManualRecord } from "@/lib/settlement-manual-records"
 import { loadPaymentInstructions, savePaymentInstruction, type PaymentInstruction } from "@/lib/settlement-payment-instructions"
 import { loadSettlementReceipts, type SettlementReceipt } from '@/lib/settlement-receipts'
@@ -24,6 +25,7 @@ const confirmedOrgAliases: Record<string, string> = {
   "org-24": "org-25", // 八王子乗馬俱楽部 → 八王子乗馬倶楽部
 }
 const settlementOrgId = (id: string) => confirmedOrgAliases[id] ?? id
+const eventBankDetails = bankDetailsForEvent(AUTUMN_EVENT_ID)
 
 export function SettlementPanel({ session }: { session: AdminSession }) {
   const { organizations, players, horses, competitions, startEntries, requests } = useStore()
@@ -184,7 +186,7 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
 
   if (selected) {
     const paymentInstruction = paymentInstructions.find(row => row.organization_key === selected.orgId)
-    const currentInstruction = instructionDraft?.orgId === selected.orgId ? instructionDraft : { orgId: selected.orgId, method: paymentInstruction?.payment_method ?? "" as const, bankDetails: paymentInstruction?.bank_details ?? "" }
+    const currentInstruction = instructionDraft?.orgId === selected.orgId ? instructionDraft : { orgId: selected.orgId, method: paymentInstruction?.payment_method ?? "" as const, bankDetails: eventBankDetails }
     const advance = prepayments.find(row => row.organization_key === selected.orgId)
     const manualDetails = manualRecords.filter(record => settlementOrgId(record.organization_key) === selected.orgId).sort((a, b) => (competition(a.competition_key)?.number ?? Infinity) - (competition(b.competition_key)?.number ?? Infinity))
     const orgReceipts = receipts.filter(row => settlementOrgId(row.organization_key) === selected.orgId)
@@ -220,7 +222,7 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
       documentLines.push({ key: record.request_id ? `request:${record.request_id}` : `manual:${record.id}`, riderId: record.rider_key, receiptRider: playerName(record.rider_key), period: record.period === 'before_event' ? '締切後〜大会前' : '大会期間中', action: `${record.action_type === 'add' ? '追加' : record.action_type === 'change' ? '変更' : '棄権'}${linked?.status === 'cancelled' ? '取消済み' : record.request_id ? '未計上' : ''}`, competitionNumber: comp?.number, competition: `競技${comp?.number ?? '?'} ${comp?.name ?? '要確認'}`, rider: playerName(record.rider_key), horse: horseName(record.horse_key), entryFee: charge, serviceFee: 0, difference: 0, amount: charge, paid: record.paid_amount + itemPaid(record.request_id ? `request:${record.request_id}` : `manual:${record.id}`), note: record.action_type === 'withdraw' ? '' : [record.request_id === null ? '会場からの事後連絡・精算のみ（手数料込み）' : linked?.status === 'cancelled' ? '取消済み・入金記録は維持。返金・充当を確認' : '申請未反映のため請求未計上', record.details].filter(Boolean).join(' ／ ') })
     }
     documentLines.sort((a, b) => (a.competitionNumber ?? Number.MAX_SAFE_INTEGER) - (b.competitionNumber ?? Number.MAX_SAFE_INTEGER))
-    const printDocument: SettlementDocument = { organization: selected.orgName, organizationKey: selected.orgId, issuedDate: new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }), normalTotal: selected.normalEntry, normalRemaining: Math.max(0, selected.normalEntry - (advance?.paid_amount ?? 0)), advancePaid: (advance?.paid_amount ?? 0) + normalReceiptPaid, advanceRecorded: !!advance || normalReceiptPaid > 0, extraTotal: selected.additional + selected.change + selected.competitionDiff, extraPaid: manualPaid, due, method: paymentInstruction?.payment_method === 'bank_transfer' ? '後日振込' : paymentInstruction?.payment_method === 'cash_at_venue' ? '当日現金' : '未設定', bankDetails: paymentInstruction?.payment_method === 'bank_transfer' ? paymentInstruction.bank_details : '', lines: documentLines }
+    const printDocument: SettlementDocument = { organization: selected.orgName, organizationKey: selected.orgId, issuedDate: new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }), normalTotal: selected.normalEntry, normalRemaining: Math.max(0, selected.normalEntry - (advance?.paid_amount ?? 0)), advancePaid: (advance?.paid_amount ?? 0) + normalReceiptPaid, advanceRecorded: !!advance || normalReceiptPaid > 0, extraTotal: selected.additional + selected.change + selected.competitionDiff, extraPaid: manualPaid, due, method: paymentInstruction?.payment_method === 'bank_transfer' ? '後日振込' : paymentInstruction?.payment_method === 'cash_at_venue' ? '当日現金' : '未設定', bankDetails: paymentInstruction?.payment_method === 'bank_transfer' ? eventBankDetails : '', lines: documentLines }
 
     const verifyFinancialSnapshot = async () => {
       const [latestFees, latestPrepayments, latestManual, latestReceipts] = await Promise.all([loadFeeOverrides(session), loadPrepayments(session), loadManualRecords(session), loadSettlementReceipts(session)])
@@ -250,10 +252,10 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
         <summary className="cursor-pointer py-2 text-lg font-bold">支払方法・振込先{!paymentInstruction ? '（未設定）' : instructionDraft?.orgId === selected.orgId ? '（変更を保存してください）' : ''}</summary>
         <h4 className="text-xl font-bold">差引残額の支払方法</h4>
         <p className="mt-2 font-bold">{paymentInstruction?.payment_method === "bank_transfer" ? "後日振込" : paymentInstruction?.payment_method === "cash_at_venue" ? "当日現金" : "未設定"}</p>
-        {paymentInstruction?.payment_method === "bank_transfer" && <div className="mt-2"><p className="font-semibold">振込先</p><p className="whitespace-pre-wrap break-words">{paymentInstruction.bank_details}</p></div>}
+        {paymentInstruction?.payment_method === "bank_transfer" && <div className="mt-2"><p className="font-semibold">振込先（大会共通）</p><p className="whitespace-pre-wrap break-words">{eventBankDetails}</p></div>}
         <form onSubmit={submitPaymentInstruction} className="print-hide mt-4 space-y-3 border-t border-border pt-4">
           <label className="block font-bold">お支払い方法<select value={currentInstruction.method} onChange={event => { setInstructionDraft({ ...currentInstruction, method: event.target.value as PaymentInstruction["payment_method"], bankDetails: currentInstruction.bankDetails }); setInstructionError("") }} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3"><option value="">選択してください</option><option value="bank_transfer">後日振込</option><option value="cash_at_venue">当日現金</option></select></label>
-          {currentInstruction.method === "bank_transfer" && <label className="block font-bold">印刷する振込先<textarea required maxLength={2000} value={currentInstruction.bankDetails} onChange={event => setInstructionDraft({ ...currentInstruction, bankDetails: event.target.value })} placeholder="銀行名・支店名・口座種別・口座番号・口座名義を入力" className="mt-1 min-h-28 w-full rounded-lg border border-border bg-background p-3" /></label>}
+          {currentInstruction.method === "bank_transfer" && <div><p className="font-bold">印刷する振込先（大会共通）</p><p className="mt-1 rounded-lg border border-border bg-background p-3">{eventBankDetails}</p><p className="mt-1 text-xs text-muted-foreground">振込先は大会ごとに設定し、全団体で統一します。</p></div>}
           {instructionError && <p role="alert" className="font-semibold text-destructive">{instructionError}</p>}
           <button type="submit" disabled={instructionSaving || !currentInstruction.method || (currentInstruction.method === "bank_transfer" && !currentInstruction.bankDetails.trim())} className="min-h-12 rounded-lg bg-primary px-5 font-bold text-primary-foreground disabled:opacity-50">{instructionSaving ? "保存中…" : "支払案内を保存"}</button>
         </form>
