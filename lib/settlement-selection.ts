@@ -17,8 +17,12 @@ export function allocateSettlement(choices: SettlementChoice[], selected: string
 }
 export function selectedSettlementDocument(document: SettlementDocument, choices: SettlementChoice[], selected: string[]): SettlementDocument {
   const selectedChoices = choices.filter(item => selected.includes(item.key))
-  const normal = selectedChoices.find(item => item.key === 'normal')?.remaining ?? 0
-  const lines = document.lines.filter((line, index) => selected.includes(line.key ?? `line:${index}`)).map(line => { const remaining = Math.max(0, line.amount - line.paid); return { ...line, amount: remaining, entryFee: remaining, serviceFee: 0, difference: 0, paid: 0 } })
+  const includeNormal = selectedChoices.some(item => item.key === 'normal')
+  const normal = includeNormal ? Math.max(0, document.normalTotal - document.advancePaid) : 0
+  // Keep the organization's original charges and payments visible for reference.
+  // Selection changes only the scope of this statement, never its payment history.
+  const lines = document.lines.filter((line, index) => selected.includes(line.key ?? `line:${index}`)).map(line => ({ ...line }))
   const extra = lines.reduce((sum, item) => sum + item.amount, 0)
-  return { ...document, organization: `${document.organization}（個別精算）`, normalTotal: normal, advancePaid: 0, advanceRecorded: false, extraTotal: extra, extraPaid: 0, due: normal + extra, lines }
+  const extraPaid = lines.reduce((sum, item) => sum + item.paid, 0)
+  return { ...document, organization: `${document.organization}（選択分の精算）`, selection: { includeNormal }, extraTotal: extra, extraPaid, due: normal + lines.reduce((sum, line) => sum + Math.max(0, line.amount - line.paid), 0), lines }
 }

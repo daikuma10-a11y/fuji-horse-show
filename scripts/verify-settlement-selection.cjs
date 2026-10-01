@@ -1,7 +1,7 @@
 const fs = require('fs'), ts = require('typescript'), assert = require('node:assert/strict')
 function load(name) { const module = { exports: {} }; const output = ts.transpileModule(fs.readFileSync(`lib/${name}.ts`, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText; new Function('exports', 'module', output)(module.exports, module); return module.exports }
 const { settlementChoices, allocateSettlement, selectedSettlementDocument } = load('settlement-selection')
-const document = { organization: 'Test', organizationKey: 'test', issuedDate: '2026/9/30', method: '現金', bankDetails: '', normalTotal: 10000, advancePaid: 10000, normalRemaining: 0, extraTotal: 13000, extraPaid: 2000, due: 11000, lines: [
+const document = { organization: 'Test', organizationKey: 'test', issuedDate: '2026/9/30', method: '現金', bankDetails: '', normalTotal: 10000, advancePaid: 10000, advanceRecorded: true, normalRemaining: 0, extraTotal: 13000, extraPaid: 2000, due: 11000, lines: [
   { key: 'request:a', action: '追加', competition: '競技1', rider: 'A', horse: 'B', amount: 11000, paid: 2000, entryFee: 8000, serviceFee: 3000, difference: 0, note: '' },
   { key: 'request:b', action: '変更', competition: '競技2', rider: 'C', horse: 'D', amount: 2000, paid: 0, entryFee: 0, serviceFee: 2000, difference: 0, note: '' },
   { key: 'request:c', action: '棄権', competition: '競技3', rider: 'E', horse: 'F', amount: 0, paid: 0, entryFee: 0, serviceFee: 0, difference: 0, note: '' },
@@ -21,7 +21,18 @@ const withdrawalStatement = selectedSettlementDocument(document, choices, ['requ
 assert.equal(withdrawalStatement.due, 2000)
 assert.deepEqual(withdrawalStatement.lines.map(line => [line.action, line.amount]), [['変更', 2000], ['棄権', 0]])
 const selected = selectedSettlementDocument(document, choices, ['request:b'])
-assert.equal(selected.due, 2000); assert.equal(selected.lines.length, 1); assert.equal(selected.normalTotal, 0)
+assert.equal(selected.due, 2000); assert.equal(selected.lines.length, 1)
+assert.equal(selected.normalTotal, 10000); assert.equal(selected.advancePaid, 10000); assert.equal(selected.advanceRecorded, true)
+assert.deepEqual(selected.selection, { includeNormal: false })
+const partial = selectedSettlementDocument(document, choices, ['request:a'])
+assert.equal(partial.extraTotal, 11000); assert.equal(partial.extraPaid, 2000); assert.equal(partial.due, 9000)
+assert.equal(partial.lines[0].paid, 2000); assert.equal(partial.lines[0].serviceFee, 3000)
+const unpaid = { ...document, advancePaid: 5000 }
+const unpaidChoices = settlementChoices(unpaid, [])
+assert.equal(selectedSettlementDocument(unpaid, unpaidChoices, ['request:b']).due, 2000)
+assert.equal(selectedSettlementDocument(unpaid, unpaidChoices, ['normal', 'request:b']).due, 7000)
+const overpaidLine = { ...document, lines: [{ ...document.lines[0], paid: 12000 }, document.lines[1]] }
+assert.equal(selectedSettlementDocument(overpaidLine, settlementChoices(overpaidLine, []), ['request:a', 'request:b']).due, 2000, 'overpayment on another line cannot silently cover the selected unpaid line')
 const receipt = { selected_items: [{ key: 'request:a', amount: 9000 }] }
 document.lines[0].paid = 11000; document.extraPaid = 11000; document.due = 2000
 choices = settlementChoices(document, [receipt])
@@ -29,5 +40,9 @@ assert.equal(choices[1].remaining, 0); assert.equal(choices[1].limit, 9000); ass
 const normal = { ...document, normalTotal: 15000, normalRemaining: 15000, advancePaid: 5000 }
 assert.equal(settlementChoices(normal, [{ selected_items: [{ key: 'normal', amount: 5000 }] }])[0].remaining, 10000)
 const { settlementWorkbook } = load('settlement-document')
+const selectedXml = new TextDecoder().decode(settlementWorkbook(selected))
+assert.match(selectedXml, /今回選択分の事前エントリー残額/)
+assert.match(selectedXml, /<f>E8\+MAX\(0,I10-J10\)<\/f>/)
+fs.mkdirSync('/tmp/fhs-document-check', { recursive: true })
 fs.writeFileSync('/tmp/fhs-document-check/selection.xlsx', settlementWorkbook(selected))
 console.log('PASS: selected charges, prior payment, partial payment, zero/overpayment rejection and remaining balances')
