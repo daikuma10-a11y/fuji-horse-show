@@ -3,7 +3,7 @@ const URL = 'https://mhgyhyxagkkwdiepifdp.supabase.co'
 const KEY = 'sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95'
 export type ReceiptItem = { key: string; amount: number; limit: number; label: string }
 export type SettlementReceipt = {
-  selected_items?: ReceiptItem[]; id: string; event_id: string; organization_key: string; recipient: string; amount: number; tax_amount: number
+  selected_items?: ReceiptItem[]; document_items?: ReceiptItem[]; id: string; event_id: string; organization_key: string; recipient: string; amount: number; tax_amount: number
   issue_date: string; purpose: string; payment_method: 'bank_transfer' | 'cash_at_venue'
   issuer_name: string; issuer_address: string; registration_number: string; created_at: string; created_by: string
 }
@@ -22,6 +22,8 @@ export async function loadSettlementReceipts(session: AdminSession, orgId?: stri
 }
 export async function createSettlementReceipt(session: AdminSession, input: ReceiptInput, id: string): Promise<SettlementReceipt> {
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || !Number.isSafeInteger(input.tax_amount) || input.tax_amount < 0 || input.tax_amount > input.amount || !input.recipient.trim() || !input.purpose.trim() || !input.issuer_name.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(input.issue_date) || (input.registration_number && !/^T\d{13}$/.test(input.registration_number))) throw new Error('領収金額・宛名・日付・発行者情報を確認してください')
+  if (input.document_items?.length && input.selected_items?.length) throw new Error('領収書のみの発行と入金記録は同時に行えません')
+  if (input.document_items?.length && input.document_items.reduce((sum, item) => sum + item.amount, 0) !== input.amount) throw new Error('領収金額と選択した人馬の金額が一致しません')
   const verified = await verifyAdminSession(session)
   const userResponse = await fetch(`${URL}/auth/v1/user`, { headers: { apikey: KEY, Authorization: `Bearer ${verified.accessToken}` }, cache: 'no-store' })
   if (!userResponse.ok) throw new Error('本部ログインを確認できません')
@@ -31,6 +33,7 @@ export async function createSettlementReceipt(session: AdminSession, input: Rece
   const response = await fetch(`${URL}/rest/v1/settlement_receipts?on_conflict=id`, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${verified.accessToken}`, 'Content-Type': 'application/json', Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify(body) })
   if (!response.ok) { const detail = await response.json().catch(() => ({})); throw new Error(detail.message || `領収書を保存できません (${response.status})`) }
   const confirmed = (await loadSettlementReceipts(verified, input.organization_key)).find(row => row.id === id)
-  if (!confirmed || confirmed.amount !== input.amount || confirmed.recipient !== input.recipient || confirmed.tax_amount !== input.tax_amount || confirmed.payment_method !== input.payment_method || (confirmed.selected_items ?? []).length !== (input.selected_items ?? []).length || !(input.selected_items ?? []).every(item => confirmed.selected_items?.some(saved => saved.key === item.key && saved.amount === item.amount && saved.label === item.label))) throw new Error('領収書の保存結果を確認できません')
+  const sameItems = (saved: ReceiptItem[] = [], expected: ReceiptItem[] = []) => saved.length === expected.length && expected.every(item => saved.some(row => row.key === item.key && row.amount === item.amount && row.label === item.label && row.limit === item.limit))
+  if (!confirmed || confirmed.amount !== input.amount || confirmed.recipient !== input.recipient || confirmed.tax_amount !== input.tax_amount || confirmed.payment_method !== input.payment_method || !sameItems(confirmed.selected_items, input.selected_items) || !sameItems(confirmed.document_items, input.document_items)) throw new Error('領収書の保存結果を確認できません')
   return confirmed
 }

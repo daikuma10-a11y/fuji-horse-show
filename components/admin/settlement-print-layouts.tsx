@@ -3,11 +3,12 @@ import type { SettlementDocument } from '@/lib/settlement-document'
 import type { SettlementReceipt } from '@/lib/settlement-receipts'
 
 export function ReceiptPrint({ receipt }: { receipt: SettlementReceipt }) {
+  const items = receipt.document_items?.length ? receipt.document_items : receipt.selected_items
   return <div className="receipt-paper">
         <div className="flex items-start justify-between"><h2 className="text-3xl font-bold tracking-[0.5em]">領収書</h2><div className="text-sm">発行日：{receipt.issue_date}<br />No. {receipt.id}</div></div>
         <p className="receipt-recipient">{receipt.recipient}　様</p><p className="mt-6">下記、正に領収いたしました。</p>
         <div className="receipt-amount">金額　{formatYen(receipt.amount)}</div><p className="mt-3">但　{receipt.purpose}</p><p className="mt-2 text-sm">受領日：{receipt.issue_date} ／ {receipt.payment_method === 'bank_transfer' ? '振込' : '現金'} ／ 10%対象（税込）：{formatYen(receipt.amount)}</p>
-        <div className="receipt-items">{receipt.selected_items?.length ? <><h4 className="mt-3 font-bold">精算内容</h4>{receipt.selected_items.map(item => <p key={item.key} className="text-xs">{item.label}：{formatYen(item.amount)}</p>)}</> : null}</div><div className="receipt-bottom"><div className="receipt-stamp">収入<br />印紙</div><div><p className="border-b pb-2">税抜金額　{formatYen(receipt.amount - receipt.tax_amount)}</p><p className="border-b py-2">消費税（10%内税）　{formatYen(receipt.tax_amount)}</p></div><div><p className="text-lg font-bold">{receipt.issuer_name}</p><p className="mt-2 whitespace-pre-wrap">{receipt.issuer_address}</p>{receipt.registration_number && <p className="mt-2">登録番号：{receipt.registration_number}</p>}<div className="receipt-seal">印</div></div></div>
+        <div className="receipt-items">{items?.length ? <><h4 className="mt-3 font-bold">対象明細</h4>{items.map(item => <p key={item.key} className="text-xs">{item.label}：{formatYen(item.amount)}</p>)}</> : null}</div><div className="receipt-bottom"><div className="receipt-stamp">収入<br />印紙</div><div><p className="border-b pb-2">税抜金額　{formatYen(receipt.amount - receipt.tax_amount)}</p><p className="border-b py-2">消費税（10%内税）　{formatYen(receipt.tax_amount)}</p></div><div><p className="text-lg font-bold">{receipt.issuer_name}</p><p className="mt-2 whitespace-pre-wrap">{receipt.issuer_address}</p>{receipt.registration_number && <p className="mt-2">登録番号：{receipt.registration_number}</p>}<div className="receipt-seal">印</div></div></div>
       </div>
 }
 

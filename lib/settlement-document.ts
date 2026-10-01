@@ -1,5 +1,5 @@
 export type SettlementDocumentLine = {
-  key?: string; competitionNumber?: number; period: string; action: string; competition: string; rider: string; horse: string
+  key?: string; competitionNumber?: number; riderId?: string; receiptRider?: string; period: string; action: string; competition: string; rider: string; horse: string
   entryFee: number; serviceFee: number; difference: number; amount: number; paid: number; note: string
 }
 export type SettlementDocument = {
