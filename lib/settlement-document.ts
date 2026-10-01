@@ -44,7 +44,7 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   label(5, '事前エントリー合計', document.normalTotal)
   label(6, '事前エントリー入金済み', document.advancePaid)
   label(7, '事前入金の確認状況', document.advanceRecorded ? (document.advancePaid >= document.normalTotal ? '支払い済み' : '一部入金／不足あり') : '未登録・要確認')
-  if (document.selection) label(8, '今回選択分の事前エントリー残額', document.selection.includeNormal ? Math.max(0, document.normalTotal - document.advancePaid) : 0, document.selection.includeNormal ? 'MAX(0,E5-E6)' : '0')
+  if (document.selection) label(8, '今回精算する事前エントリー残額', document.selection.includeNormal ? Math.max(0, document.normalTotal - document.advancePaid) : 0, document.selection.includeNormal ? 'MAX(0,E5-E6)' : '0')
   const header = ['区分', '競技', '選手', '馬', '備考', '競技料金', '手数料', '差額', '合計']
   addRow(9, header.map((value, index) => textCell(`${String.fromCharCode(65 + index)}9`, value, 1)).join(''))
   document.lines.forEach((line, index) => {
@@ -55,7 +55,7 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   const totalRow = row, paidRow = row + 1, dueRow = row + 2
   label(totalRow, '締切後・大会期間中 合計', document.extraTotal, document.lines.length ? `SUM(I10:I${row - 1})` : '0')
   label(paidRow, '締切後・大会期間中 入金済み', document.extraPaid, document.selection ? document.lines.length ? `SUM(J10:J${row - 1})` : '0' : undefined)
-  label(dueRow, document.selection ? '今回選択分のお支払額' : '差引不足額（マイナスは過入金）', document.due, document.selection ? ['E8', ...document.lines.map((_, index) => `MAX(0,I${10 + index}-J${10 + index})`)].join('+') : `E5-E6+E${totalRow}-E${paidRow}`)
+  label(dueRow, '差引不足額（マイナスは過入金）', document.due, document.selection ? ['E8', ...document.lines.map((_, index) => `MAX(0,I${10 + index}-J${10 + index})`)].join('+') : `E5-E6+E${totalRow}-E${paidRow}`)
   label(row + 4, '不足額の支払方法', document.method)
   label(row + 5, '振込先', document.bankDetails || '—')
   rows[rows.length - 1] = rows[rows.length - 1].replace('ht="25"', 'ht="65"')

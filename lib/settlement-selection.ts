@@ -24,5 +24,5 @@ export function selectedSettlementDocument(document: SettlementDocument, choices
   const lines = document.lines.filter((line, index) => selected.includes(line.key ?? `line:${index}`)).map(line => ({ ...line }))
   const extra = lines.reduce((sum, item) => sum + item.amount, 0)
   const extraPaid = lines.reduce((sum, item) => sum + item.paid, 0)
-  return { ...document, organization: `${document.organization}（選択分の精算）`, selection: { includeNormal }, extraTotal: extra, extraPaid, due: normal + lines.reduce((sum, line) => sum + Math.max(0, line.amount - line.paid), 0), lines }
+  return { ...document, selection: { includeNormal }, extraTotal: extra, extraPaid, due: normal + lines.reduce((sum, line) => sum + Math.max(0, line.amount - line.paid), 0), lines }
 }

@@ -74,3 +74,20 @@ const recipient = elements(form, node => node.type === 'input' && node.props.val
 recipient.props.onChange({ target: { value: '千葉県馬術連盟' } }); form = receiptForm.render()
 assert(elements(form, node => node.type === 'input' && node.props.value === '千葉県馬術連盟').length)
 console.log('PASS: three closed task panels, one visible action, persistent selection, default add/withdrawal checks, print prerequisites, group/rider paid-only receipt selection and editable recipient')
+for (const advancePaid of [0, 5000]) {
+  const unpaidDocument = { ...document, advancePaid, advanceRecorded: advancePaid > 0, normalRemaining: 10000 - advancePaid, due: 21000 - advancePaid }
+  const unpaid = harness(SettlementDocuments, { ...instance.props, ready: true, document: unpaidDocument })
+  let unpaidView = unpaid.render()
+  elements(unpaidView, node => node.type === 'button' && 'aria-controls' in node.props)[0].props.onClick()
+  unpaidView = unpaid.render()
+  const normalCheckbox = elements(unpaidView, node => node.type === 'input' && node.props.type === 'checkbox')[0]
+  assert.equal(normalCheckbox.props.disabled, false)
+  normalCheckbox.props.onChange({ target: { checked: true } }); unpaidView = unpaid.render()
+  assert.match(text(unpaidView), new RegExp(`選択分：¥${(21000 - advancePaid).toLocaleString('en-US')}`))
+  elements(unpaidView, node => node.type === 'button' && text(node) === '選択分の精算書を印刷')[0].props.onClick()
+  unpaidView = unpaid.render()
+  const printed = elements(unpaidView, node => typeof node.type === 'function' && node.type.name === 'StatementPrint').at(-1).props.document
+  assert.equal(printed.due, 21000 - advancePaid); assert.equal(printed.selection.includeNormal, true)
+  assert.equal(printed.organization, 'STAR HORSES'); assert.equal(printed.advancePaid, advancePaid)
+}
+console.log('PASS: unpaid and partially paid advance entries can be checked and included in printed settlement balances')

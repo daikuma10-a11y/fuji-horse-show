@@ -41,7 +41,7 @@ const normal = { ...document, normalTotal: 15000, normalRemaining: 15000, advanc
 assert.equal(settlementChoices(normal, [{ selected_items: [{ key: 'normal', amount: 5000 }] }])[0].remaining, 10000)
 const { settlementWorkbook } = load('settlement-document')
 const selectedXml = new TextDecoder().decode(settlementWorkbook(selected))
-assert.match(selectedXml, /今回選択分の事前エントリー残額/)
+assert.match(selectedXml, /今回精算する事前エントリー残額/)
 assert.match(selectedXml, /<f>E8\+MAX\(0,I10-J10\)<\/f>/)
 fs.mkdirSync('/tmp/fhs-document-check', { recursive: true })
 fs.writeFileSync('/tmp/fhs-document-check/selection.xlsx', settlementWorkbook(selected))
