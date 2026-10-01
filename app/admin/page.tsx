@@ -8,16 +8,18 @@ import { RequestPanel } from "@/components/admin/request-panel"
 import { SettlementPanel } from "@/components/admin/settlement-panel"
 import { StartListViewer } from "@/components/admin/startlist-viewer"
 import { OnSiteReception } from "@/components/admin/on-site-reception"
+import { MeetingPanel } from "@/components/admin/meeting-panel"
 import { useStore } from "@/lib/store"
 import { ADMIN_SESSION_KEY, verifyAdminSession, signInAdmin, type AdminSession } from "@/lib/supabase-rest"
 
-type Tab = "requests" | "settlement" | "startlist" | "on-site"
+type Tab = "requests" | "settlement" | "startlist" | "on-site" | "meeting"
 
 const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
   { id: "requests", label: "申請一覧", icon: ClipboardList },
   { id: "settlement", label: "精算", icon: Calculator },
   { id: "startlist", label: "出番表", icon: ListOrdered },
   { id: "on-site", label: "事後登録", icon: ClipboardList },
+  { id: "meeting", label: "打ち合わせ会", icon: ListOrdered },
 ]
 
 export default function AdminPage() {
@@ -97,13 +99,14 @@ export default function AdminPage() {
           <Link href="/" className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-xl font-semibold"><ArrowLeft className="size-6" />受付画面へ</Link>
           <button type="button" onClick={logout} className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-lg font-semibold"><LogOut className="size-5" />ログアウト</button>
         </div>
-        <div className="print-hide mb-6 grid grid-cols-2 gap-2 rounded-2xl border-2 border-border bg-card p-2 sm:grid-cols-4">
+        <div className="print-hide mb-6 grid grid-cols-2 gap-2 rounded-2xl border-2 border-border bg-card p-2 sm:grid-cols-5">
           {tabs.map((t) => { const Icon=t.icon, active=tab===t.id; return <button key={t.id} type="button" onClick={()=>setTab(t.id)} className={`flex min-h-16 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-xl font-bold transition ${active?"bg-primary text-primary-foreground shadow-sm":"text-muted-foreground"}`}><Icon className="size-6" /><span>{t.label}</span>{t.id==="requests"&&pendingCount>0&&<span className="flex size-7 items-center justify-center rounded-full bg-destructive text-base text-white">{pendingCount}</span>}</button> })}
         </div>
         {tab === "requests" && <RequestPanel canManage={!!session} />}
         {tab === "settlement" && <SettlementPanel session={session} />}
         {tab === "startlist" && <StartListViewer canReorder={!!session} />}
         {tab === "on-site" && <OnSiteReception session={session} />}
+        {tab === "meeting" && <MeetingPanel session={session} />}
       </main>
     </div>
   )
