@@ -1,13 +1,14 @@
 "use client"
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { formatYen } from '@/lib/fees'
 import { riderReceiptChoices, type ReceiptSourceItem } from '@/lib/rider-receipt'
 import { allocateSettlement } from '@/lib/settlement-selection'
 import { createSettlementReceipt, type SettlementReceipt } from '@/lib/settlement-receipts'
 import type { AdminSession } from '@/lib/supabase-rest'
 
-type Props = { organizationKey: string; organization: string; sources: ReceiptSourceItem[]; receipts: SettlementReceipt[]; session: AdminSession; onBeforeIssue: () => Promise<void>; onSaved: (receipt: SettlementReceipt) => void; embedded?: boolean; onBusyChange?: (busy: boolean) => void }
-export function RiderReceiptForm({ organizationKey, organization, sources, receipts, session, onBeforeIssue, onSaved, embedded = false, onBusyChange }: Props) {
+type PaymentMethod = 'bank_transfer' | 'cash_at_venue'
+type Props = { organizationKey: string; organization: string; sources: ReceiptSourceItem[]; receipts: SettlementReceipt[]; session: AdminSession; onBeforeIssue: () => Promise<void>; onSaved: (receipt: SettlementReceipt) => void; embedded?: boolean; onBusyChange?: (busy: boolean) => void; paymentMethod?: PaymentMethod }
+export function RiderReceiptForm({ organizationKey, organization, sources, receipts, session, onBeforeIssue, onSaved, embedded = false, onBusyChange, paymentMethod }: Props) {
   const choices = riderReceiptChoices(sources, receipts)
   const riders = Array.from(new Map(sources.filter(item => item.riderId).map(item => [item.riderId, item.rider])).entries()).sort((a, b) => a[1].localeCompare(b[1], 'ja'))
   const [riderId, setRiderId] = useState('')
@@ -16,7 +17,9 @@ export function RiderReceiptForm({ organizationKey, organization, sources, recei
   const [amount, setAmount] = useState('0')
   const [tax, setTax] = useState('0')
   const [date, setDate] = useState(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date()))
-  const [method, setMethod] = useState<'bank_transfer' | 'cash_at_venue'>('bank_transfer')
+  const [method, setMethod] = useState<PaymentMethod | ''>(paymentMethod ?? '')
+  const methodEdited = useRef(false)
+  useEffect(() => { if (!methodEdited.current) setMethod(paymentMethod ?? '') }, [paymentMethod])
   const [purpose, setPurpose] = useState('2026 Fuji Horse Show Autumn Grand Prix エントリー代として')
   const [issuer, setIssuer] = useState('有限会社 富士ファーム')
   const [address, setAddress] = useState('〒412-0048\n静岡県御殿場市板妻861\nTEL：0550-88-1033\nFAX：0550-88-1048')
@@ -39,6 +42,7 @@ export function RiderReceiptForm({ organizationKey, organization, sources, recei
     event.preventDefault()
     if (savingRef.current) return
     if (!confirmed) { setError('対象・宛名・入金済みであることを確認してください'); return }
+    if (!method) { setError('領収書の受領方法を選択してください'); return }
     if (!/^\d+$/.test(amount) || !/^\d+$/.test(tax)) { setError('金額は整数で入力してください'); return }
     const documentItems = (() => { try { return allocateSettlement(visible, selected, Number(amount)) } catch (cause) { setError(cause instanceof Error ? cause.message : '対象と金額を確認してください'); return null } })()
     if (!documentItems) return
@@ -63,7 +67,7 @@ export function RiderReceiptForm({ organizationKey, organization, sources, recei
       <label className="block font-bold">領収書の宛名<input required maxLength={200} className="document-input" value={recipient} onChange={event => { setRecipient(event.target.value); change() }} placeholder="例：千葉県馬術連盟" /></label>
       <div className="grid gap-3 sm:grid-cols-2"><label className="block font-bold">領収金額（円）<input required type="number" min="1" max={selectedTotal} step="1" className="document-input" value={amount} onChange={event => { setAmount(event.target.value); setTax(String(Math.floor(Number(event.target.value) / 11))); change() }} /></label><label className="block font-bold">消費税額（10%内税・修正可）<input required type="number" min="0" step="1" className="document-input" value={tax} onChange={event => { setTax(event.target.value); change() }} /></label></div>
       <p className="text-xs text-muted-foreground">金額は選択分を自動入力します。減額した場合は表示順に充当します。</p>
-      <div className="grid gap-3 sm:grid-cols-2"><label className="block font-bold">受領日・発行日<input required type="date" className="document-input" value={date} onChange={event => { setDate(event.target.value); change() }} /></label><label className="block font-bold">受領方法<select className="document-input" value={method} onChange={event => { setMethod(event.target.value as typeof method); change() }}><option value="bank_transfer">振込</option><option value="cash_at_venue">現金</option></select></label></div>
+      <div className="grid gap-3 sm:grid-cols-2"><label className="block font-bold">受領日・発行日<input required type="date" className="document-input" value={date} onChange={event => { setDate(event.target.value); change() }} /></label><label className="block font-bold">受領方法<select required className="document-input" value={method} onChange={event => { methodEdited.current = true; setMethod(event.target.value as typeof method); change() }}><option value="">選択してください</option><option value="bank_transfer">振込</option><option value="cash_at_venue">現金</option></select></label></div>
       <label className="block font-bold">但し書き<input required maxLength={500} className="document-input" value={purpose} onChange={event => { setPurpose(event.target.value); change() }} /></label>
       <details><summary className="cursor-pointer py-2 font-bold">発行者情報</summary><label className="block font-bold">発行者名<input required maxLength={200} className="document-input" value={issuer} onChange={event => { setIssuer(event.target.value); change() }} /></label><label className="mt-2 block font-bold">住所・連絡先<textarea maxLength={1000} className="document-input min-h-28" value={address} onChange={event => { setAddress(event.target.value); change() }} /></label><label className="mt-2 block font-bold">登録番号（記載する場合）<input maxLength={14} pattern="T[0-9]{13}" className="document-input" placeholder="T＋13桁の数字" value={registration} onChange={event => { setRegistration(event.target.value); change() }} /></label></details>
       <label className="flex items-start gap-3 rounded-lg border-2 border-primary/30 p-3 font-bold"><input type="checkbox" required className="mt-1 size-6 shrink-0" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />対象・金額・宛名と入金済みであることを確認しました。既に団体名義の領収書を渡している場合は、その原本と重複して渡さないことも確認しました。</label>

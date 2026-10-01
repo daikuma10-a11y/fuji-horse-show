@@ -37,7 +37,7 @@ const document = { organizationKey: 'org-7', organization: 'STAR HORSES', issued
   { key: 'request:add', riderId: 'p1', action: '追加', period: '大会期間中', competitionNumber: 1, competition: '競技1', rider: '福島大輔', horse: '馬A', amount: 11000, paid: 0, note: '' },
   { key: 'request:withdraw', riderId: 'p1', action: '棄権', period: '大会期間中', competitionNumber: 2, competition: '競技2', rider: '福島大輔', horse: '馬B', amount: 0, paid: 0, note: '' },
 ] }
-const instance = harness(SettlementDocuments, { document, receiptSources: [], receipts: [], session: {}, ready: true, onReceiptSaved() {}, onBeforeIssue: async () => {}, paymentSettings: React.createElement('p', {}, '振込先設定') })
+const instance = harness(SettlementDocuments, { document, receiptSources: [], receipts: [], session: {}, ready: true, onReceiptSaved() {}, onBeforeIssue: async () => {}, paymentMethod: 'bank_transfer' })
 let view = instance.render()
 let panels = elements(view, node => node.type === 'section')
 assert.equal(panels.length, 3); assert(panels.every(node => node.props.hidden))
@@ -55,7 +55,7 @@ assert.equal(elements(view, node => node.type === 'input' && node.props.type ===
 actionButtons()[2].props.onClick(); view = instance.render()
 assert.deepEqual(elements(view, node => node.type === 'section').map(node => node.props.hidden), [true, true, false])
 instance.props.ready = false; view = instance.render()
-assert.match(text(view), /支払方法・振込先を保存/)
+assert.match(text(view), /上の支払方法を保存/)
 assert(elements(view, node => node.type === 'button' && text(node) === '団体全体の精算書を印刷')[0].props.disabled)
 const sources = [
   { key: 'normal:p1', riderId: 'p1', rider: '福島大輔', label: '福島大輔 ／ 馬A', amount: 10000, paid: 10000 },

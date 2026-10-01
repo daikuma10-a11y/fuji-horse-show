@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { formatYen } from '@/lib/fees'
 import { ReceiptPrint, StatementPrint } from './settlement-print-layouts'
 import { RiderReceiptForm } from './rider-receipt-form'
@@ -11,7 +11,8 @@ import { createSettlementReceipt, type SettlementReceipt } from '@/lib/settlemen
 import { settlementChoices, allocateSettlement, selectedSettlementDocument } from '@/lib/settlement-selection'
 
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
-export function SettlementDocuments({ document, receiptSources, session, ready, receipts, onReceiptSaved, onBeforeIssue, paymentSettings }: { document: SettlementDocument; receiptSources: ReceiptSourceItem[]; session: AdminSession; ready: boolean; receipts: SettlementReceipt[]; onReceiptSaved: (row: SettlementReceipt) => void; onBeforeIssue: () => Promise<void>; paymentSettings?: ReactNode }) {
+type PaymentMethod = 'cash_at_venue' | 'bank_transfer'
+export function SettlementDocuments({ document, receiptSources, session, ready, receipts, onReceiptSaved, onBeforeIssue, paymentMethod }: { document: SettlementDocument; receiptSources: ReceiptSourceItem[]; session: AdminSession; ready: boolean; receipts: SettlementReceipt[]; onReceiptSaved: (row: SettlementReceipt) => void; onBeforeIssue: () => Promise<void>; paymentMethod?: PaymentMethod }) {
   const [action, setAction] = useState<'settle' | 'receipt' | 'statement' | null>(null)
   const [receiptBusy, setReceiptBusy] = useState(false)
   const panelId = useId()
@@ -30,7 +31,8 @@ export function SettlementDocuments({ document, receiptSources, session, ready, 
   const [tax, setTax] = useState(String(Math.floor(Math.max(0, document.due) / 11)))
   const [date, setDate] = useState(today)
   const [purpose, setPurpose] = useState('2026 Fuji Horse Show Autumn Grand Prix エントリー代として')
-  const [method, setMethod] = useState<'cash_at_venue' | 'bank_transfer'>('cash_at_venue')
+  const [method, setMethod] = useState<PaymentMethod | ''>(paymentMethod ?? '')
+  const methodEdited = useRef(false)
   const [issuer, setIssuer] = useState('有限会社 富士ファーム')
   const [address, setAddress] = useState('〒412-0048\n静岡県御殿場市板妻861\nTEL：0550-88-1033\nFAX：0550-88-1048')
   const [registration, setRegistration] = useState('')
@@ -41,16 +43,18 @@ export function SettlementDocuments({ document, receiptSources, session, ready, 
   const receiptId = useRef<string | null>(null)
   const amountEdited = useRef(false)
   useEffect(() => { if (!amountEdited.current) { const due = Math.max(0, document.due); setAmount(String(due)); setTax(String(Math.floor(due / 11))); receiptId.current = null } }, [document.due])
+  useEffect(() => { if (!methodEdited.current) setMethod(paymentMethod ?? '') }, [paymentMethod])
 
   useEffect(() => { if (!printTick) return; const timer = window.setTimeout(() => window.print(), 50); return () => window.clearTimeout(timer) }, [printTick])
   const print = (nextMode: 'settlement' | 'receipt') => { setMode(nextMode); setPrintTick(previous => previous + 1) }
   useEffect(() => { if (!savingRef.current) setConfirmed(false) }, [document.due, selectedTotal])
   const change = () => { receiptId.current = null; setError(''); setConfirmed(false) }
-  function beginReceipt() { setShowReceipt(true); setAmount(String(Math.min(selectedTotal, Math.max(0, document.due)))); setTax(String(Math.floor(Math.min(selectedTotal, Math.max(0, document.due)) / 11))); amountEdited.current = true; change() }
+  function beginReceipt() { methodEdited.current = false; setMethod(paymentMethod ?? ''); setShowReceipt(true); setAmount(String(Math.min(selectedTotal, Math.max(0, document.due)))); setTax(String(Math.floor(Math.min(selectedTotal, Math.max(0, document.due)) / 11))); amountEdited.current = true; change() }
   async function issue(event: FormEvent) {
     event.preventDefault()
     if (savingRef.current) return
     if (!confirmed) { setError('受領金額と対象を確認してください'); return }
+    if (!method) { setError('領収書の受領方法を選択してください'); return }
     if (!/^\d+$/.test(amount) || !/^\d+$/.test(tax)) { setError('受領金額と消費税額は整数で入力してください'); return }
     if (Number(amount) > Math.max(0, document.due)) { setError('団体の差引残額を超える金額は精算できません'); return }
     savingRef.current = true; setSaving(true); setError('')
@@ -83,7 +87,7 @@ export function SettlementDocuments({ document, receiptSources, session, ready, 
         <div className="grid gap-3 sm:grid-cols-2"><label className="block font-bold">受領金額（円）<input required type="number" min="1" step="1" value={amount} onChange={event => { amountEdited.current = true; setAmount(event.target.value); setTax(String(Math.floor(Number(event.target.value) / 11))); change() }} className="document-input" /></label><label className="block font-bold">消費税額（10%内税・修正可）<input required type="number" min="0" step="1" value={tax} onChange={event => { setTax(event.target.value); change() }} className="document-input" /></label></div>
         <p className="text-xs text-muted-foreground">内税額は受領金額から計算し、1円未満を切り捨てた初期値です。発行前に確認してください。</p>
         <label className="block font-bold">受領日・発行日<input required type="date" value={date} onChange={event => { setDate(event.target.value); change() }} className="document-input" /></label>
-        <label className="block font-bold">受領方法<select value={method} onChange={event => { setMethod(event.target.value as typeof method); change() }} className="document-input"><option value="cash_at_venue">当日現金</option><option value="bank_transfer">振込</option></select></label>
+        <label className="block font-bold">受領方法<select required value={method} onChange={event => { methodEdited.current = true; setMethod(event.target.value as typeof method); change() }} className="document-input"><option value="">選択してください</option><option value="cash_at_venue">当日現金</option><option value="bank_transfer">振込</option></select></label>
         <label className="block font-bold">但し書き<input required maxLength={500} value={purpose} onChange={event => { setPurpose(event.target.value); change() }} className="document-input" /></label>
         <details><summary className="cursor-pointer py-2 font-bold">発行者情報</summary><label className="block font-bold">発行者名<input required maxLength={200} value={issuer} onChange={event => { setIssuer(event.target.value); change() }} className="document-input" /></label>
         <label className="block font-bold">発行者の住所・連絡先<textarea maxLength={1000} value={address} onChange={event => { setAddress(event.target.value); change() }} className="document-input min-h-28" /></label>
@@ -94,16 +98,15 @@ export function SettlementDocuments({ document, receiptSources, session, ready, 
       </section>
       <section id={`${panelId}-receipt`} hidden={action !== 'receipt'} className="mt-4 rounded-xl border-2 border-primary/30 p-4">
         <h4 className="text-2xl font-bold">領収書を作る</h4>
-        <RiderReceiptForm embedded organizationKey={document.organizationKey} organization={document.organization} sources={receiptSources} receipts={receipts} session={session} onBusyChange={setReceiptBusy} onBeforeIssue={onBeforeIssue} onSaved={row => { setReceipt(row); onReceiptSaved(row); print('receipt') }} />
+        <RiderReceiptForm embedded paymentMethod={paymentMethod} organizationKey={document.organizationKey} organization={document.organization} sources={receiptSources} receipts={receipts} session={session} onBusyChange={setReceiptBusy} onBeforeIssue={onBeforeIssue} onSaved={row => { setReceipt(row); onReceiptSaved(row); print('receipt') }} />
       </section>
       <section id={`${panelId}-statement`} hidden={action !== 'statement'} className="mt-4 rounded-xl border-2 border-primary/30 p-4">
         <h4 className="text-2xl font-bold">精算書を印刷・保存</h4>
         <p className="mt-2 text-sm text-muted-foreground">事前エントリーの合計と追加・変更・棄権の人馬別明細を出力します。Excelの編集内容はアプリには自動反映されません。</p>
-        {!ready && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 font-bold text-amber-950">印刷・保存の前に、下の支払方法・振込先を保存してください。</p>}
+        {!ready && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 font-bold text-amber-950">印刷・保存の前に、上の支払方法を保存してください。</p>}
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!ready} onClick={() => { setPrintedDocument(document); print('settlement') }} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50">団体全体の精算書を印刷</button><button type="button" disabled={!ready} onClick={() => downloadSettlementWorkbook(document)} className="min-h-12 rounded-lg border border-primary px-4 font-bold text-primary disabled:opacity-50">Excelで保存</button><button type="button" disabled={!ready || !selected.length} onClick={() => { setPrintedDocument(selectedDocument); print('settlement') }} className="min-h-12 rounded-lg border px-4 font-bold disabled:opacity-50">選択分の精算書を印刷</button></div>
         <p className="mt-2 text-xs text-muted-foreground">選択分の対象は「精算する」で変更できます。現在 {selected.length}件 ／ {formatYen(selectedTotal)}</p>
         <details className="mt-4"><summary className="cursor-pointer py-3 font-bold">精算書のプレビュー</summary><div className="overflow-x-auto rounded-lg border bg-white p-3 text-black"><StatementPrint document={document} /></div></details>
-        <div className="mt-4 border-t pt-4">{paymentSettings}</div>
       </section>
       {error && <p role="alert" className="mt-3 font-semibold text-destructive">{error}</p>}
       {receipts.length > 0 && <details className="mt-4"><summary className="cursor-pointer font-bold">発行済み領収書（再印刷）</summary>{receipts.map(row => <div key={row.id} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t pt-2"><span>{row.issue_date} ／ {row.recipient} ／ {formatYen(row.amount)} ／ {row.document_items?.length ? '領収書のみ・入金記録は追加なし' : row.selected_items?.length ? '精算済み' : '従来の領収書・入金記録は別管理'}</span><button type="button" onClick={() => { setReceipt(row); print('receipt') }} className="min-h-10 rounded-lg border px-3">再印刷</button></div>)}</details>}
