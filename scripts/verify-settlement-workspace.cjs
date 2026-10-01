@@ -40,23 +40,29 @@ const document = { organizationKey: 'org-7', organization: 'STAR HORSES', issued
 const instance = harness(SettlementDocuments, { document, receiptSources: [], receipts: [], session: {}, ready: true, onReceiptSaved() {}, onBeforeIssue: async () => {}, paymentMethod: 'bank_transfer' })
 let view = instance.render()
 let panels = elements(view, node => node.type === 'section')
-assert.equal(panels.length, 3); assert(panels.every(node => node.props.hidden))
+assert.equal(panels.length, 2); assert(panels.every(node => node.props.hidden))
 const actionButtons = () => elements(view, node => node.type === 'button' && 'aria-controls' in node.props)
-assert.deepEqual(actionButtons().map(node => text(node.props.children[0])), ['精算する', '領収書を作る', '精算書を印刷・保存'])
+assert.deepEqual(actionButtons().map(node => text(node.props.children[0])), ['精算する', '領収書を作る'])
 actionButtons()[0].props.onClick(); view = instance.render()
 panels = elements(view, node => node.type === 'section')
-assert.deepEqual(panels.map(node => node.props.hidden), [false, true, true])
+assert.deepEqual(panels.map(node => node.props.hidden), [false, true])
+const previewButton = elements(view, node => node.type === 'button' && text(node) === '精算書を確認')[0]
+previewButton.props.onClick(); view = instance.render()
+assert.match(text(view), /印刷・入金記録はまだ行いません/)
+assert.equal(elements(view, node => node.type === 'form').length, 0, 'preview does not open a receipt form')
 const checks = elements(panels[0], node => node.type === 'input' && node.props.type === 'checkbox')
 assert.equal(checks.length, 3); assert.equal(checks[0].props.checked, false); assert(checks.slice(1).every(node => node.props.checked))
 checks[1].props.onChange({ target: { checked: false } }); view = instance.render()
 actionButtons()[1].props.onClick(); view = instance.render()
 actionButtons()[0].props.onClick(); view = instance.render()
 assert.equal(elements(view, node => node.type === 'input' && node.props.type === 'checkbox')[1].props.checked, false, 'selection survives panel switches')
-actionButtons()[2].props.onClick(); view = instance.render()
-assert.deepEqual(elements(view, node => node.type === 'section').map(node => node.props.hidden), [true, true, false])
+assert.deepEqual(elements(view, node => node.type === 'section').map(node => node.props.hidden), [false, true])
 instance.props.ready = false; view = instance.render()
+elements(view, node => node.type === 'button' && text(node) === '精算書を確認')[0].props.onClick(); view = instance.render()
 assert.match(text(view), /上の支払方法を保存/)
-assert(elements(view, node => node.type === 'button' && text(node) === '団体全体の精算書を印刷')[0].props.disabled)
+assert(elements(view, node => node.type === 'button' && text(node) === 'この精算書を印刷')[0].props.disabled)
+elements(view, node => node.type === 'button' && text(node) === '領収書を準備・精算へ')[0].props.onClick(); view = instance.render()
+assert.match(text(view), /領収書の準備・精算/)
 const sources = [
   { key: 'normal:p1', riderId: 'p1', rider: '福島大輔', label: '福島大輔 ／ 馬A', amount: 10000, paid: 10000 },
   { key: 'normal:p2', riderId: 'p2', rider: '別選手', label: '別選手 ／ 馬B', amount: 8000, paid: 8000 },
@@ -73,7 +79,7 @@ assert.equal(elements(form, node => node.type === 'input' && node.props.type ===
 const recipient = elements(form, node => node.type === 'input' && node.props.value === 'STAR HORSES')[0]
 recipient.props.onChange({ target: { value: '千葉県馬術連盟' } }); form = receiptForm.render()
 assert(elements(form, node => node.type === 'input' && node.props.value === '千葉県馬術連盟').length)
-console.log('PASS: three closed task panels, one visible action, persistent selection, default add/withdrawal checks, print prerequisites, group/rider paid-only receipt selection and editable recipient')
+console.log('PASS: two task panels, preview without receipt or print, direct receipt preparation, persistent selection, print prerequisites and rider-only receipt selection')
 for (const advancePaid of [0, 5000]) {
   const unpaidDocument = { ...document, advancePaid, advanceRecorded: advancePaid > 0, normalRemaining: 10000 - advancePaid, due: 21000 - advancePaid }
   const unpaid = harness(SettlementDocuments, { ...instance.props, ready: true, document: unpaidDocument })
@@ -84,7 +90,9 @@ for (const advancePaid of [0, 5000]) {
   assert.equal(normalCheckbox.props.disabled, false)
   normalCheckbox.props.onChange({ target: { checked: true } }); unpaidView = unpaid.render()
   assert.match(text(unpaidView), new RegExp(`選択分：¥${(21000 - advancePaid).toLocaleString('en-US')}`))
-  elements(unpaidView, node => node.type === 'button' && text(node) === '選択分の精算書を印刷')[0].props.onClick()
+  elements(unpaidView, node => node.type === 'button' && text(node) === '精算書を確認')[0].props.onClick()
+  unpaidView = unpaid.render()
+  elements(unpaidView, node => node.type === 'button' && text(node) === 'この精算書を印刷')[0].props.onClick()
   unpaidView = unpaid.render()
   const printed = elements(unpaidView, node => typeof node.type === 'function' && node.type.name === 'StatementPrint').at(-1).props.document
   assert.equal(printed.due, 21000 - advancePaid); assert.equal(printed.selection.includeNormal, true)
