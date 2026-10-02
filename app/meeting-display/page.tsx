@@ -5,12 +5,11 @@ import type { MeetingMonitorRow, MeetingMonitorSnapshot } from '@/lib/meeting-mo
 
 function AudienceStartList({ rows, fontSize }: { rows: MeetingMonitorRow[]; fontSize: number }) {
   return <table className="w-full table-fixed border-collapse leading-[1.18] [&_td]:align-top [&_td]:px-1 [&_td]:py-0.5" style={{ fontSize }}>
-    <colgroup><col className="w-[9%]" /><col className="w-[21%]" /><col className="w-[14%]" /><col className="w-[30%]" /><col className="w-[26%]" /></colgroup>
-    <thead className="bg-blue-800 text-white"><tr><th className="px-1 py-1 text-left">出番</th><th className="px-1 py-1 text-left">選手</th><th className="px-1 py-1 text-left">受付</th><th className="px-1 py-1 text-left">馬名</th><th className="px-1 py-1 text-left">所属</th></tr></thead>
+    <colgroup><col className="w-[14%]" /><col className="w-[24%]" /><col className="w-[33%]" /><col className="w-[29%]" /></colgroup>
+    <thead className="bg-blue-800 text-white"><tr><th className="px-1 py-1 text-left">出番</th><th className="px-1 py-1 text-left">選手</th><th className="px-1 py-1 text-left">馬名</th><th className="px-1 py-1 text-left">所属</th></tr></thead>
     <tbody>{rows.map(row => <tr key={row.id} className={`border-b border-slate-200 ${row.withdrawn ? 'bg-red-50 text-red-700' : 'even:bg-blue-50'}`}>
-      <td className="font-bold">{row.order}{row.op && <span className="ml-0.5 inline-block rounded bg-slate-800 px-0.5 text-[0.65em] text-white">OP</span>}</td>
+      <td className="font-bold"><span className="inline-flex items-baseline gap-1 whitespace-nowrap"><span className={`inline-block w-[2.1em] rounded text-center text-[0.7em] ${row.withdrawn ? 'bg-red-700 text-white' : row.op ? 'bg-slate-800 text-white' : ''}`}>{row.withdrawn ? 'WD' : row.op ? 'OP' : ''}</span><span>{row.order}</span></span></td>
       <td className="break-words font-bold">{row.player}</td>
-      <td className="break-words">{row.mark && <span className={`rounded px-0.5 text-[0.75em] font-bold text-white ${row.withdrawn ? 'bg-red-700' : row.mark === '追加' ? 'bg-blue-700' : 'bg-violet-700'}`}>{row.mark}</span>}</td>
       <td className="whitespace-normal break-words font-bold">{row.horse}</td>
       <td className="break-words text-[0.85em]">{row.organization}</td>
     </tr>)}</tbody>
