@@ -4,7 +4,7 @@ const competitions = [1, 5].map(number => ({ id: `c-${number}`, number, official
 const baseEntries = ['a', 'b', 'c'].map((id, index) => ({ id, competitionId: index === 2 ? 'c-5' : 'c-1', order: index === 2 ? 1 : index + 1, playerId: `p${index}`, horseId: `h${index}`, organizationId: 'org' }))
 const organizations = [{ id: 'org', name: '団体' }]
 let current, writes = []
-const hooks = { ...React, useState(initial) { const h = current, index = h.index++; if (!(index in h.state)) h.state[index] = initial; return [h.state[index], next => h.state[index] = typeof next === 'function' ? next(h.state[index]) : next] }, useEffect() {} }
+const hooks = { ...React, useState(initial) { const h = current, index = h.index++; if (!(index in h.state)) h.state[index] = initial; return [h.state[index], next => h.state[index] = typeof next === 'function' ? next(h.state[index]) : next] }, useEffect() {}, useRef(value) { return { current: value } } }
 function load(file) {
   if (!path.extname(file)) file += fs.existsSync(file + '.tsx') ? '.tsx' : '.ts'
   if (cache.has(file)) return cache.get(file).exports
@@ -12,7 +12,7 @@ function load(file) {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, esModuleInterop: true, target: ts.ScriptTarget.ES2020 } }).outputText
   new Function('require', 'module', 'exports', code)(name => {
     if (name === 'react') return hooks
-    if (name === '@/lib/store') return { useStore: () => ({ competitions, startEntries: baseEntries, organizations, getOrg: id => organizations.find(org => org.id === id), reconciliation: { state: 'verified' } }) }
+    if (name === '@/lib/store') return { useStore: () => ({ competitions, startEntries: baseEntries, organizations, getPlayer: id => ({ name: id }), getHorse: id => ({ name: id }), getOrg: id => organizations.find(org => org.id === id), reconciliation: { state: 'verified' } }) }
     if (name === '@/components/start-list') return { StartList: function StartList() {} }
     if (name === './on-site-reception') return { OnSiteReception: function OnSiteReception() {} }
     if (name === '@/lib/meeting-drafts') return { ...load(path.join(root, 'lib/meeting-drafts.ts')), saveMeetingDraft: async (id, revision, content) => { writes.push(['save', content]); return { id, revision: revision + 1, status: 'draft', updated_at: new Date().toISOString(), content } }, applyMeetingDraft: async () => writes.push(['apply']) }
@@ -25,11 +25,21 @@ function text(node) { return Array.isArray(node) ? node.map(text).join('') : nod
 const { meetingEntries } = load(path.join(root, 'lib/meeting-drafts.ts'))
 const { MeetingPanel } = load(path.join(root, 'components/admin/meeting-panel.tsx'))
 const initial = { baseEntries, baseOfficial: [], staged: [], orders: { 'c-1': ['b', 'a'] } }
-const instance = { state: [null, initial, JSON.stringify(initial), 'c-1', undefined, false, '', false, true], index: 0, render() { current = this; this.index = 0; return MeetingPanel({ session: {} }) } }
+const instance = { state: [null, initial, JSON.stringify(initial), 'c-1', undefined, 'change', undefined, false, '', false, true], index: 0, render() { current = this; this.index = 0; return MeetingPanel({ session: {} }) } }
 const stagedItem = (id, type, competitionId, payload) => ({ request: { id, type, status: 'pending', orgId: 'org', fee: { total: type === 'withdraw' ? 0 : 11000 }, [type]: payload }, record: { competition_key: competitionId }, label: `${type} ${id}` })
 let view
 const input = () => { view = instance.render(); return elements(view, node => node.props?.meeting)[0].props.meeting }
-input().onStage(stagedItem('add', 'add', 'c-1', { competitionId: 'c-1', playerId: 'p4', horseId: 'h4' }))
+global.requestAnimationFrame = callback => callback()
+for (const action of ['変更する', '棄権する']) {
+  view = instance.render()
+  elements(view, node => node.props?.onNameSelect)[0].props.onNameSelect(baseEntries[0])
+  view = instance.render()
+  elements(view, node => node.type === 'button' && text(node) === action)[0].props.onClick()
+  assert.equal(input().selectedEntry.id, 'a')
+  assert.equal(input().selectedAction, action === '変更する' ? 'change' : 'withdraw')
+  assert.equal(writes.length, 0)
+}
+input().onStage(stagedItem('add' , 'add', 'c-1', { competitionId: 'c-1', playerId: 'p4', horseId: 'h4' }))
 assert.deepEqual(meetingEntries(instance.state[1], competitions).filter(row => row.competitionId === 'c-1' && !row.withdrawn).map(row => row.id), ['b', 'a', 'request:add'])
 input().onStage(stagedItem('official', 'add', 'c-5', { competitionId: 'c-5', playerId: 'p5', horseId: 'h5' }))
 assert.deepEqual(meetingEntries(instance.state[1], competitions).filter(row => row.competitionId === 'c-5' && !row.withdrawn).map(row => row.id), ['request:official', 'c'])

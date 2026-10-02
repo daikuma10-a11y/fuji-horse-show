@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useStore } from "@/lib/store"
 import { loadAutumnEntryRows, type AdminSession } from "@/lib/supabase-rest"
 import { applyMeetingDraft, archiveMeetingDraft, loadMeetingDraft, meetingEntries, saveMeetingDraft, type MeetingContent, type MeetingDraft, type StagedRegistration } from "@/lib/meeting-drafts"
@@ -21,6 +21,21 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
   const [savedContent, setSavedContent] = useState("")
   const [competitionId, setCompetitionId] = useState(competitions[0]?.id ?? "")
   const [selectedEntry, setSelectedEntry] = useState<StartEntry>()
+  const [selectedAction, setSelectedAction] = useState<"change" | "withdraw">("change")
+  const [actionEntry, setActionEntry] = useState<StartEntry>()
+  const actionDialog = useRef<HTMLDialogElement>(null)
+  const inputSection = useRef<HTMLFieldSetElement>(null)
+  useEffect(() => {
+    if (!actionEntry) return
+    const dialog = actionDialog.current
+    if (dialog && !dialog.open) dialog.showModal()
+    return () => { if (dialog?.open) dialog.close() }
+  }, [actionEntry])
+  function chooseAction(action: "change" | "withdraw") {
+    if (!actionEntry) return
+    setSelectedEntry({ ...actionEntry }); setSelectedAction(action); setActionEntry(undefined)
+    requestAnimationFrame(() => inputSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [confirmed, setConfirmed] = useState(false)
@@ -146,14 +161,21 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
     <label className="block text-lg font-bold">打ち合わせ中の競技<select disabled={busy} value={competitionId} onChange={event => { setCompetitionId(event.target.value); setSelectedEntry(undefined) }} className="mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-card px-3">{competitions.map(comp => <option key={comp.id} value={comp.id}>{comp.date.slice(5)} ／ 競技{comp.number} {comp.name}{comp.official ? " ★公認" : ""}</option>)}</select></label>
     <section className="rounded-xl border-2 border-border bg-card p-3">
       <h3 className="mb-2 text-lg font-bold">打ち合わせ会用出番表：競技{selected?.number}</h3>
-      <p className="mb-3 text-sm">移動マークを押したまま上下に動かせます。変更・棄権は対象の行を選び、下の入力欄で操作します。</p>
-      <StartList competitionId={competitionId} draftEntries={rows} showAdminChanges compact dense adminReorder={!busy} onReorder={move} selectedId={selectedEntry?.id} onSelect={row => {
+      <p className="mb-3 text-sm">移動マークを押したまま上下に動かせます。選手名・馬名をクリックすると、変更・棄権を選べます。</p>
+      <StartList competitionId={competitionId} draftEntries={rows} showAdminChanges compact dense adminReorder={!busy} onReorder={move} selectedId={selectedEntry?.id} onNameSelect={row => {
         if (busy || row.withdrawn) return
         if (row.id.startsWith("request:") || reserved.has(row.id)) { setError("入力済みの人馬を修正する場合は、下の確認一覧から該当申請を外して入力し直してください。"); return }
-        setSelectedEntry(content.baseEntries.find(original => original.id === row.id))
+        setActionEntry(content.baseEntries.find(original => original.id === row.id))
       }} />
     </section>
-    <fieldset disabled={busy} className="min-w-0"><OnSiteReception session={session} meeting={{ competitionId, selectedEntry, staged: content.staged, onStage: stage, disabled: busy }} /></fieldset>
+    <dialog ref={actionDialog} onCancel={() => setActionEntry(undefined)} aria-labelledby="meeting-action-title" className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border-2 border-primary bg-card p-5 text-foreground shadow-xl backdrop:bg-black/40">
+      <h3 id="meeting-action-title" className="text-xl font-bold">変更・棄権する人馬</h3>
+      <p className="mt-3 font-bold">{actionEntry?.order}番　{actionEntry && getPlayer(actionEntry.playerId)?.name} ／ {actionEntry && getHorse(actionEntry.horseId)?.name}</p>
+      <p className="mt-2 text-sm">内容は下書きに登録し、最終確認後に反映します。</p>
+      <div className="mt-4 grid grid-cols-2 gap-3"><button type="button" onClick={() => chooseAction("change")} className="min-h-14 rounded-xl bg-violet-700 px-4 font-bold text-white">変更する</button><button type="button" onClick={() => chooseAction("withdraw")} className="min-h-14 rounded-xl bg-destructive px-4 font-bold text-white">棄権する</button></div>
+      <button type="button" onClick={() => setActionEntry(undefined)} className="mt-3 min-h-12 w-full rounded-xl border-2 font-bold">閉じる</button>
+    </dialog>
+    <fieldset ref={inputSection} disabled={busy} className="min-w-0 scroll-mt-4"><OnSiteReception session={session} meeting={{ competitionId, selectedEntry, selectedAction, staged: content.staged, onStage: stage, disabled: busy }} /></fieldset>
     <section className="rounded-2xl border-2 border-border bg-card p-4">
       <h3 className="text-xl font-bold">全競技の確認一覧（{content.staged.length}件）</h3>
       <p className="mt-1 text-sm">並べ替え：{Object.keys(content.orders).length}競技 ／ 追加・変更の料金合計：{formatYen(content.staged.reduce((sum, item) => sum + item.request.fee.total, 0))}</p>

@@ -14,7 +14,7 @@ import type { AppRequest, RequestType, StartEntry } from "@/lib/types"
 
 import type { StagedRegistration } from "@/lib/meeting-drafts"
 
-type MeetingInput = { competitionId: string; selectedEntry?: StartEntry; staged: StagedRegistration[]; onStage: (item: StagedRegistration) => void; disabled: boolean }
+type MeetingInput = { competitionId: string; selectedEntry?: StartEntry; selectedAction?: "change" | "withdraw"; staged: StagedRegistration[]; onStage: (item: StagedRegistration) => void; disabled: boolean }
 const stagedStorageKey = "fhs-autumn-post-deadline-staged-v1"
 
 export function OnSiteReception({ session, meeting }: { session: AdminSession; meeting?: MeetingInput }) {
@@ -95,8 +95,8 @@ export function OnSiteReception({ session, meeting }: { session: AdminSession; m
     setCompetitionId(meeting.competitionId); setEntry(null); setToCompetitionId(""); setPlayerId(""); setHorseId(""); setIsOp(false)
   }, [meeting?.competitionId])
   useEffect(() => {
-    if (meeting?.selectedEntry) { setType("change"); chooseEntry(meeting.selectedEntry) }
-  }, [meeting?.selectedEntry])
+    if (meeting?.selectedEntry) { setType(meeting.selectedAction ?? "change"); chooseEntry(meeting.selectedEntry) }
+  }, [meeting?.selectedEntry, meeting?.selectedAction])
   function selectType(next: RequestType) {
     if (meeting) { setType(next); setError(""); if (next !== "add" && meeting.selectedEntry) chooseEntry(meeting.selectedEntry); else { setEntry(null); setPlayerId(""); setHorseId(""); setIsOp(false) }; return }
     setType(next); setCompetitionId(""); setEntry(null); setToCompetitionId(""); setPlayerId(""); setHorseId(""); setIsOp(false); setOrganizationId(""); setError("")
