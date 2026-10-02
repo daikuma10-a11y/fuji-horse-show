@@ -1,7 +1,30 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MeetingMonitorRow, MeetingMonitorSnapshot } from '@/lib/meeting-monitor'
+
+function OrganizationName({ name, fontSize }: { name: string; fontSize: number }) {
+  const container = useRef<HTMLDivElement>(null)
+  const text = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const box = container.current, label = text.current
+    if (!box || !label) return
+    let active = true
+    const fit = () => {
+      if (!active) return
+      const base = fontSize * 0.85
+      label.style.fontSize = `${base}px`
+      const width = label.getBoundingClientRect().width
+      if (width > box.clientWidth && box.clientWidth > 0) label.style.fontSize = `${base * Math.max(0, box.clientWidth - 1) / width}px`
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(box)
+    void document.fonts.ready.then(fit)
+    return () => { active = false; observer.disconnect() }
+  }, [name, fontSize])
+  return <div ref={container} className="w-full overflow-hidden"><span ref={text} className="inline-block whitespace-nowrap" style={{ fontSize: fontSize * 0.85 }}>{name}</span></div>
+}
 
 function AudienceStartList({ rows, fontSize }: { rows: MeetingMonitorRow[]; fontSize: number }) {
   return <table className="w-full table-fixed border-collapse leading-[1.18] [&_td]:align-top [&_td]:px-1 [&_td]:py-0.5" style={{ fontSize }}>
@@ -11,7 +34,7 @@ function AudienceStartList({ rows, fontSize }: { rows: MeetingMonitorRow[]; font
       <td className="font-bold"><span className="inline-flex items-baseline gap-1 whitespace-nowrap"><span className={`inline-block w-[2.1em] rounded text-center text-[0.7em] ${row.withdrawn ? 'bg-red-700 text-white' : row.op ? 'bg-slate-800 text-white' : ''}`}>{row.withdrawn ? 'WD' : row.op ? 'OP' : ''}</span><span>{row.order}</span></span></td>
       <td className="break-words font-bold">{row.player}</td>
       <td className="whitespace-normal break-words font-bold">{row.horse}</td>
-      <td className="break-words text-[0.85em]">{row.organization}</td>
+      <td><OrganizationName name={row.organization} fontSize={fontSize} /></td>
     </tr>)}</tbody>
   </table>
 }
