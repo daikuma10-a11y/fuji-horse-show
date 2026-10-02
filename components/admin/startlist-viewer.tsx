@@ -23,6 +23,8 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
   const [drafts, setDrafts] = useState<Record<string, DraftOrder>>({})
   const [savedOrders, setSavedOrders] = useState<Record<string, SavedOrder>>({})
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState("")
   const [saveError, setSaveError] = useState("")
   const [wideView, setWideView] = useState(false)
   const [printScope, setPrintScope] = useState<"day" | "competition">("day")
@@ -105,7 +107,27 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
     window.setTimeout(() => window.print(), 0)
   }
 
+  async function exportExcel() {
+    if (exporting) return
+    setExportError("")
+    if (Object.entries(drafts).some(([id, value]) => !sameOrder(value.ids, entriesByCompetition(id).filter(entry => !entry.withdrawn).map(entry => entry.id)))) { setExportError("未保存の出番順があります。保存または取消後にExcelを出力してください。"); return }
+    setExporting(true)
+    try {
+      const raw = sessionStorage.getItem(ADMIN_SESSION_KEY)
+      if (!raw) throw new Error("本部ログインが必要です")
+      const session = await refreshAdminSession(JSON.parse(raw) as AdminSession)
+      sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session))
+      const response = await fetch('/api/official-excel', { method: 'POST', headers: { Authorization: `Bearer ${session.accessToken}` } })
+      if (!response.ok) { const body = await response.json(); throw new Error(body.error || "Excelを出力できません") }
+      const url = URL.createObjectURL(await response.blob()), link = document.createElement('a')
+      link.href = url; link.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'FujiHorseShow_1-10.xlsm'
+      link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 30000)
+    } catch (cause) { setExportError(cause instanceof Error ? cause.message : "Excelを出力できません") }
+    finally { setExporting(false) }
+  }
+
   return <div className={wideView ? "fixed inset-0 z-50 flex flex-col gap-1 overflow-y-auto bg-background px-3 py-2 lg:px-5" : "flex flex-col gap-3"}>
+    <div className="print-hide rounded-xl border-2 border-primary/30 bg-card p-3"><button type="button" onClick={() => void exportExcel()} disabled={!canReorder || exporting || saving || !canEdit} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50">{exporting ? "Excelを作成中…" : "正式Excelを出力（競技1〜10・成績表付き）"}</button><p className="mt-2 text-sm text-muted-foreground">正式DBへ反映済みの出番を出力します。打ち合わせ会の下書き・未反映申請は含みません。OP・WD、元の書式・連動数式・マクロを引き継ぎます。</p>{exportError && <p role="alert" className="mt-2 font-bold text-destructive">{exportError}</p>}</div>
     <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" onClick={() => printList("day")} disabled={reconciliation.state === "loading" || reconciliation.state === "error"} className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50">この日の出番表を印刷</button>{selected && <button type="button" onClick={() => printList("competition")} disabled={dirty} className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50">この競技を印刷</button>}</div>
     <div className="print-hide contents"><button type="button" onClick={() => setWideView(current => !current)} className={wideView ? "sticky top-0 z-20 self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary shadow" : "self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary"}>{wideView ? "通常画面へ戻る" : "出番表を一画面で見る"}</button>
     <div className={`rounded-lg border px-3 py-2 text-sm font-bold ${wideView ? "hidden" : ""} ${verificationClass}`}>DB照合状況：{reconciliation.message}</div>

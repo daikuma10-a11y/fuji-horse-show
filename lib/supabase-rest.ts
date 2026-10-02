@@ -1,4 +1,5 @@
 import type { AppRequest, Competition, FeeBreakdown, Horse, Player, StartEntry } from "./types"
+import type { OfficialExcelEntry } from "./official-excel"
 import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrganizations, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 
 const SUPABASE_URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
@@ -123,4 +124,14 @@ export async function loadAutumnMasterOrganizations():Promise<{riders:Map<string
  return {riders:new Map(riderRows.map(row=>[row.rider_id,row.organization_name])),horses:new Map(horseRows.map(row=>[row.horse_id,row.organization_name])),registeredRiders:riderRows.map(row=>({id:row.rider_id,name:row.rider_name,organizationName:row.organization_name,registered:!!row.jef_member_no?.trim(),registryNumber:row.jef_member_no?.trim()??"",entryCount:Number(row.entry_count)})),registeredHorses:horseRows.map(row=>({id:row.horse_id,name:row.horse_name,organizationName:row.organization_name,registered:!!row.jef_registration_no?.trim(),registryNumber:row.jef_registration_no?.trim()??"",entryCount:Number(row.entry_count)}))}
 }
 export async function loadAutumnEntryRows():Promise<EntryRow[]>{const select="entry_id,competition_id,competition_no,start_order,status,rider_id,rider_name,horse_id,horse_name,organization_name,is_op,result_eligible";const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_entries?event_id=eq.${AUTUMN_EVENT_ID}&select=${select}&order=competition_no.asc,start_order.asc`,{headers,cache:"no-store"});if(!response.ok)throw new Error(`出番表データ取得失敗: ${response.status}`);return response.json() as Promise<EntryRow[]>}
+export async function loadOfficialExcelEntries(accessToken:string):Promise<OfficialExcelEntry[]> {
+ const auth=await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${accessToken}`},cache:"no-store"})
+ if(!auth.ok)throw new Error("本部管理者の認証が必要です")
+ const user=await auth.json() as {app_metadata?:{role?:string}}
+ if(user.app_metadata?.role!=="admin")throw new Error("本部管理者の認証が必要です")
+ const select="entry_id,competition_no,start_order,status,rider_name,jef_member_no,horse_name,jef_registration_no,organization_name,is_op"
+ const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_entries?event_id=eq.${AUTUMN_EVENT_ID}&competition_no=in.(1,2,3,4,5,6,7,8,9,10)&select=${select}&order=competition_no.asc,start_order.asc`,{headers:{...headers,Authorization:`Bearer ${accessToken}`},cache:"no-store"})
+ if(!response.ok)throw new Error(`正式出番表のExcel出力データを取得できません (${response.status})`)
+ return response.json() as Promise<OfficialExcelEntry[]>
+}
 export function reconcileAutumnEntries(rows:EntryRow[],entries:StartEntry[],competitions:Competition[],players:Player[],horses:Horse[]):EntryMatch[]{return rows.map(row=>{const competition=competitions.find(c=>c.number===Number(row.competition_no));if(!competition)return{row,local:null,reason:"not_found"};const candidates=entries.filter(e=>e.competitionId===competition.id&&e.order===row.start_order&&norm(players.find(p=>p.id===e.playerId)?.name)===norm(row.rider_name)&&norm(horses.find(h=>h.id===e.horseId)?.name)===norm(row.horse_name));if(candidates.length===1)return{row,local:candidates[0],reason:"matched"};if(candidates.length>1)return{row,local:null,reason:"ambiguous"};const loose=entries.filter(e=>e.competitionId===competition.id&&norm(players.find(p=>p.id===e.playerId)?.name)===norm(row.rider_name)&&norm(horses.find(h=>h.id===e.horseId)?.name)===norm(row.horse_name));return loose.length===1?{row,local:loose[0],reason:"matched"}:{row,local:null,reason:loose.length>1?"ambiguous":"not_found"}})}
