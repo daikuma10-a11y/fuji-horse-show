@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MeetingMonitorRow, MeetingMonitorSnapshot } from '@/lib/meeting-monitor'
 
-function OrganizationName({ name, fontSize }: { name: string; fontSize: number }) {
+function FittedName({ name, fontSize, scale = 1 }: { name: string; fontSize: number; scale?: number }) {
   const container = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLSpanElement>(null)
   useLayoutEffect(() => {
@@ -12,7 +12,7 @@ function OrganizationName({ name, fontSize }: { name: string; fontSize: number }
     let active = true
     const fit = () => {
       if (!active) return
-      const base = fontSize * 0.85
+      const base = fontSize * scale
       label.style.fontSize = `${base}px`
       const width = label.getBoundingClientRect().width
       if (width > box.clientWidth && box.clientWidth > 0) label.style.fontSize = `${base * Math.max(0, box.clientWidth - 1) / width}px`
@@ -22,19 +22,29 @@ function OrganizationName({ name, fontSize }: { name: string; fontSize: number }
     observer.observe(box)
     void document.fonts.ready.then(fit)
     return () => { active = false; observer.disconnect() }
-  }, [name, fontSize])
-  return <div ref={container} className="w-full overflow-hidden"><span ref={text} className="inline-block whitespace-nowrap" style={{ fontSize: fontSize * 0.85 }}>{name}</span></div>
+  }, [name, fontSize, scale])
+  return <div ref={container} className="w-full overflow-hidden"><span ref={text} className="inline-block whitespace-nowrap" style={{ fontSize: fontSize * scale }}>{name}</span></div>
+}
+
+function AudienceCells({ row, fontSize }: { row?: MeetingMonitorRow; fontSize: number }) {
+  if (!row) return <td colSpan={4} className="border-b border-slate-200" />
+  const statusClass = `border-b border-slate-200 ${row.withdrawn ? 'bg-red-50 text-red-700' : ''}`
+  return <>
+    <td className={`${statusClass} font-bold`}><span className="inline-flex items-baseline gap-1 whitespace-nowrap"><span className={`inline-block w-[2.1em] rounded text-center text-[0.7em] ${row.withdrawn ? 'bg-red-700 text-white' : row.op ? 'bg-slate-800 text-white' : ''}`}>{row.withdrawn ? 'WD' : row.op ? 'OP' : ''}</span><span>{row.order}</span></span></td>
+    <td className={`${statusClass} font-bold`}><FittedName name={row.player} fontSize={fontSize} /></td>
+    <td className={`${statusClass} font-bold`}><FittedName name={row.horse} fontSize={fontSize} /></td>
+    <td className={statusClass}><FittedName name={row.organization} fontSize={fontSize} scale={0.85} /></td>
+  </>
 }
 
 function AudienceStartList({ rows, fontSize }: { rows: MeetingMonitorRow[]; fontSize: number }) {
   return <table className="w-full table-fixed border-collapse leading-[1.18] [&_td]:align-top [&_td]:px-1 [&_td]:py-0.5" style={{ fontSize }}>
-    <colgroup><col className="w-[14%]" /><col className="w-[24%]" /><col className="w-[33%]" /><col className="w-[29%]" /></colgroup>
-    <thead className="bg-blue-800 text-white"><tr><th className="px-1 py-1 text-left">出番</th><th className="px-1 py-1 text-left">選手</th><th className="px-1 py-1 text-left">馬名</th><th className="px-1 py-1 text-left">所属</th></tr></thead>
-    <tbody>{rows.map(row => <tr key={row.id} className={`border-b border-slate-200 ${row.withdrawn ? 'bg-red-50 text-red-700' : 'even:bg-blue-50'}`}>
-      <td className="font-bold"><span className="inline-flex items-baseline gap-1 whitespace-nowrap"><span className={`inline-block w-[2.1em] rounded text-center text-[0.7em] ${row.withdrawn ? 'bg-red-700 text-white' : row.op ? 'bg-slate-800 text-white' : ''}`}>{row.withdrawn ? 'WD' : row.op ? 'OP' : ''}</span><span>{row.order}</span></span></td>
-      <td className="break-words font-bold">{row.player}</td>
-      <td className="whitespace-normal break-words font-bold">{row.horse}</td>
-      <td><OrganizationName name={row.organization} fontSize={fontSize} /></td>
+    <colgroup><col className="w-[7%]" /><col className="w-[12%]" /><col className="w-[16%]" /><col className="w-[14%]" /><col className="w-[2%]" /><col className="w-[7%]" /><col className="w-[12%]" /><col className="w-[16%]" /><col className="w-[14%]" /></colgroup>
+    <thead className="bg-blue-800 text-white"><tr><th className="px-1 py-1 text-left">出番</th><th className="px-1 py-1 text-left">選手</th><th className="px-1 py-1 text-left">馬名</th><th className="px-1 py-1 text-left">所属</th><th aria-hidden="true" className="bg-white" /><th className="px-1 py-1 text-left">出番</th><th className="px-1 py-1 text-left">選手</th><th className="px-1 py-1 text-left">馬名</th><th className="px-1 py-1 text-left">所属</th></tr></thead>
+    <tbody>{Array.from({ length: Math.min(20, rows.length) }, (_, index) => <tr key={index} className="even:bg-blue-50">
+      <AudienceCells key={rows[index].id} row={rows[index]} fontSize={fontSize} />
+      <td aria-hidden="true" className="bg-white" />
+      <AudienceCells key={rows[index + 20]?.id ?? 'empty'} row={rows[index + 20]} fontSize={fontSize} />
     </tr>)}</tbody>
   </table>
 }
@@ -71,6 +81,6 @@ export default function MeetingDisplayPage() {
     </header>
     {error && <p role="alert" className="mb-3 rounded bg-red-50 p-3 text-red-700">{error}</p>}
     {!connected && <p className="mb-3 rounded bg-amber-50 p-2 font-bold text-amber-900">本部の打ち合わせ会画面を開いたままにしてください。表示は最後に受け取った内容です。</p>}
-    {snapshot && (groups.length ? <div className="overflow-x-auto">{groups.map((group, index) => <div key={index} className="mb-3 grid min-w-[950px] grid-cols-2 gap-3"><AudienceStartList rows={group.slice(0, 20)} fontSize={fontSize} /><AudienceStartList rows={group.slice(20, 40)} fontSize={fontSize} /></div>)}</div> : <p className="p-5 text-center">この競技の人馬はありません。</p>)}
+    {snapshot && (groups.length ? <div className="overflow-x-auto">{groups.map((group, index) => <div key={index} className="mb-3 min-w-[950px]"><AudienceStartList rows={group} fontSize={fontSize} /></div>)}</div> : <p className="p-5 text-center">この競技の人馬はありません。</p>)}
   </main>
 }
