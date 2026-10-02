@@ -8,6 +8,7 @@ import { compareOrganizations } from "@/lib/organization-order"
 import { formatYen } from "@/lib/fees"
 import type { StartEntry } from "@/lib/types"
 import { StartList } from "@/components/start-list"
+import { monitorRows, type MeetingMonitorSnapshot } from "@/lib/meeting-monitor"
 import { OnSiteReception } from "./on-site-reception"
 
 const RECOVERY_KEY = "fhs-autumn-meeting-work-v1"
@@ -75,6 +76,26 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
   const preview = content ? meetingEntries(content, competitions) : []
   const selected = competitions.find(comp => comp.id === competitionId)
   const rows = preview.filter(row => row.competitionId === competitionId)
+  const monitorToken = useRef<string | null>(null)
+  useEffect(() => {
+    if (!content || !selected || !monitorToken.current) return
+    const channel = new BroadcastChannel(monitorToken.current)
+    const send = () => {
+      const snapshot: MeetingMonitorSnapshot = { kind: "snapshot", competition: `競技${selected.number} ${selected.name}${selected.official ? " ★公認" : ""}`, rows: monitorRows(rows, id => getPlayer(id)?.name ?? "—", id => getHorse(id)?.name ?? "—", id => getOrg(id)?.name ?? "—"), sentAt: Date.now(), saved: !!draft && !dirty }
+      channel.postMessage(snapshot)
+    }
+    channel.onmessage = event => { if (event.data?.kind === "request") send() }
+    send()
+    const timer = window.setInterval(send, 2000)
+    return () => { window.clearInterval(timer); channel.close() }
+  }, [content, competitionId, draft, dirty])
+  function openMonitor() {
+    if (!monitorToken.current) monitorToken.current = `fhs-meeting-${crypto.randomUUID()}`
+    const opened = window.open(`/meeting-display#${monitorToken.current}`, "fhs-meeting-monitor", "popup,width=1280,height=900")
+    if (!opened) { setError("モニター表示を開けません。ブラウザのポップアップを許可して、もう一度押してください。"); return }
+    // Start the sender after a newly opened monitor requests its initial snapshot.
+    setContent(previous => previous ? { ...previous } : previous)
+  }
   const reserved = new Set(content?.staged.flatMap(item => [item.request.change?.entryId, item.request.withdraw?.entryId].filter(Boolean)) ?? [])
   function edit(next: MeetingContent) { setContent(next); setConfirmed(false); setError("") }
   function stage(item: StagedRegistration) {
@@ -153,7 +174,7 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
   const groups = organizations.filter(org => content.staged.some(item => item.request.orgId === org.id)).sort(compareOrganizations)
   return <div className="space-y-4">
     <section className="rounded-2xl border-2 border-primary bg-card p-4">
-      <h2 className="text-2xl font-bold">打ち合わせ会</h2>
+      <h2 className="text-2xl font-bold">打ち合わせ会</h2><button type="button" onClick={openMonitor} className="mt-3 min-h-12 rounded-xl bg-primary px-4 font-bold text-primary-foreground">モニター表示（出番表のみ）</button><p className="mt-2 text-sm text-muted-foreground">別ウィンドウを外部モニターへ移してください。現在の競技と下書きの変更がリアルタイムで表示されます。</p>
       <p className="mt-2">競技を切り替えながら、各団体の追加・変更・棄権と出番の移動を入力できます。最後に全競技をまとめて保存し、最終確認後に正式出番表・精算へ反映してください。</p>
       <p className="mt-3 font-bold text-primary">{dirty ? "未保存の変更があります" : draft ? `下書き保存済み：${timestamp(draft.updated_at)} ／ 正式未反映` : "正式出番表から開始 ／ 正式未反映"}</p>
       <button type="button" disabled={busy} onClick={() => void restart()} className="mt-3 min-h-11 rounded-lg border px-3 text-sm font-semibold">最新の正式出番表からやり直す</button>

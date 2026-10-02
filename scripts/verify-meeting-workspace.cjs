@@ -4,7 +4,7 @@ const competitions = [1, 5].map(number => ({ id: `c-${number}`, number, official
 const baseEntries = ['a', 'b', 'c'].map((id, index) => ({ id, competitionId: index === 2 ? 'c-5' : 'c-1', order: index === 2 ? 1 : index + 1, playerId: `p${index}`, horseId: `h${index}`, organizationId: 'org' }))
 const organizations = [{ id: 'org', name: '団体' }]
 let current, writes = []
-const hooks = { ...React, useState(initial) { const h = current, index = h.index++; if (!(index in h.state)) h.state[index] = initial; return [h.state[index], next => h.state[index] = typeof next === 'function' ? next(h.state[index]) : next] }, useEffect() {}, useRef(value) { return { current: value } } }
+const hooks = { ...React, useState(initial) { const h = current, index = h.index++; if (!(index in h.state)) h.state[index] = initial; return [h.state[index], next => h.state[index] = typeof next === 'function' ? next(h.state[index]) : next] }, useEffect(effect) { current.effects.push(effect) }, useRef(value) { const h = current, index = h.refIndex++; h.refs[index] ??= { current: value }; return h.refs[index] } }
 function load(file) {
   if (!path.extname(file)) file += fs.existsSync(file + '.tsx') ? '.tsx' : '.ts'
   if (cache.has(file)) return cache.get(file).exports
@@ -25,7 +25,7 @@ function text(node) { return Array.isArray(node) ? node.map(text).join('') : nod
 const { meetingEntries } = load(path.join(root, 'lib/meeting-drafts.ts'))
 const { MeetingPanel } = load(path.join(root, 'components/admin/meeting-panel.tsx'))
 const initial = { baseEntries, baseOfficial: [], staged: [], orders: { 'c-1': ['b', 'a'] } }
-const instance = { state: [null, initial, JSON.stringify(initial), 'c-1', undefined, 'change', undefined, false, '', false, true], index: 0, render() { current = this; this.index = 0; return MeetingPanel({ session: {} }) } }
+const instance = { state: [null, initial, JSON.stringify(initial), 'c-1', undefined, 'change', undefined, false, '', false, true], index: 0, refs: [], refIndex: 0, effects: [], render() { current = this; this.index = 0; this.refIndex = 0; this.effects = []; return MeetingPanel({ session: {} }) } }
 const stagedItem = (id, type, competitionId, payload) => ({ request: { id, type, status: 'pending', orgId: 'org', fee: { total: type === 'withdraw' ? 0 : 11000 }, [type]: payload }, record: { competition_key: competitionId }, label: `${type} ${id}` })
 let view
 const input = () => { view = instance.render(); return elements(view, node => node.props?.meeting)[0].props.meeting }
@@ -73,5 +73,31 @@ global.window = { location: { reload() {} } }; global.sessionStorage = { removeI
   elements(view, node => node.type === 'button' && text(node) === '正式出番表・精算へまとめて反映')[0].props.onClick()
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(writes.map(row => row[0]), ['save', 'apply'])
+  // Verify the separate monitor receives only presentation data and follows edits/competition.
+  const messages = [], channels = []
+  global.BroadcastChannel = class { constructor(name) { this.name = name; channels.push(this) } postMessage(data) { messages.push(data) } close() { this.closed = true } }
+  global.window.open = () => ({})
+  global.window.setInterval = () => 1
+  global.window.clearInterval = () => {}
+  view = instance.render()
+  elements(view, node => node.type === 'button' && text(node) === 'モニター表示（出番表のみ）')[0].props.onClick()
+  instance.render()
+  let stopMonitor = instance.effects.find(effect => effect.toString().includes('postMessage(snapshot)'))()
+  assert(messages.at(-1).competition.includes('競技1'))
+  assert(messages.at(-1).rows.some(row => row.mark === '棄権'))
+  assert(messages.at(-1).rows.some(row => row.mark === '追加'))
+  assert(!JSON.stringify(messages).includes('fee'))
+  const beforeRequest = messages.length
+  channels.at(-1).onmessage({ data: { kind: 'request' } })
+  assert.equal(messages.length, beforeRequest + 1)
+  stopMonitor()
+  assert(channels.at(-1).closed)
+  view = instance.render()
+  elements(view, node => node.type === 'select')[0].props.onChange({ target: { value: 'c-5' } })
+  instance.render()
+  stopMonitor = instance.effects.find(effect => effect.toString().includes('postMessage(snapshot)'))()
+  assert(messages.at(-1).competition.includes('競技5'))
+  assert(messages.at(-1).rows.every(row => row.id === 'c' || row.id === 'request:official'))
+  stopMonitor()
   console.log('Meeting workspace: multi-competition staging, active order, official-first, removal restoration, draft isolation and confirmation: PASS')
 })().catch(error => { console.error(error); process.exitCode = 1 })
