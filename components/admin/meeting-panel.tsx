@@ -81,7 +81,7 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
     if (!content || !selected || !monitorToken.current) return
     const channel = new BroadcastChannel(monitorToken.current)
     const send = () => {
-      const snapshot: MeetingMonitorSnapshot = { kind: "snapshot", competition: `競技${selected.number} ${selected.name}${selected.official ? " ★公認" : ""}`, rows: monitorRows(rows, id => getPlayer(id)?.name ?? "—", id => getHorse(id)?.name ?? "—", id => getOrg(id)?.name ?? "—"), sentAt: Date.now(), saved: !!draft && !dirty }
+      const snapshot: MeetingMonitorSnapshot = { kind: "snapshot", competition: `第${selected.number}競技 ${selected.name}${selected.official ? " ★公認" : ""}`, rows: monitorRows(rows, id => getPlayer(id)?.name ?? "—", id => getHorse(id)?.name ?? "—", id => getOrg(id)?.name ?? "—"), sentAt: Date.now(), saved: !!draft && !dirty }
       channel.postMessage(snapshot)
     }
     channel.onmessage = event => { if (event.data?.kind === "request") send() }
@@ -179,9 +179,9 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
       <p className="mt-3 font-bold text-primary">{dirty ? "未保存の変更があります" : draft ? `下書き保存済み：${timestamp(draft.updated_at)} ／ 正式未反映` : "正式出番表から開始 ／ 正式未反映"}</p>
       <button type="button" disabled={busy} onClick={() => void restart()} className="mt-3 min-h-11 rounded-lg border px-3 text-sm font-semibold">最新の正式出番表からやり直す</button>
     </section>
-    <label className="block text-lg font-bold">打ち合わせ中の競技<select disabled={busy} value={competitionId} onChange={event => { setCompetitionId(event.target.value); setSelectedEntry(undefined) }} className="mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-card px-3">{competitions.map(comp => <option key={comp.id} value={comp.id}>{comp.date.slice(5)} ／ 競技{comp.number} {comp.name}{comp.official ? " ★公認" : ""}</option>)}</select></label>
+    <label className="block text-lg font-bold">打ち合わせ中の競技<select disabled={busy} value={competitionId} onChange={event => { setCompetitionId(event.target.value); setSelectedEntry(undefined) }} className="mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-card px-3">{competitions.map(comp => <option key={comp.id} value={comp.id}>{comp.date.slice(5)} ／ 第{comp.number}競技 {comp.name}{comp.official ? " ★公認" : ""}</option>)}</select></label>
     <section className="rounded-xl border-2 border-border bg-card p-3">
-      <h3 className="mb-2 text-lg font-bold">打ち合わせ会用出番表：競技{selected?.number}</h3>
+      <h3 className="mb-2 text-lg font-bold">打ち合わせ会用出番表：第{selected?.number}競技</h3>
       <p className="mb-3 text-sm">移動マークを押したまま上下に動かせます。選手名・馬名をクリックすると、変更・棄権を選べます。</p>
       <StartList competitionId={competitionId} draftEntries={rows} showAdminChanges compact dense adminReorder={!busy} onReorder={move} selectedId={selectedEntry?.id} onNameSelect={row => {
         if (busy || row.withdrawn) return
