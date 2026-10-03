@@ -52,10 +52,9 @@ function AudienceStartList({ rows, fontSize }: { rows: MeetingMonitorRow[]; font
 export default function MeetingDisplayPage() {
   const [snapshot, setSnapshot] = useState<MeetingMonitorSnapshot | null>(null)
   const [connected, setConnected] = useState(false)
-  const [fontSize, setFontSize] = useState(18)
+  const [fontSize, setFontSize] = useState(21)
   const [error, setError] = useState('')
   useEffect(() => {
-    setFontSize(Math.max(12, Math.min(18, Math.floor((window.innerHeight - 110) / 20 / 1.35))))
     const token = window.location.hash.slice(1)
     if (!/^fhs-meeting-[a-f0-9-]{36}$/.test(token)) { setError('本部の「打ち合わせ会」から「モニター表示」を押して開いてください。'); return }
     const channel = new BroadcastChannel(token)
