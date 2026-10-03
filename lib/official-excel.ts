@@ -1,7 +1,8 @@
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
 
 export type OfficialExcelEntry = { entry_id: string; competition_no: string; start_order: number; status: string; rider_name: string; jef_member_no: string | null; horse_name: string; jef_registration_no: string | null; organization_name: string; is_op: boolean | null }
-const startSheets = ['1-70', '2-80', '3-90', '4-100', '5_中D', '6_MD', '7_中Ｃ', '8_MC', '9_中B', '10_中A']
+export type ExcelRange = '1-10' | '11-20' | '21-30'
+export const EXCEL_RANGES: ExcelRange[] = ['1-10', '11-20', '21-30']
 const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 const unescapeXml = (value: string) => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
@@ -12,7 +13,7 @@ function patchCells(xml: string, values: Map<string, string | number>, formulaCa
   const result = xml.replace(/<c\b([^>]*\br="([A-Z]+\d+)"[^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, (whole, attributes: string, address: string, body = '') => {
     if (!values.has(address)) return whole
     seen.add(address)
-    const value = values.get(address)!, formula = body.match(/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/)?.[0] ?? ''
+    const value = values.get(address)!, formula = body.match(/<f\b[^>]*?(?:\/>|>[^<]*<\/f>)/)?.[0] ?? ''
     if (formulaCache && !formula) throw new Error(`出番表の連動数式を確認できません：${address}`)
     const attrs = attributes.replace(/\s+t="[^"]*"/g, '')
     if (formulaCache) return `<c${attrs}${typeof value === 'number' ? '' : ' t="str"'}>${formula}<v>${escapeXml(String(value))}</v></c>`
@@ -24,16 +25,18 @@ function patchCells(xml: string, values: Map<string, string | number>, formulaCa
   return result
 }
 
-export function exportOfficialExcel(template: Uint8Array, entries: OfficialExcelEntry[], generatedAt = new Date()): Uint8Array {
+export function exportOfficialExcel(template: Uint8Array, entries: OfficialExcelEntry[], generatedAt = new Date(), range: ExcelRange = '1-10'): Uint8Array {
   const files = unzipSync(template), workbook = strFromU8(files['xl/workbook.xml']), rels = strFromU8(files['xl/_rels/workbook.xml.rels'])
   const targets = new Map([...rels.matchAll(/<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"[^>]*\/>/g)].map(match => [match[1], 'xl/' + match[2]]))
   const sheets = [...workbook.matchAll(/<sheet\b[^>]*\bname="([^"]+)"[^>]*\br:id="([^"]+)"[^>]*\/>/g)].map(match => ({ name: unescapeXml(match[1]), path: targets.get(match[2])! }))
   const stringsXml = strFromU8(files['xl/sharedStrings.xml'])
   const sharedStrings = [...stringsXml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map(match => [...match[1].matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map(part => unescapeXml(part[1])).join(''))
   let outputWorkbook = workbook
-  if (!entries.length) throw new Error('正式出番表が空です。出力を中止しました。')
-  for (let number = 1; number <= 10; number++) {
-    const result = sheets.find(sheet => sheet.name === String(number)), start = sheets.find(sheet => sheet.name === startSheets[number - 1])
+  if (!EXCEL_RANGES.includes(range)) throw new Error('競技範囲が正しくありません。')
+  const [first, last] = range.split('-').map(Number)
+  if (!entries.some(entry => Number(entry.competition_no) >= first && Number(entry.competition_no) <= last)) throw new Error('正式出番表が空です。出力を中止しました。')
+  for (let number = first; number <= last; number++) {
+    const result = sheets.find(sheet => sheet.name === String(number)), start = sheets.find(sheet => new RegExp(`^${number}[-_]`).test(sheet.name))
     if (!result?.path || !start?.path) throw new Error(`競技${number}の出番表・成績表がありません。`)
     const source = strFromU8(files[result.path]), startXml = strFromU8(files[start.path])
     // Never move a rider/horse onto another rider's entered scores.

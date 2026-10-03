@@ -2,6 +2,38 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MeetingMonitorRow, MeetingMonitorSnapshot } from '@/lib/meeting-monitor'
+import { monitorRows } from '@/lib/meeting-monitor'
+import { useStore } from '@/lib/store'
+import { COMPETITION_DATES } from '@/lib/mock-data'
+
+export function StartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 'startlist' }) {
+  return source === 'startlist' ? <OfficialStartListMonitor /> : <MeetingStartListMonitor />
+}
+
+function OfficialStartListMonitor() {
+  const { competitions, entriesByCompetition, getPlayer, getHorse, getOrg, reconciliation, lastSyncedAt, syncError, liveConnected } = useStore()
+  const [fontSize, setFontSize] = useState(21)
+  const [error, setError] = useState('')
+  async function fullscreen() {
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen() }
+    catch { setError('全画面表示を開始できません。パソコンではF11キーでも全画面表示にできます。') }
+  }
+  return <main className="min-h-screen bg-white px-3 py-2 text-slate-900">
+    <header className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-700 pb-1">
+      <h1 className="text-xl font-bold text-blue-800">Fuji Horse Show ／ 正式出番表</h1>
+      <div className="flex items-center gap-3 text-sm"><span role="status" className={syncError || !liveConnected ? 'font-bold text-red-700' : 'font-bold text-blue-800'}>{syncError ? '更新停止・通信を確認' : !liveConnected ? '再接続中' : lastSyncedAt ? '変更時に自動更新' : '読み込み中'}{lastSyncedAt > 0 && ` ／ ${new Date(lastSyncedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => setFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
+    </header>
+    {(syncError || error) && <p role="alert" className="mb-3 rounded bg-red-50 p-3 text-red-700">{syncError || error}</p>}
+    {lastSyncedAt > 0 ? <div className="overflow-x-auto">{competitions.slice().sort((a, b) => a.number - b.number).map(competition => {
+      const rows = monitorRows(entriesByCompetition(competition.id), id => getPlayer(id)?.name ?? '要確認', id => getHorse(id)?.name ?? '要確認', id => getOrg(id)?.name ?? '要確認')
+      const groups = Array.from({ length: Math.ceil(rows.length / 40) }, (_, index) => rows.slice(index * 40, (index + 1) * 40))
+      return <section key={competition.id} className="mb-6 min-w-[950px]" aria-label={`第${competition.number}競技`}>
+        <h2 className="mb-2 border-b border-blue-700 text-2xl font-bold">第{competition.number}競技 {competition.name}{competition.official ? ' ★公認' : ''}<span className="ml-3 text-base">{COMPETITION_DATES.find(date => date.value === competition.date)?.label}</span></h2>
+        {groups.length ? groups.map((group, index) => <div key={index} className="mb-3"><AudienceStartList rows={group} fontSize={fontSize} /></div>) : <p className="p-3">この競技の人馬はありません。</p>}
+      </section>
+    })}</div> : <p className="p-5 text-center">{reconciliation.message}</p>}
+  </main>
+}
 
 function FittedName({ name, fontSize, scale = 1 }: { name: string; fontSize: number; scale?: number }) {
   const container = useRef<HTMLDivElement>(null)
@@ -49,7 +81,7 @@ function AudienceStartList({ rows, fontSize }: { rows: MeetingMonitorRow[]; font
   </table>
 }
 
-export function StartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 'startlist' }) {
+function MeetingStartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 'startlist' }) {
   const [snapshot, setSnapshot] = useState<MeetingMonitorSnapshot | null>(null)
   const [connected, setConnected] = useState(false)
   const [fontSize, setFontSize] = useState(21)
