@@ -112,10 +112,11 @@ export function OnSiteReception({ session, meeting }: { session: AdminSession; m
     if (period === "before_event" && type === "add" && startEntries.some(row => !row.withdrawn && row.competitionId === target.id && row.playerId === rider.id && row.horseId === horse.id)) { setError("同じ競技の同じ人馬が既に出番表にあります。二重登録を避けるため確認してください"); return }
     if (period === "before_event" && type === "add" && staged.some(item => item.record.period === "before_event" && item.record.action_type === "add" && item.record.competition_key === target.id && item.record.rider_key === rider.id && item.record.horse_key === horse.id)) { setError("この人馬・競技の追加は確認一覧にあります"); return }
     if (type !== "add" && period === "before_event" && staged.some(item => item.record.period === "before_event" && (item.request.change?.entryId === entry?.id || item.request.withdraw?.entryId === entry?.id))) { setError("この出番への変更・棄権は確認一覧にあります。確認一覧から外して入力し直してください"); return }
-    const amount = Number(paidAmount)
-    if (!/^\d+$/.test(paidAmount) || !Number.isSafeInteger(amount) || amount > fee.total) { setError("入金済み金額は今回の料金以下で入力してください"); return }
-    if (paymentPlan === "paid_before_event" && amount !== fee.total) { setError("支払い済みを選ぶ場合は今回の料金を全額入金済みにしてください"); return }
-    if (paymentPlan !== "paid_before_event" && amount > 0) { setError("未払いの予定では入金済み金額を0円にしてください"); return }
+    const effectivePaymentPlan = meeting ? "pay_at_venue" : paymentPlan
+    const amount = meeting ? 0 : Number(paidAmount)
+    if ((!meeting && !/^\d+$/.test(paidAmount)) || !Number.isSafeInteger(amount) || amount > fee.total) { setError("入金済み金額は今回の料金以下で入力してください"); return }
+    if (effectivePaymentPlan === "paid_before_event" && amount !== fee.total) { setError("支払い済みを選ぶ場合は今回の料金を全額入金済みにしてください"); return }
+    if (effectivePaymentPlan !== "paid_before_event" && amount > 0) { setError("未払いの予定では入金済み金額を0円にしてください"); return }
     const id = crypto.randomUUID()
     const request: AppRequest = {
       id, type, status: "pending", onSiteAdmin: true, postDeadlinePeriod: period, createdAt: new Date().toISOString(),
@@ -130,9 +131,9 @@ export function OnSiteReception({ session, meeting }: { session: AdminSession; m
         rider_key: rider.id, horse_key: horse.id,
         details: note.trim() || (type === "change" ? `変更前：${fromComp?.name ?? ""} ／ ${getPlayer(entry?.playerId ?? "")?.name ?? ""} ／ ${getHorse(entry?.horseId ?? "")?.name ?? ""}` : ""),
         bill_amount: period === "at_venue" ? fee.total : 0,
-        paid_amount: amount, payment_plan: paymentPlan, operator_name: recordedOperator,
+        paid_amount: amount, payment_plan: effectivePaymentPlan, operator_name: recordedOperator,
       }
-    const item: StagedRegistration = { request, record, label: `${type === "add" ? "追加" : type === "change" ? "変更" : "棄権"} ／ 競技${target.number} ／ ${rider.name} ／ ${horse.name} ／ ${getOrg(selectedOrg)?.name ?? "所属不明"} ／ ${formatYen(fee.total)} ／ ${paymentPlan === "paid_before_event" ? "振込済み" : paymentPlan === "pay_after_event" ? "大会後振込" : "当日支払い予定"}`, applyOrder: (type === "add" || treatedAsWithdrawAdd) && target.official ? 1 : undefined }
+    const item: StagedRegistration = { request, record, label: `${type === "add" ? "追加" : type === "change" ? "変更" : "棄権"} ／ 競技${target.number} ／ ${rider.name} ／ ${horse.name} ／ ${getOrg(selectedOrg)?.name ?? "所属不明"} ／ ${formatYen(fee.total)}${meeting ? "" : ` ／ ${paymentPlan === "paid_before_event" ? "振込済み" : paymentPlan === "pay_after_event" ? "大会後振込" : "当日支払い予定"}`}`, applyOrder: (type === "add" || treatedAsWithdrawAdd) && target.official ? 1 : undefined }
     if (meeting) meeting.onStage(item)
     else setStaged(previous => [...previous, item])
     setEntry(null); if (!meeting) setCompetitionId(""); setToCompetitionId(""); setPlayerId(""); setHorseId(""); setOrganizationId(""); setIsOp(false); setNote(""); setPaidAmount("0"); setPaymentPlan("pay_at_venue")
@@ -208,8 +209,8 @@ export function OnSiteReception({ session, meeting }: { session: AdminSession; m
       </>}
       {crossClub && <label className="block font-bold">エントリーと精算の所属<select required value={selectedOrg} onChange={event => setOrganizationId(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3"><option value="">所属を選択</option><option value={riderOrg!.id}>{riderOrg!.name}（選手の所属）</option><option value={horseOrg!.id}>{horseOrg!.name}（馬の所属）</option></select></label>}
       {type === "add" && <label className="block font-bold">備考（任意）<input value={note} onChange={event => setNote(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3" /></label>}
-      <label className="block font-bold">今回分の支払い<select value={paymentPlan} onChange={event => { const next = event.target.value as ManualRecord["payment_plan"]; setPaymentPlan(next); setPaidAmount(next === "paid_before_event" ? String(fee.total) : "0") }} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3"><option value="paid_before_event">大会前に振込済み</option><option value="pay_at_venue">大会当日に支払い予定（振込・会場）</option><option value="pay_after_event">大会後に振込予定</option></select></label>
-      {paymentPlan === "paid_before_event" && <label className="block font-bold">今回分の入金済み金額（円）<input type="number" min="0" step="1" required value={paidAmount} onChange={event => setPaidAmount(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3" /></label>}
+      {!meeting && <label className="block font-bold">今回分の支払い<select value={paymentPlan} onChange={event => { const next = event.target.value as ManualRecord["payment_plan"]; setPaymentPlan(next); setPaidAmount(next === "paid_before_event" ? String(fee.total) : "0") }} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3"><option value="paid_before_event">大会前に振込済み</option><option value="pay_at_venue">大会当日に支払い予定（振込・会場）</option><option value="pay_after_event">大会後に振込予定</option></select></label>}
+      {!meeting && paymentPlan === "paid_before_event" && <label className="block font-bold">今回分の入金済み金額（円）<input type="number" min="0" step="1" required value={paidAmount} onChange={event => setPaidAmount(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3" /></label>}
       {!meeting && <label className="block font-bold">本部で登録した担当者名<input required value={operatorName} onChange={event => setOperatorName(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-border bg-background px-3" /></label>}
       {target && rider && horse && <div className="rounded-xl bg-secondary p-4 font-bold">{type === "add" ? "追加" : type === "change" ? "変更" : "棄権"}：{rider.name} ／ {horse.name} ／ {target.name}<br />所属：{getOrg(selectedOrg)?.name ?? "未選択"}　料金：{formatYen(fee.total)}</div>}
       {error && <p role="alert" className="rounded-xl bg-destructive/10 p-3 font-semibold text-destructive">{error}</p>}
