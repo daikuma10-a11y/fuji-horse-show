@@ -2,8 +2,8 @@ import type { AppRequest, Competition, FeeBreakdown, Horse, Player, StartEntry }
 import type { OfficialExcelEntry } from "./official-excel"
 import { competitions as seedCompetitions, horses as seedHorses, organizations as seedOrganizations, players as seedPlayers, startEntries as seedStartEntries } from "./mock-data"
 
-const SUPABASE_URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
+export const SUPABASE_URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
+export const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
 export const AUTUMN_EVENT_ID = "2af66251-66a2-4c51-8180-a5badf0584d4"
 export const ADMIN_SESSION_KEY = "fhs-admin-session-v1"
 
@@ -130,7 +130,7 @@ export async function loadOfficialExcelEntries(accessToken:string):Promise<Offic
  const user=await auth.json() as {app_metadata?:{role?:string}}
  if(user.app_metadata?.role!=="admin")throw new Error("本部管理者の認証が必要です")
  const select="entry_id,competition_no,start_order,status,rider_name,jef_member_no,horse_name,jef_registration_no,organization_name,is_op"
- const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_entries?event_id=eq.${AUTUMN_EVENT_ID}&competition_no=in.(1,2,3,4,5,6,7,8,9,10)&select=${select}&order=competition_no.asc,start_order.asc`,{headers:{...headers,Authorization:`Bearer ${accessToken}`},cache:"no-store"})
+ const response=await fetch(`${SUPABASE_URL}/rest/v1/reception_entries?event_id=eq.${AUTUMN_EVENT_ID}&competition_no=in.(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30)&select=${select}&order=competition_no.asc,start_order.asc`,{headers:{...headers,Authorization:`Bearer ${accessToken}`},cache:"no-store"})
  if(!response.ok)throw new Error(`正式出番表のExcel出力データを取得できません (${response.status})`)
  return response.json() as Promise<OfficialExcelEntry[]>
 }

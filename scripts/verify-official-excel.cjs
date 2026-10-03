@@ -21,7 +21,7 @@ for(let number=1;number<=10;number++) {
   const score=`xl/worksheets/sheet${number+20}.xml`, start=`xl/worksheets/sheet${number*2}.xml`
   const stripInputs=xml=>xml.replace(/<c\b[^>]*\br="[A-G](?:1[4-9]|[2-9]\d)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g,'')
   assert.equal(stripInputs(strFromU8(original[score])),stripInputs(strFromU8(output[score])))
-  const formulas=xml=>[...xml.matchAll(/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/g)].map(match=>match[0])
+  const formulas=xml=>[...xml.matchAll(/<f\b[^>]*?(?:\/>|>[^<]*<\/f>)/g)].map(match=>match[0])
   assert.deepEqual(formulas(strFromU8(original[start])),formulas(strFromU8(output[start])))
   assert(strFromU8(output[score]).includes('検証選手&lt;&amp;'))
   assert(strFromU8(output[start]).includes('<v>00123</v>'))
@@ -35,6 +35,24 @@ assert.throws(()=>exportOfficialExcel(template,[]),/空/)
 assert.throws(()=>exportOfficialExcel(template,[{...fixture[0],start_order:2}]),/連続/)
 assert.throws(()=>exportOfficialExcel(template,[{...fixture[0],rider_name:''}]),/未確認/)
 assert.throws(()=>exportOfficialExcel(template,Array.from({length:61},(_,index)=>({...fixture[0],entry_id:String(index),start_order:index+1}))),/行数/)
+for (const range of ['11-20','21-30']) {
+  const [first,last] = range.split('-').map(Number)
+  const template = fs.readFileSync(`templates/autumn-${range}.xlsm`)
+  const original = unzipSync(template)
+  const fixture = Array.from({length:10},(_,index)=>({entry_id:`test-${index}`,competition_no:String(first+index),start_order:1,status:index===0?'withdrawn':'active',rider_name:'テスト選手<&',jef_member_no:'00123',horse_name:'テスト馬',jef_registration_no:'00456',organization_name:'テスト所属',is_op:true}))
+  const output = unzipSync(exportOfficialExcel(template,fixture,new Date('2026-10-03T06:00:00Z'),range))
+  const changed = Object.keys(original).filter(key=>!Buffer.from(original[key]).equals(Buffer.from(output[key])))
+  assert.equal(changed.length,21)
+  assert(Buffer.from(original['xl/vbaProject.bin']).equals(Buffer.from(output['xl/vbaProject.bin'])))
+  const formulas=xml=>[...xml.matchAll(/<f\b[^>]*?(?:\/>|>[^<]*<\/f>)/g)].map(match=>match[0])
+  for(const key of Object.keys(original)) {
+    if(!changed.includes(key)) assert(Buffer.from(original[key]).equals(Buffer.from(output[key])))
+    if(/^xl\/worksheets\//.test(key)) assert.deepEqual(formulas(strFromU8(original[key])),formulas(strFromU8(output[key])),key)
+  }
+  assert.throws(()=>exportOfficialExcel(template,[{...fixture[0],start_order:2}],new Date(),range),/連続/)
+  assert.throws(()=>exportOfficialExcel(template,[{...fixture[0],competition_no:'1'}],new Date(),range),/空/)
+  console.log(`PASS: ${range}: ten competitions, original formulas/styles/macros, only roster cells and caches changed`)
+}
 const { loadOfficialExcelEntries } = load(path.resolve('lib/supabase-rest.ts'))
 ;(async()=>{
   let calls=0
