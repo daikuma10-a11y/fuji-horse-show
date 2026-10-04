@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { COMPETITION_DATES } from "@/lib/mock-data"
 import { useStore } from "@/lib/store"
 import { entryChangeLabel } from "@/lib/entry-change-marks"
 import { StartList } from "@/components/start-list"
 import { OfficialBadge } from "@/components/official-badge"
 import { ADMIN_SESSION_KEY, refreshAdminSession, reorderEntries, type AdminSession } from "@/lib/supabase-rest"
+import type { StartListPreview } from "@/lib/startlist-preview"
 import type { CompetitionDate } from "@/lib/types"
 
 const SAVED_ORDERS_KEY = "fhs-confirmed-start-orders-v1"
@@ -30,6 +31,8 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
   const [saveError, setSaveError] = useState("")
   const [wideView, setWideView] = useState(false)
   const [monitorToken, setMonitorToken] = useState<string | null>(null)
+  const previewChannel = useRef<BroadcastChannel | null>(null)
+  const latestPreview = useRef<StartListPreview>({ kind: "startlist-preview", selectedId: null, orders: {} })
   const [printScope, setPrintScope] = useState<"day" | "competition">("day")
 
   useEffect(() => {
@@ -55,9 +58,31 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
     ? new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(saved.savedAt))
     : null
 
+  useEffect(() => {
+    latestPreview.current = { kind: "startlist-preview", selectedId: compId, orders: drafts }
+    previewChannel.current?.postMessage(latestPreview.current)
+  }, [compId, drafts])
+
+  useEffect(() => {
+    if (!monitorToken) return
+    const channel = new BroadcastChannel(monitorToken)
+    previewChannel.current = channel
+    const send = () => channel.postMessage(latestPreview.current)
+    channel.onmessage = event => { if (event.data?.kind === "request") send() }
+    send()
+    const timer = window.setInterval(send, 2000)
+    return () => {
+      window.clearInterval(timer)
+      channel.postMessage({ kind: "preview-closed" })
+      previewChannel.current = null
+      channel.close()
+    }
+  }, [monitorToken])
+
   function openMonitor() {
+    if (typeof BroadcastChannel === "undefined") { setSaveError("このブラウザでは確認中のモニター連携を使えません。ChromeまたはEdgeで開いてください。"); return }
     const token = monitorToken ?? `fhs-startlist-${crypto.randomUUID()}`
-    const opened = window.open(`/startlist-display`, "fhs-startlist-monitor", "popup,width=1280,height=900")
+    const opened = window.open(`/startlist-display#${token}`, "fhs-startlist-monitor", "popup,width=1280,height=900")
     if (!opened) { setSaveError("モニター表示を開けません。ブラウザのポップアップを許可して、もう一度押してください。"); return }
     setMonitorToken(token)
   }
@@ -139,7 +164,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
   return <div className={wideView ? "fixed inset-0 z-50 flex flex-col gap-1 overflow-y-auto bg-background px-3 py-2 lg:px-5" : "flex flex-col gap-3"}>
     <div className="print-hide rounded-xl border-2 border-primary/30 bg-card p-3"><label className="mr-3 inline-flex items-center gap-2 font-bold">競技範囲<select aria-label="Excelの競技範囲" value={excelRange} onChange={event => setExcelRange(event.target.value)} disabled={exporting} className="min-h-12 rounded-lg border bg-background px-3">{["1-10", "11-20", "21-30"].map(range => <option key={range} value={range}>第{range.replace("-", "〜第")}競技</option>)}</select></label><button type="button" onClick={() => void exportExcel()} disabled={!canReorder || exporting || saving || !canEdit} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50">{exporting ? "Excelを作成中…" : "正式Excelを出力（成績表付き）"}</button><p className="mt-2 text-sm text-muted-foreground">正式DBへ反映済みの出番を出力します。打ち合わせ会の下書き・未反映申請は含みません。OP・WD、元の書式・連動数式・マクロを引き継ぎます。</p>{exportError && <p role="alert" className="mt-2 font-bold text-destructive">{exportError}</p>}</div>
     <div className="print-hide flex flex-wrap justify-end gap-2">{canReorder && <button type="button" onClick={openMonitor} disabled={!canEdit} className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50">モニター表示</button>}<button type="button" onClick={() => printList("day")} disabled={reconciliation.state === "loading" || reconciliation.state === "error"} className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50">この日の出番表を印刷</button>{selected && <button type="button" onClick={() => printList("competition")} disabled={dirty} className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50">この競技を印刷</button>}</div>
-    {monitorToken && <p className="print-hide text-sm text-muted-foreground">モニターには正式DBへ保存済みの出番を表示します。未保存の並べ替えは表示されません。別ウインドウをモニターへ移動してください。本部で他の操作をしていても自動更新し、スクロールで全競技を確認できます。</p>}
+    {monitorToken && <p className="print-hide text-sm text-muted-foreground">並べ替え中の順番もモニターへ即時表示します。「未確定」の表示を見ながら確認し、決まったら「出番順を保存」を押してください。取消すると元の順番に戻ります。本部の出番表を閉じると、モニターは正式な順番の表示に戻ります。</p>}
     <div className="print-hide contents"><button type="button" onClick={() => setWideView(current => !current)} className={wideView ? "sticky top-0 z-20 self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary shadow" : "self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary"}>{wideView ? "通常画面へ戻る" : "出番表を一画面で見る"}</button>
     <div className={`rounded-lg border px-3 py-2 text-sm font-bold ${wideView ? "hidden" : ""} ${verificationClass}`}>DB照合状況：{reconciliation.message}</div>
     <p className={wideView ? "sr-only" : "text-sm text-muted-foreground"}>人馬の行を少し長押しすると持ち上がります。そのまま上下に動かし、入れたい位置で指を離してください。右の移動マークならすぐに動かせます。最後に「出番順を保存」を押してください。</p>
