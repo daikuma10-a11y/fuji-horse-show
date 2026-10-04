@@ -1,9 +1,10 @@
 import Link from "next/link"
-import { PlusCircle, RefreshCw, XCircle, ClipboardList } from "lucide-react"
+import { PlusCircle, RefreshCw, XCircle, ClipboardList, Printer } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 import { ReceptionDraftLink } from "@/components/reception-draft-link"
 
 const actions = [
+  { href: "/settlement", label: "精算", description: "支払い内容を確認して精算書を印刷します", icon: Printer, className: "bg-blue-800 text-white" },
   {
     href: "/add",
     label: "追加",

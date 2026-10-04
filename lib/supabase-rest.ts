@@ -32,7 +32,7 @@ function enrichedPayload(request:AppRequest){
  if(request.change)return {...request,organizationName,change:{...request.change,fromPlayerName:playerName(request.change.fromPlayerId),fromHorseName:horseName(request.change.fromHorseId),toPlayerName:request.change.toPlayerName||playerName(request.change.toPlayerId),toHorseName:request.change.toHorseName||horseName(request.change.toHorseId),fromCompetitionNo:competitionNo(request.change.fromCompetitionId),toCompetitionNo:competitionNo(request.change.toCompetitionId),entryOrder:entryOrder(request.change.entryId)}}
  return request
 }
-function normalizeRequestRow(row:RequestRow):AppRequest|null{
+export function normalizeRequestRow(row:RequestRow):AppRequest|null{
  const p=obj(row.payload),type=row.request_type,status=row.status
  if(!["add","change","withdraw"].includes(type)||!["pending","reflected","cancelled"].includes(status))return null
  const total=Number(row.fee_amount??row.fee??0),orgId=str(p.orgId)||row.organization_id||""

@@ -219,3 +219,9 @@
   .statement-dense { font-size: 8pt; }
   .statement-dense .document-lines td { padding: 2px 4px; }
 }
+
+@media print {
+  body[data-self-settlement-print] .print-only { display: none !important; }
+  body[data-self-settlement-print] .self-settlement-confirmation { display: block !important; }
+  body[data-self-settlement-print] .settlement-print { display: none !important; }
+}

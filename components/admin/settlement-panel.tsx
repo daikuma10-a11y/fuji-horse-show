@@ -14,6 +14,7 @@ import { bankDetailsForEvent } from '@/lib/event-payment-settings'
 import { loadManualRecords, type ManualRecord } from "@/lib/settlement-manual-records"
 import { loadPaymentInstructions, savePaymentInstruction, type PaymentInstruction } from "@/lib/settlement-payment-instructions"
 import { loadSettlementReceipts, type SettlementReceipt } from '@/lib/settlement-receipts'
+import { SelfSettlementHistory } from "./self-settlement-history"
 import { SettlementDocuments } from './settlement-documents'
 import type { SettlementDocument, SettlementDocumentLine } from '@/lib/settlement-document'
 
@@ -229,7 +230,7 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
       const stable = (rows: unknown[]) => JSON.stringify(rows.map(row => Object.entries(row as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))
       if (stable(latestFees) !== stable(feeOverrides) || stable(latestPrepayments) !== stable(prepayments) || stable(latestManual) !== stable(manualRecords) || stable(latestReceipts) !== stable(receipts)) throw new Error('別の操作で入金・料金が更新されています。再読み込みし、対象と残額を確認してください')
     }
-    return <div className="flex flex-col gap-5">
+    return <div className="flex flex-col gap-5"><SelfSettlementHistory session={session} orgId={selected.orgId}/>
 
       <div className="flex flex-col gap-5">
       <button type="button" onClick={() => { setSelectedOrgId(null); setPaymentEditing(false); setEditing(null); setError("") }} className="print-hide w-fit rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button>
@@ -272,7 +273,7 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
     </div>
   }
 
-  return <div className="flex flex-col gap-5"><div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5"><p className="text-lg font-semibold">通常エントリー料金は原則事前払いです。団体を選ぶと通常分と今回の受付分を分けて確認できます。</p>{excludedLegacyCount>0&&<p className="mt-2 text-sm font-semibold text-muted-foreground">旧テストデータ {excludedLegacyCount}件は正式データへ紐付けできないため、精算金額から除外しています。</p>}<div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 追加・変更分</span><span className="text-3xl font-bold text-primary">{formatYen(receptionTotal)}</span></div><p className="mt-2 text-sm text-muted-foreground">大会費用の合計（通常分を含む）：{formatYen(grandTotal)}。支払い済みかどうかは未反映です。</p></div><div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">{rows.map((row,index)=><button key={row.orgId} type="button" onClick={()=>setSelectedOrgId(row.orgId)} className={`flex w-full items-center justify-between gap-4 px-5 py-5 text-left ${index?"border-t border-border":""}`}><span className="min-w-0 text-xl font-bold text-foreground">{row.orgName}</span><span className="flex shrink-0 items-center gap-3"><span className="flex flex-col items-end"><span className="text-xl font-bold text-primary">{formatYen(row.additional + row.change + row.competitionDiff)}</span>{prepayments.some(payment => payment.organization_key === row.orgId) && <span className="text-xs font-bold text-primary">事前入金記録あり</span>}</span><span className="text-2xl text-muted-foreground">›</span></span></button>)}</div></div>
+  return <div className="flex flex-col gap-5"><SelfSettlementHistory session={session}/><div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5"><p className="text-lg font-semibold">通常エントリー料金は原則事前払いです。団体を選ぶと通常分と今回の受付分を分けて確認できます。</p>{excludedLegacyCount>0&&<p className="mt-2 text-sm font-semibold text-muted-foreground">旧テストデータ {excludedLegacyCount}件は正式データへ紐付けできないため、精算金額から除外しています。</p>}<div className="mt-4 flex items-end justify-between gap-4 border-t border-primary/20 pt-4"><span className="text-lg font-bold">全団体 追加・変更分</span><span className="text-3xl font-bold text-primary">{formatYen(receptionTotal)}</span></div><p className="mt-2 text-sm text-muted-foreground">大会費用の合計（通常分を含む）：{formatYen(grandTotal)}。支払い済みかどうかは未反映です。</p></div><div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-sm">{rows.map((row,index)=><button key={row.orgId} type="button" onClick={()=>setSelectedOrgId(row.orgId)} className={`flex w-full items-center justify-between gap-4 px-5 py-5 text-left ${index?"border-t border-border":""}`}><span className="min-w-0 text-xl font-bold text-foreground">{row.orgName}</span><span className="flex shrink-0 items-center gap-3"><span className="flex flex-col items-end"><span className="text-xl font-bold text-primary">{formatYen(row.additional + row.change + row.competitionDiff)}</span>{prepayments.some(payment => payment.organization_key === row.orgId) && <span className="text-xs font-bold text-primary">事前入金記録あり</span>}</span><span className="text-2xl text-muted-foreground">›</span></span></button>)}</div></div>
 }
 
 function Cell({label,value}:{label:string;value:string}){return <div><dt className="text-base font-semibold text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold text-foreground">{value}</dd></div>}
