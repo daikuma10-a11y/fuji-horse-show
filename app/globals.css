@@ -225,3 +225,32 @@
   body[data-self-settlement-print] .self-settlement-confirmation { display: block !important; }
   body[data-self-settlement-print] .settlement-print { display: none !important; }
 }
+
+/* Reception statements use the same readable table style for both entry types. */
+.checkout-paper { font-size: 13px; line-height: 1.3; }
+.checkout-paper h2 { text-align: center; font-size: 22px; font-weight: bold; }
+.checkout-paper h3 { margin: 8px 0; font-size: 17px; font-weight: bold; }
+.checkout-paper h4 { margin: 10px 0 5px; font-size: 14px; font-weight: bold; }
+.checkout-paper .checkout-heading p { font-size: 12px; }
+.checkout-paper table, .settlement-normal-lines { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: inherit; }
+.checkout-paper th, .checkout-paper td, .settlement-normal-lines th, .settlement-normal-lines td { border: 1px solid #777; padding: 4px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: pre-line; }
+.checkout-paper th, .settlement-normal-lines th { background: #eef3f8; }
+.checkout-paper .amount, .settlement-normal-lines .amount { text-align: right; white-space: nowrap; }
+.checkout-totals { margin: 10px 0; }
+.checkout-due { font-weight: bold; }
+.checkout-due td { font-size: 16px; }
+@media print {
+ .checkout-paper { font-size: 9pt; line-height: 1.2; }
+ .checkout-paper h2 { font-size: 16pt; }
+ .checkout-paper h3 { font-size: 11pt; margin: 5px 0; }
+ .checkout-paper h4 { font-size: 10pt; margin: 7px 0 4px; }
+ .checkout-paper .checkout-heading p { font-size: 8pt; }
+ .checkout-paper th, .checkout-paper td { padding: 3px 4px; }
+ .checkout-paper .checkout-due td { font-size: 11pt; }
+ .checkout-paper .checkout-heading, .checkout-paper .checkout-totals { break-inside: avoid; }
+ .checkout-paper .checkout-normal { break-before: page; }
+ .checkout-paper thead { display: table-header-group; }
+ .checkout-paper tr { break-inside: avoid; }
+ .checkout-paper h4 { break-after: avoid; }
+ .checkout-paper .settlement-normal-lines { margin-top: 4px; font-size: inherit; }
+}

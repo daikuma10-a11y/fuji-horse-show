@@ -3,6 +3,7 @@ import { checkoutProxy, CHECKOUT_COOKIE, accountVersion } from '@/lib/self-settl
 import { checkoutData } from '@/lib/self-settlement-data'
 import { selfSettlementAccount, selfSettlementOrganizations } from '@/lib/self-settlement-account'
 import { signInAdmin } from '@/lib/supabase-rest'
+import { currentSavedSettlement } from '@/lib/self-settlement-saved'
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}})
@@ -16,7 +17,8 @@ export async function GET(req:NextRequest){
   const data=await checkoutData(checkoutProxy('data',token))
   if(!org)return reply({organizations:selfSettlementOrganizations(data)})
   const account=selfSettlementAccount(data,org)
-  return reply({account,version:accountVersion(data.financialVersion,account)})
+  const records=await checkoutProxy('history',token,{org})
+  return reply({account,version:accountVersion(data.financialVersion,account),savedRecord:currentSavedSettlement(account,records)})
  }catch(e){return reply({error:e instanceof Error?e.message:'明細を取得できません'},Number((e as {status?:number}).status)||409)}
 }
 export async function POST(req:NextRequest){
