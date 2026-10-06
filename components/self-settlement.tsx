@@ -14,10 +14,10 @@ async function api(url:string,options?:RequestInit){const response=await fetch(u
 export function SelfSettlement(){
  const [organizations,setOrganizations]=useState<Organization[]>([]),[query,setQuery]=useState(''),[org,setOrg]=useState('')
  const [account,setAccount]=useState<Account|null>(null),[version,setVersion]=useState(''),[name,setName]=useState(''),[method,setMethod]=useState(''),[checked,setChecked]=useState(false)
- const [record,setRecord]=useState<RecordRow|null>(null),[history,setHistory]=useState<RecordRow[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[needsSetup,setNeedsSetup]=useState(false),[consult,setConsult]=useState(false)
+ const [record,setRecord]=useState<RecordRow|null>(null),[history,setHistory]=useState<RecordRow[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[consult,setConsult]=useState(false)
  const attemptId=useRef<string|null>(null),lastAction=useRef(Date.now()),sequence=useRef(0),working=useRef(false),printing=useRef(false)
  function reset(){sequence.current++;setOrg('');setQuery('');setAccount(null);setVersion('');setName('');setMethod('');setChecked(false);setRecord(null);setHistory([]);setError('');setConsult(false);attemptId.current=null;lastAction.current=Date.now()}
- useEffect(()=>{let active=true;api('/api/self-settlement').then(data=>{if(active)setOrganizations(data.organizations)}).catch(e=>{if(active){setError(e.message);setNeedsSetup(e.status===401)}});return()=>{active=false}},[])
+ useEffect(()=>{let active=true;api('/api/self-settlement').then(data=>{if(active)setOrganizations(data.organizations)}).catch(e=>{if(active){setError(e.message)}});return()=>{active=false}},[])
  useEffect(()=>{const touch=()=>{lastAction.current=Date.now()};const timer=window.setInterval(()=>{if(!working.current&&!printing.current&&document.visibilityState!=='hidden'&&Date.now()-lastAction.current>120000)reset()},5000);window.addEventListener('pointerdown',touch);window.addEventListener('keydown',touch);return()=>{window.clearInterval(timer);window.removeEventListener('pointerdown',touch);window.removeEventListener('keydown',touch)}},[])
  useEffect(()=>{const start=()=>{printing.current=true};const finish=()=>{printing.current=false;lastAction.current=Date.now()};window.addEventListener('beforeprint',start);window.addEventListener('afterprint',finish);return()=>{window.removeEventListener('beforeprint',start);window.removeEventListener('afterprint',finish)}},[])
  async function select(id:string){const seq=++sequence.current;setOrg(id);setAccount(null);setRecord(null);setHistory([]);setChecked(false);setMethod('');setName('');setConsult(false);setError('');setBusy(true);working.current=true;attemptId.current=null
@@ -33,7 +33,7 @@ export function SelfSettlement(){
    <header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-3xl font-bold">大会精算</h1>{!busy&&<Link href="/" onClick={reset} className="rounded-xl border-2 px-4 py-3 text-lg font-bold">受付へ戻る</Link>}</header>
    <p className="text-lg">団体を選択 → 明細確認 → 支払い方法 → 確定・印刷</p>
    {error&&<p role="alert" className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-xl font-bold text-red-800">{error}</p>}
-   {needsSetup?<div className="rounded-2xl border-2 bg-card p-6"><p className="mb-5 text-xl">係員が一度設定すると、この端末で選手の方が精算できます。</p><Link href="/settlement/setup" className={`${button} inline-flex items-center border-blue-700 bg-blue-700 text-white`}>係員：精算端末を設定</Link></div>:!org?<>
+   {!org?<>
     <h2 className="text-2xl font-bold">ご所属の団体を選んでください</h2><input aria-label="団体を検索" placeholder="団体名で検索" value={query} onChange={e=>setQuery(e.target.value)} className="min-h-16 w-full rounded-xl border-2 bg-card px-4 text-2xl"/>
     <div className="grid gap-3">{organizations.filter(o=>o.name.normalize('NFKC').toLowerCase().includes(query.normalize('NFKC').toLowerCase())).map(o=><button key={o.id} type="button" onClick={()=>void select(o.id)} className={`${button} border-border bg-card text-left`}>{o.name} <span className="float-right">›</span></button>)}</div>{!organizations.length&&<p className="text-xl">団体を読み込んでいます…</p>}
    </>:<>

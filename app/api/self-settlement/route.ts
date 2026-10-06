@@ -9,16 +9,24 @@ export const dynamic='force-dynamic'
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}})
 export async function GET(req:NextRequest){
  try{
-  const token=req.cookies.get(CHECKOUT_COOKIE)?.value??''
-  if(!token)return reply({error:'係員による精算端末の設定が必要です'},401)
+  let token=req.cookies.get(CHECKOUT_COOKIE)?.value??'', renewed=false
   const org=req.nextUrl.searchParams.get('org')
   if(org&&!/^org-\d+$/.test(org))return reply({error:'団体を選び直してください'},400)
-  if(req.nextUrl.searchParams.get('history')==='1'&&org)return reply({records:await checkoutProxy('history',token,{org})})
-  const data=await checkoutData(checkoutProxy('data',token))
-  if(!org)return reply({organizations:selfSettlementOrganizations(data)})
-  const account=selfSettlementAccount(data,org)
-  const records=await checkoutProxy('history',token,{org})
-  return reply({account,version:accountVersion(data.financialVersion,account),savedRecord:currentSavedSettlement(account,records)})
+  const provision=async()=>{token=(await checkoutProxy('public-setup','')).token;renewed=true}
+  const load=async()=>{
+   if(req.nextUrl.searchParams.get('history')==='1'&&org)return {records:await checkoutProxy('history',token,{org})}
+   const data=await checkoutData(checkoutProxy('data',token))
+   if(!org)return {organizations:selfSettlementOrganizations(data)}
+   const account=selfSettlementAccount(data,org)
+   const records=await checkoutProxy('history',token,{org})
+   return {account,version:accountVersion(data.financialVersion,account),savedRecord:currentSavedSettlement(account,records)}
+  }
+  if(!token)await provision()
+  let result
+  try{result=await load()}catch(e){if(renewed||(e as {status?:number}).status!==401)throw e;await provision();result=await load()}
+  const response=reply(result)
+  if(renewed)response.cookies.set(CHECKOUT_COOKIE,token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',maxAge:12*3600,path:'/api/self-settlement'})
+  return response
  }catch(e){return reply({error:e instanceof Error?e.message:'明細を取得できません'},Number((e as {status?:number}).status)||409)}
 }
 export async function POST(req:NextRequest){

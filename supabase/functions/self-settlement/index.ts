@@ -30,10 +30,15 @@ Deno.serve(async (req: Request) => {
    await rest('self_settlement_devices',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({event_id:EVENT,token_hash:await sha(token),created_by:user.id,expires_at:new Date(Date.now()+12*3600*1000).toISOString()})})
    return json({token})
   }
+  if(body.action==='public-setup'){
+   const token=[...crypto.getRandomValues(new Uint8Array(32))].map(n=>n.toString(16).padStart(2,'0')).join('')
+   await rest('self_settlement_devices',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({event_id:EVENT,token_hash:await sha(token),created_by:null,expires_at:new Date(Date.now()+12*3600*1000).toISOString()})})
+   return json({token})
+  }
   if(typeof body.token!=='string'||!/^[a-f0-9]{64}$/.test(body.token))return json({error:'精算端末の設定が必要です'},401)
   const hash=await sha(body.token)
   const devices=await rest(`self_settlement_devices?token_hash=eq.${hash}&revoked=eq.false&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=id,event_id`)
-  if(devices.length!==1||devices[0].event_id!==EVENT)return json({error:'精算端末の有効期限が切れました。係員が設定し直してください'},401)
+  if(devices.length!==1||devices[0].event_id!==EVENT)return json({error:'有効期限が切れました。精算画面を開き直してください'},401)
   if(body.action==='data'){
    const version=await rest('rpc/self_settlement_financial_version',{method:'POST',body:JSON.stringify({p_event:EVENT})})
    const [feeOverrides,prepayments,manualRecords,paymentInstructions,receipts,requestRows]=await Promise.all(['settlement_fee_overrides','settlement_prepayments','settlement_manual_records','settlement_payment_instructions','settlement_receipts','reception_requests'].map(table=>rows(table)))
