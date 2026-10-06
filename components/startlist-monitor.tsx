@@ -6,6 +6,7 @@ import { monitorRows } from '@/lib/meeting-monitor'
 import { useStore } from '@/lib/store'
 import { isStartListPreview, previewEntryOrder, type StartListPreview } from '@/lib/startlist-preview'
 import { COMPETITION_DATES } from '@/lib/mock-data'
+import { useMonitorLink } from '@/components/monitor-link'
 
 export function StartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 'startlist' }) {
   return source === 'startlist' ? <OfficialStartListMonitor /> : <MeetingStartListMonitor />
@@ -54,6 +55,7 @@ function OfficialStartListMonitor() {
   }, [ready, selectedPreviewId])
   const displayedCompetitions = competitions.slice().sort((a, b) => a.number - b.number).map(competition => ({ competition, displayed: previewEntryOrder(entriesByCompetition(competition.id), preview?.orders[competition.id]) }))
   const hasDrafts = displayedCompetitions.some(item => item.displayed.pending)
+  const changeFontSize = useMonitorLink({ competition:'出番表を読み込んでいます',ready:ready&&!syncError,pending:hasDrafts,fontSize,setFontSize })
   async function fullscreen() {
     try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen() }
     catch { setError('全画面表示を開始できません。パソコンではF11キーでも全画面表示にできます。') }
@@ -61,7 +63,7 @@ function OfficialStartListMonitor() {
   return <main className="min-h-screen bg-white px-3 py-2 text-slate-900">
     <header className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-700 pb-1">
       <h1 className="text-xl font-bold text-blue-800">Fuji Horse Show ／ 出番表{hasDrafts ? "（確認中・未確定）" : "（正式）"}</h1>
-      <div className="flex items-center gap-3 text-sm"><span role="status" className={syncError || !liveConnected ? 'font-bold text-red-700' : 'font-bold text-blue-800'}>{syncError ? '更新停止・通信を確認' : !liveConnected ? '再接続中' : lastSyncedAt ? '変更時に自動更新' : '読み込み中'}{lastSyncedAt > 0 && ` ／ ${new Date(lastSyncedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => setFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
+      <div className="flex items-center gap-3 text-sm"><span role="status" className={syncError || !liveConnected ? 'font-bold text-red-700' : 'font-bold text-blue-800'}>{syncError ? '更新停止・通信を確認' : !liveConnected ? '再接続中' : lastSyncedAt ? '変更時に自動更新' : '読み込み中'}{lastSyncedAt > 0 && ` ／ ${new Date(lastSyncedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => changeFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
     </header>
     {hasDrafts && <p role="status" className="mb-3 rounded border-2 border-amber-500 bg-amber-100 p-3 text-lg font-bold text-amber-950">確認中・未確定の並び順です。本部の「出番順を保存」で確定します。</p>}
     {previewLost && <p role="status" className="mb-3 rounded bg-amber-50 p-3 font-bold text-amber-900">本部との確認表示の連携が終了しました。正式な出番順を表示しています。</p>}
@@ -69,7 +71,7 @@ function OfficialStartListMonitor() {
     {lastSyncedAt > 0 ? <div className="overflow-x-auto">{displayedCompetitions.map(({ competition, displayed }) => {
       const rows = monitorRows(displayed.entries, id => getPlayer(id)?.name ?? '要確認', id => getHorse(id)?.name ?? '要確認', id => getOrg(id)?.name ?? '要確認')
       const groups = Array.from({ length: Math.ceil(rows.length / 40) }, (_, index) => rows.slice(index * 40, (index + 1) * 40))
-      return <section key={competition.id} ref={element => { if (element) sectionRefs.current.set(competition.id, element); else sectionRefs.current.delete(competition.id) }} className="mb-6 min-w-[950px]" aria-label={`第${competition.number}競技`}>
+      return <section key={competition.id} data-monitor-competition={`第${competition.number}競技 ${competition.name}`} ref={element => { if (element) sectionRefs.current.set(competition.id, element); else sectionRefs.current.delete(competition.id) }} className="mb-6 min-w-[950px]" aria-label={`第${competition.number}競技`}>
         <h2 className="mb-2 border-b border-blue-700 text-2xl font-bold">第{competition.number}競技 {competition.name}{competition.official ? ' ★公認' : ''}{displayed.pending && <span className="ml-3 rounded bg-amber-100 px-2 text-xl text-amber-950">確認中・未確定</span>}<span className="ml-3 text-base">{COMPETITION_DATES.find(date => date.value === competition.date)?.label}</span></h2>
         {displayed.conflict && <p role="alert" className="mb-2 rounded bg-amber-100 p-2 font-bold text-amber-950">正式表が更新されたため、正式な順番を表示しています。本部で並べ替えを取り消し、最新の表で確認してください。</p>}
         {groups.length ? groups.map((group, index) => <div key={index} className="mb-3"><AudienceStartList rows={group} fontSize={fontSize} /></div>) : <p className="p-3">この競技の人馬はありません。</p>}
@@ -129,6 +131,7 @@ function MeetingStartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 
   const [connected, setConnected] = useState(false)
   const [fontSize, setFontSize] = useState(21)
   const [error, setError] = useState('')
+  const changeFontSize = useMonitorLink({competition:snapshot?.competition??'出番表を待っています',ready:connected,pending:!!snapshot&&!snapshot.saved,fontSize,setFontSize})
   useEffect(() => {
     const token = window.location.hash.slice(1)
     const prefix = source === 'startlist' ? 'fhs-startlist-' : 'fhs-meeting-'
@@ -152,7 +155,7 @@ function MeetingStartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 
   return <main className="min-h-screen bg-white px-3 py-2 text-slate-900">
     <header className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-700 pb-1">
       <div><p className="text-sm font-bold text-blue-800">Fuji Horse Show ／ {source === 'startlist' ? '正式出番表' : '打ち合わせ会用・正式反映前'}</p><h1 className="text-2xl font-bold">{snapshot?.competition ?? '出番表を待っています'}</h1></div>
-      <div className="flex items-center gap-3 text-sm"><span role="status" className={connected ? 'font-bold text-blue-800' : 'font-bold text-red-700'}>{connected ? 'リアルタイム表示中' : '接続待ち・更新停止'}{snapshot && ` ／ ${new Date(snapshot.sentAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => setFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
+      <div className="flex items-center gap-3 text-sm"><span role="status" className={connected ? 'font-bold text-blue-800' : 'font-bold text-red-700'}>{connected ? 'リアルタイム表示中' : '接続待ち・更新停止'}{snapshot && ` ／ ${new Date(snapshot.sentAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => changeFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
     </header>
     {error && <p role="alert" className="mb-3 rounded bg-red-50 p-3 text-red-700">{error}</p>}
     {!connected && <p className="mb-3 rounded bg-amber-50 p-2 font-bold text-amber-900">本部の{source === 'startlist' ? '出番表' : '打ち合わせ会'}画面を開いたままにしてください。表示は最後に受け取った内容です。</p>}

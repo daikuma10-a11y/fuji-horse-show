@@ -253,4 +253,7 @@
  .checkout-paper tr { break-inside: avoid; }
  .checkout-paper h4 { break-after: avoid; }
  .checkout-paper .settlement-normal-lines { margin-top: 4px; font-size: inherit; }
+ .checkout-paper .checkout-normal .settlement-normal-lines { font-size: 8pt; line-height: 1.15; }
+ .checkout-paper .checkout-normal th, .checkout-paper .checkout-normal td { padding: 2px 3px; }
+ .checkout-paper { width: 100%; max-width: 100%; }
 }

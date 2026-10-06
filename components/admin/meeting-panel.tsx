@@ -10,6 +10,7 @@ import type { StartEntry } from "@/lib/types"
 import { StartList } from "@/components/start-list"
 import { monitorRows, type MeetingMonitorSnapshot } from "@/lib/meeting-monitor"
 import { OnSiteReception } from "./on-site-reception"
+import { MonitorStatus } from "./monitor-status"
 
 const RECOVERY_KEY = "fhs-autumn-meeting-work-v1"
 const clean = (content: MeetingContent): MeetingContent => ({ baseEntries: content.baseEntries, baseOfficial: content.baseOfficial, staged: content.staged, orders: content.orders })
@@ -175,6 +176,7 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
   return <div className="space-y-4">
     <section className="rounded-2xl border-2 border-primary bg-card p-4">
       <h2 className="text-2xl font-bold">打ち合わせ会</h2><button type="button" onClick={openMonitor} className="mt-3 min-h-12 rounded-xl bg-primary px-4 font-bold text-primary-foreground">モニター表示（出番表のみ）</button><p className="mt-2 text-sm text-muted-foreground">別ウィンドウを外部モニターへ移してください。現在の競技と下書きの変更がリアルタイムで表示されます。</p>
+      <MonitorStatus token={monitorToken.current}/>
       <p className="mt-2">競技を切り替えながら、各団体の追加・変更・棄権と出番の移動を入力できます。最後に全競技をまとめて保存し、最終確認後に正式出番表・精算へ反映してください。</p>
       <p className="mt-3 font-bold text-primary">{dirty ? "未保存の変更があります" : draft ? `下書き保存済み：${timestamp(draft.updated_at)} ／ 正式未反映` : "正式出番表から開始 ／ 正式未反映"}</p>
       <button type="button" disabled={busy} onClick={() => void restart()} className="mt-3 min-h-11 rounded-lg border px-3 text-sm font-semibold">最新の正式出番表からやり直す</button>
