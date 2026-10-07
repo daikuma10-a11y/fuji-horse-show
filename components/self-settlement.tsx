@@ -76,6 +76,5 @@ export function ConfirmationPaper({record}:{record:RecordRow}){
    {document.bankDetails&&<tr><th>振込先</th><td colSpan={3}>{document.bankDetails}</td></tr>}
   </tbody></table></section>
   <section className="checkout-extra"><h4>締切後・大会期間中の追加・変更・棄権</h4><table className="checkout-extra-lines"><colgroup><col style={{width:'7%'}}/><col style={{width:'35%'}}/><col style={{width:'16%'}}/><col style={{width:'18%'}}/><col style={{width:'12%'}}/><col style={{width:'12%'}}/></colgroup><thead><tr><th>区分</th><th>競技</th><th>選手</th><th>馬</th><th>備考</th><th>金額</th></tr></thead><tbody>{document.lines.length?document.lines.map((line,index)=><tr key={line.key??index}><td>{line.action}</td><td>{line.competition}</td><td>{line.rider}</td><td>{line.horse}</td><td>{line.action.startsWith('棄権')?'':line.note||'—'}</td><td className="amount">{formatYen(line.amount)}</td></tr>):<tr><td colSpan={6}>追加・変更・棄権の記録はありません。</td></tr>}</tbody></table></section>
-  <section className="checkout-normal"><h4>事前エントリーの明細</h4><NormalLines account={record.document}/></section>
  </article>
 }
