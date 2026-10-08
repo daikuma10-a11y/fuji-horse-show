@@ -4,9 +4,10 @@ import { useState, useRef, type FormEvent } from "react"
 import { signInAdmin, verifyAdminSession, type AdminSession } from "@/lib/supabase-rest"
 import { reviewWinterAdd, submitWinterAdd, type WinterAddInput } from "@/lib/winter-reception"
 import { WinterMasterRegistration } from "@/components/winter-master-registration"
-import type { WinterOrganizationRow } from "@/lib/winter-data"
+import { loadWinterData, type WinterOrganizationRow } from "@/lib/winter-data"
+import { WinterRequestPanel } from "@/components/winter-request-panel"
 
-type Props = Partial<Pick<WinterAddInput, "organization" | "competition" | "rider" | "horse">> & Pick<WinterAddInput, "selection"> & { organizations: WinterOrganizationRow[]; onRegistered: () => void }
+type Props = Partial<Pick<WinterAddInput, "organization" | "competition" | "rider" | "horse">> & Pick<WinterAddInput, "selection"> & { organizations: WinterOrganizationRow[]; data: Awaited<ReturnType<typeof loadWinterData>>; onRegistered: () => void }
 const inputClass = "mt-2 min-h-16 w-full rounded-xl border-2 border-slate-300 p-3 text-xl"
 const buttonClass = "min-h-16 w-full rounded-xl bg-blue-800 p-4 text-2xl font-bold text-white disabled:opacity-50"
 
@@ -44,7 +45,7 @@ export function WinterAddSavePanel(props: Props) {
     lock.current = true; setBusy(true); setError("")
     try {
       const verified = await verifyAdminSession(session); setSession(verified)
-      setSavedId(await submitWinterAdd(review, verified.accessToken)); setReview(null)
+      setSavedId(await submitWinterAdd(review, verified.accessToken)); setReview(null); props.onRegistered()
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存できませんでした。同じ内容で再試行できます") }
     finally { lock.current = false; setBusy(false) }
   }
@@ -70,7 +71,8 @@ export function WinterAddSavePanel(props: Props) {
       <button onClick={confirm} disabled={busy || !props.organization || !props.competition || !props.rider || !props.horse} className={buttonClass}>内容を確認</button>
       <button disabled={busy} onClick={() => setSession(null)} className="min-h-12 rounded-lg border p-3 text-lg">本部ログアウト</button>
     </div>}
+    {session && !review && <WinterRequestPanel session={session} onSession={setSession} data={props.data} refresh={props.data.entries.length + props.data.organizations.length + (savedId ? 1 : 0)} onChanged={props.onRegistered} />}
     {error && <p role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}</p>}
-    {savedId && <div role="status" className="rounded-xl bg-green-100 p-4 text-xl"><p className="font-bold">追加申請を保存しました</p><p className="break-all">受付番号：{savedId}</p><p>出番表への反映はまだ行われていません。</p></div>}
+    {savedId && <div role="status" className="rounded-xl bg-green-100 p-4 text-xl"><p className="font-bold">追加申請を保存しました</p><p className="break-all">受付番号：{savedId}</p><p>下の申請一覧で「出番表へ反映」を押してください。</p></div>}
   </section>
 }

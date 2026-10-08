@@ -21,7 +21,6 @@ export default function WinterReceptionPreparation() {
   useEffect(() => {
     const controller = new AbortController()
     setError("")
-    setOrgId(""); setCompetitionId(""); setRiderId(""); setHorseId(""); setSelection({})
     loadWinterData(controller.signal).then(value => { if (!controller.signal.aborted) setData(value) })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "読み込めませんでした") })
     return () => controller.abort()
@@ -45,11 +44,11 @@ export default function WinterReceptionPreparation() {
 
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-6 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
-    <div className="rounded-xl bg-amber-100 p-4 text-xl font-bold">Winter受付の準備・追加保存テスト画面</div>
-    <p className="text-lg">出番表への反映・変更・棄権・精算はまだ対応していません。</p>
+    <div className="rounded-xl bg-amber-100 p-4 text-xl font-bold">Winter受付・本部操作テスト画面</div>
+    <p className="text-lg">追加・棄権の受付と出番表への反映をテストできます。変更・精算・モニター連携は準備中です。</p>
     {error ? <div role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}<button className={fieldClass} onClick={() => setReload(value => value + 1)}>再読み込み</button></div> : !data ? <p role="status" className="text-xl">Winterのデータを読み込んでいます…</p> : <>
       <p className="text-lg">競技 {data.competitions.length}件 ／ 団体 {data.organizations.length}件 ／ 選手 {data.riders.length}名 ／ 馬 {data.horses.length}頭</p>
-      {!data.organizations.length && <p className="rounded-xl bg-blue-100 p-4 text-xl">Winterの団体・人馬は未登録です。申込データの取り込み後に選択できます。</p>}
+      {!data.organizations.length && <p className="rounded-xl bg-blue-100 p-4 text-xl">Winterの団体・人馬は未登録です。画面下部の本部ログイン後に団体・人馬を登録できます。</p>}
       <label className="block text-xl font-bold">団体<select className={fieldClass} value={orgId} onChange={e => { setOrgId(e.target.value); setRiderId(""); setHorseId("") }}><option value="">団体を選択</option>{data.organizations.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
       <label className="block text-xl font-bold">競技<select className={fieldClass} value={competitionId} onChange={e => { setCompetitionId(e.target.value); setSelection({}) }}><option value="">競技を選択</option>{sortedCompetitions.map(row => <option key={row.id} value={row.id}>{new Date(`${row.competition_date}T00:00:00+09:00`).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" })}　第{row.competition_no}競技 {row.name}</option>)}</select></label>
       <label className="block text-xl font-bold">選手<select className={fieldClass} value={riderId} onChange={e => setRiderId(e.target.value)}><option value="">選手を選択</option>{riders.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
@@ -57,8 +56,17 @@ export default function WinterReceptionPreparation() {
       {competition && (competition.member_fee !== null || competition.nonmember_fee !== null) && <label className="block text-xl font-bold">料金区分<select className={fieldClass} value={selection.membership ?? ""} onChange={e => setSelection(value => ({ ...value, membership: e.target.value === "member" ? "member" : e.target.value === "nonmember" ? "nonmember" : undefined }))}><option value="">区分を選択してください</option><option value="member">会員</option><option value="nonmember">非会員</option></select></label>}
       {instructorRequired && <label className="flex min-h-16 items-center gap-4 text-xl"><input type="checkbox" className="size-7" checked={!!selection.instructorConfirmed} onChange={e => setSelection(value => ({ ...value, instructorConfirmed: e.target.checked }))} />地域乗馬指導者資格を確認しました</label>}
       {canUseOp && <label className="flex min-h-16 items-center gap-4 text-xl"><input type="checkbox" className="size-7" checked={!!selection.isOp} onChange={e => setSelection(value => ({ ...value, isOp: e.target.checked }))} />OP参加</label>}
-      <div role="status" className="rounded-xl bg-white p-5 text-2xl font-bold">{fee === null ? feeMessage : `競技エントリー料　¥${fee.toLocaleString('ja-JP')}`}<p className="mt-3 text-base font-normal">追加手数料などを含む申請額は、受付機能の組み込み後に表示します。</p></div>
-      <WinterAddSavePanel organizations={data.organizations} onRegistered={() => setReload(value => value + 1)} organization={data.organizations.find(row => row.id === orgId)} competition={competition} rider={data.riders.find(row => row.id === riderId)} horse={data.horses.find(row => row.id === horseId)} selection={selection} />
+      <div role="status" className="rounded-xl bg-white p-5 text-2xl font-bold">{fee === null ? feeMessage : `競技エントリー料　¥${fee.toLocaleString('ja-JP')}`}<p className="mt-3 text-base font-normal">追加申請は、この料金に追加手数料3,000円を加算します。内容確認画面で合計をご確認ください。</p></div>
+      {competition && <section className="space-y-3 rounded-xl border-2 border-blue-200 bg-white p-4">
+        <h2 className="text-2xl font-bold">第{competition.competition_no}競技の出番表</h2>
+        <p>本部で反映した内容を表示します。棄権は下段に残します。</p>
+        {!data.entries.some(row => row.competition_id === competition.id) && <p>まだ出番がありません。</p>}
+        {data.entries.filter(row => row.competition_id === competition.id).sort((a, b) => (['wd','withdrawn'].includes(a.status.toLowerCase()) ? 1 : 0) - (['wd','withdrawn'].includes(b.status.toLowerCase()) ? 1 : 0) || (a.start_order ?? 0) - (b.start_order ?? 0)).map(row => <div key={row.entry_id} className={`rounded-xl border p-3 text-xl ${['wd','withdrawn'].includes(row.status.toLowerCase()) ? 'bg-slate-100 text-slate-500' : 'bg-blue-50'}`}>
+          <p className="font-bold">{['wd','withdrawn'].includes(row.status.toLowerCase()) ? '棄権' : `${row.start_order}番`}{row.is_op ? '（OP）' : ''}</p>
+          <p>{data.riders.find(rider => rider.id === row.rider_id)?.name} ／ {data.horses.find(horse => horse.id === row.horse_id)?.name}</p><p className="text-base">{row.organization_name}</p>
+        </div>)}
+      </section>}
+      <WinterAddSavePanel data={data} organizations={data.organizations} onRegistered={() => setReload(value => value + 1)} organization={data.organizations.find(row => row.id === orgId)} competition={competition} rider={data.riders.find(row => row.id === riderId)} horse={data.horses.find(row => row.id === horseId)} selection={selection} />
     </>}
   </main>
 }
