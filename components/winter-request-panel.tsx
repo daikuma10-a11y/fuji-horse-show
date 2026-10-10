@@ -6,10 +6,10 @@ import { loadWinterData } from '@/lib/winter-data'
 import { loadWinterRequests, reflectWinterRequest, submitWinterWithdraw, type WinterRequestRow } from '@/lib/winter-reception'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
-type Props = { mode?: "admin" | "withdraw"; initialOrgId?: string; session: AdminSession; onSession: (session: AdminSession) => void; data: Data; refresh: number; onChanged: () => void }
+type Props = { mode?: "admin" | "withdraw"; initialOrgId?: string; session: AdminSession; onSession: (session: AdminSession) => void; data: Data; refresh: number; onChanged: () => void; showWithdraw?: boolean }
 const button = 'min-h-14 rounded-xl border-2 border-blue-800 bg-blue-800 p-3 text-xl font-bold text-white disabled:opacity-50'
 
-export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSession, data, refresh, onChanged }: Props) {
+export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSession, data, refresh, onChanged, showWithdraw = true }: Props) {
   const [requests, setRequests] = useState<WinterRequestRow[]>([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -67,6 +67,7 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
       {row.status === 'pending' && ['add','change','withdraw'].includes(row.request_type) && <button className={button} disabled={busy} onClick={() => void run(token => reflectWinterRequest(row.id, token, row.request_type), '出番表へ反映しました')}>出番表へ反映</button>}
     </article>)}
     </>}
+    {showWithdraw && <>
     <h2 className="text-2xl font-bold">棄権受付（0円）</h2>
     {review ? <div className="space-y-3 rounded-xl bg-orange-50 p-4"><p className="text-xl font-bold">この人馬の棄権を保存します</p><p>{entryLabel(review.entryId)}</p><p>受付担当者：{review.visitorName} ／ 料金：0円</p><button className={button} disabled={busy} onClick={() => void run(token => submitWinterWithdraw(review.id, review.entryId, review.visitorName, token), '棄権申請を保存しました。一覧で出番表へ反映してください')}>棄権申請を保存</button><button className={button} disabled={busy} onClick={() => setReview(null)}>入力に戻る</button></div> : <div className="space-y-3">
       <label className="block text-xl">対象の人馬<select className="mt-2 min-h-14 w-full rounded-xl border-2 p-3" value={entryId} onChange={event => setEntryId(event.target.value)}><option value="">人馬を選択</option>{activeEntries.map(row => <option key={row.entry_id} value={row.entry_id}>{entryLabel(row.entry_id)}</option>)}</select></label>
@@ -74,6 +75,7 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
       <label className="block text-xl">棄権の受付担当者名<input className="mt-2 min-h-14 w-full rounded-xl border-2 p-3" maxLength={100} value={visitorName} onChange={event => setVisitorName(event.target.value)} /></label>
       <button className={button} disabled={busy || !entryId || !visitorName.trim()} onClick={() => { setError(''); setReview({ id: crypto.randomUUID(), entryId, visitorName: visitorName.trim() }) }}>棄権内容を確認</button>
     </div>}
+    </>}
     {message && <p role="status" className="rounded-xl bg-green-100 p-4 text-xl">{message}</p>}
     {error && <p role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}</p>}
   </div>

@@ -1,3 +1,3 @@
-import { WinterReceptionWorkspace } from "@/components/winter-reception-workspace"
+import { WinterAdminDashboard } from "@/components/winter-admin-dashboard"
 
-export default function Page() { return <WinterReceptionWorkspace mode="admin" /> }
+export default function Page() { return <WinterAdminDashboard /> }
