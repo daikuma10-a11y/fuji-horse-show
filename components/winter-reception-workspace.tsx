@@ -50,6 +50,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
     <Link href="/winter" className="inline-flex min-h-14 items-center rounded-xl border-2 px-5 text-xl font-bold">受付トップに戻る</Link>
     {mode !== 'admin' && <WinterQueueLink />}
     <div className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">{mode === "admin" ? "大会本部" : mode === "add" ? "追加受付" : "棄権受付"}</div>
+    {mode === 'admin' && <Link href="/winter/prepare" className="inline-flex min-h-16 items-center rounded-xl border-2 border-blue-800 bg-white px-5 text-xl font-bold">締切前の準備：名簿・出番表・事前精算を確認</Link>}
     <p className="text-lg">{mode === "admin" ? "団体・人馬の登録、申請確認、出番表への反映を行います。" : "現在は操作テスト版のため、保存には本部アカウントのログインが必要です。"}</p>
     {error ? <div role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}<button className={fieldClass} onClick={() => setReload(value => value + 1)}>再読み込み</button></div> : !data ? <p role="status" className="text-xl">Winterのデータを読み込んでいます…</p> : <>
       <p className="text-lg">競技 {data.competitions.length}件 ／ 団体 {data.organizations.length}件 ／ 選手 {data.riders.length}名 ／ 馬 {data.horses.length}頭</p>
