@@ -1,0 +1,14 @@
+{
+  "source": "26autumn選手名簿.xlsx",
+  "sourceSha256": "076e28a2d3217e0db646424e8d9398e9bf389678fb011a8cc3f6a3dcce24e911",
+  "confirmedOn": "2026-10-10",
+  "differentClubs": "retain_all_affiliations",
+  "riderIdentityGroups": [
+    {"sourceRows": [217, 719], "name": "横田 真吾", "jefNumber": "11693", "samePersonConfirmed": true},
+    {"sourceRows": [495, 554], "name": "山本 久美子", "jefNumber": null, "samePersonConfirmed": true},
+    {"sourceRows": [737, 760], "name": "中垣 真歩", "jefNumber": "33872", "samePersonConfirmed": true}
+  ],
+  "readingOverrides": [{"sourceRow": 4, "name": "森本 健史", "reading": "モリモト ケンジ", "confirmedBy": "organizer"}],
+  "excludedSourceRows": [317, 837, 838],
+  "keepExcludedArchive": true
+}

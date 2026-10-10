@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path')
+const original=Module._extensions['.ts'];Module._extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,f)
+const {clubEntities}=require(path.resolve('lib/shared-roster.ts'))
+const entity=id=>({id,kind:'rider',name:id,reading:'',jef_number:null,updated_at:'2026-10-10'})
+const d={entities:[entity('A'),entity('B'),entity('C')],clubs:[],participants:[],affiliations:[{id:'1',entity_id:'A',club_id:'old',started_at:'2026-01-01',ended_at:'2026-10-01'},{id:'2',entity_id:'A',club_id:'new',started_at:'2026-10-01',ended_at:null},{id:'3',entity_id:'B',club_id:'old',started_at:'2026-01-01',ended_at:null}]}
+assert.deepEqual(clubEntities(d,'old').map(x=>x.id),['B']);assert.deepEqual(clubEntities(d,'new').map(x=>x.id),['A']);assert.deepEqual(clubEntities(d,'unknown'),[])
+d.affiliations.push({id:'4',entity_id:'A',club_id:'old',started_at:'2026-10-10',ended_at:null});assert.deepEqual(clubEntities(d,'old').map(x=>x.id),['A','B']);assert.deepEqual(clubEntities(d,'new').map(x=>x.id),['A'])
+d.entities[0].archived_at='2026-10-10';assert.deepEqual(clubEntities(d,'old').map(x=>x.id),['B']);assert.deepEqual(clubEntities(d,'new'),[])
+const decisions=JSON.parse(fs.readFileSync('config/roster-review-decisions.json','utf8'));assert.deepEqual(decisions.riderIdentityGroups.map(x=>x.sourceRows),[[217,719],[495,554],[737,760]]);assert.equal(decisions.readingOverrides[0].reading,'モリモト ケンジ')
+Module._extensions['.ts']=original;console.log('PASS: historical affiliations excluded, current club filtering, unassigned entities excluded')

@@ -8,6 +8,7 @@ import { loadWinterData, type WinterOrganizationRow } from "@/lib/winter-data"
 import { WinterRequestPanel } from "@/components/winter-request-panel"
 import { stageWinterDraft } from '@/lib/winter-batch'
 import { WinterStartList } from '@/components/winter-start-list'
+import { SharedRosterManager } from '@/components/shared-roster-manager'
 
 type Props = Partial<Pick<WinterAddInput, "organization" | "competition" | "rider" | "horse">> & Pick<WinterAddInput, "selection"> & { organizations: WinterOrganizationRow[]; data: Awaited<ReturnType<typeof loadWinterData>>; mode?: "admin" | "add" | "withdraw"; onRegistered: () => void }
 const inputClass = "mt-2 min-h-16 w-full rounded-xl border-2 border-slate-300 p-3 text-xl"
@@ -60,6 +61,7 @@ export function WinterAddSavePanel(props: Props) {
 
   return <section className="space-y-4 rounded-xl border-2 border-blue-200 bg-white p-5">
     <h2 className="text-2xl font-bold">{props.mode === "withdraw" ? "棄権申請" : "追加申請"}</h2>
+    {session && !review && props.mode === 'admin' && <SharedRosterManager session={session} />}
     {session && !review && props.mode === "admin" && <WinterMasterRegistration session={session} organizations={props.organizations} onRegistered={props.onRegistered} />}
     {session && !review && props.mode === 'admin' && <WinterStartList data={props.data} session={session} onSession={setSession} onChanged={props.onRegistered} />}
     {!session && props.mode !== 'add' ? <form onSubmit={login} className="space-y-3">
