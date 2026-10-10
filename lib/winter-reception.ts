@@ -36,6 +36,7 @@ export async function submitWinterAdd(input: WinterAddInput, accessToken: string
 }
 
 export type WinterRequestRow = {
+  entry_id: string | null
   id: string; event_id: string; request_type: 'add' | 'change' | 'withdraw'; status: string
   organization_id: string; target_competition_id: string; rider_id: string; horse_id: string
   fee_amount: number; created_at: string; reflected_at: string | null

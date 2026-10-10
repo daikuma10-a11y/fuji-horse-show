@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { loadWinterData } from "@/lib/winter-data"
 import { WINTER_EVENT_NAME, winterCompetition, winterEntryPrice, type WinterFeeSelection } from "@/lib/winter-event"
 import { WinterAddSavePanel } from "@/components/winter-add-save-panel"
+import { WinterQueueLink } from '@/components/winter-queue-link'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 const fieldClass = "mt-2 min-h-16 w-full rounded-xl border-2 border-slate-300 bg-white p-3 text-xl"
@@ -47,6 +48,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-6 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
     <Link href="/winter" className="inline-flex min-h-14 items-center rounded-xl border-2 px-5 text-xl font-bold">受付トップに戻る</Link>
+    {mode !== 'admin' && <WinterQueueLink />}
     <div className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">{mode === "admin" ? "大会本部" : mode === "add" ? "追加受付" : "棄権受付"}</div>
     <p className="text-lg">{mode === "admin" ? "団体・人馬の登録、申請確認、出番表への反映を行います。" : "現在は操作テスト版のため、保存には本部アカウントのログインが必要です。"}</p>
     {error ? <div role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}<button className={fieldClass} onClick={() => setReload(value => value + 1)}>再読み込み</button></div> : !data ? <p role="status" className="text-xl">Winterのデータを読み込んでいます…</p> : <>
@@ -62,15 +64,6 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
       {canUseOp && <label className="flex min-h-16 items-center gap-4 text-xl"><input type="checkbox" className="size-7" checked={!!selection.isOp} onChange={e => setSelection(value => ({ ...value, isOp: e.target.checked }))} />OP参加</label>}
       <div role="status" className="rounded-xl bg-white p-5 text-2xl font-bold">{fee === null ? feeMessage : `競技エントリー料　¥${fee.toLocaleString('ja-JP')}`}<p className="mt-3 text-base font-normal">追加申請は、この料金に追加手数料3,000円を加算します。内容確認画面で合計をご確認ください。</p></div>
       </>}
-      {mode === "admin" && competition && <section className="space-y-3 rounded-xl border-2 border-blue-200 bg-white p-4">
-        <h2 className="text-2xl font-bold">第{competition.competition_no}競技の出番表</h2>
-        <p>本部で反映した内容を表示します。棄権は下段に残します。</p>
-        {!data.entries.some(row => row.competition_id === competition.id) && <p>まだ出番がありません。</p>}
-        {data.entries.filter(row => row.competition_id === competition.id).sort((a, b) => (['wd','withdrawn'].includes(a.status.toLowerCase()) ? 1 : 0) - (['wd','withdrawn'].includes(b.status.toLowerCase()) ? 1 : 0) || (a.start_order ?? 0) - (b.start_order ?? 0)).map(row => <div key={row.entry_id} className={`rounded-xl border p-3 text-xl ${['wd','withdrawn'].includes(row.status.toLowerCase()) ? 'bg-slate-100 text-slate-500' : 'bg-blue-50'}`}>
-          <p className="font-bold">{['wd','withdrawn'].includes(row.status.toLowerCase()) ? '棄権' : `${row.start_order}番`}{row.is_op ? '（OP）' : ''}</p>
-          <p>{data.riders.find(rider => rider.id === row.rider_id)?.name} ／ {data.horses.find(horse => horse.id === row.horse_id)?.name}</p><p className="text-base">{row.organization_name}</p>
-        </div>)}
-      </section>}
       <WinterAddSavePanel mode={mode} data={data} organizations={data.organizations} onRegistered={() => setReload(value => value + 1)} organization={data.organizations.find(row => row.id === orgId)} competition={competition} rider={data.riders.find(row => row.id === riderId)} horse={data.horses.find(row => row.id === horseId)} selection={selection} />
     </>}
   </main>

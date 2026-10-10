@@ -1,11 +1,12 @@
 "use client"
 
 import Link from 'next/link'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadWinterData } from '@/lib/winter-data'
-import { signInAdmin, verifyAdminSession, type AdminSession } from '@/lib/supabase-rest'
 import { WINTER_EVENT_NAME, winterCompetition, type WinterFeeSelection } from '@/lib/winter-event'
-import { reviewWinterChange, submitWinterChange, type WinterChangeInput } from '@/lib/winter-change'
+import { reviewWinterChange, type WinterChangeInput } from '@/lib/winter-change'
+import { stageWinterDraft } from '@/lib/winter-batch'
+import { WinterQueueLink } from '@/components/winter-queue-link'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 const field = 'mt-2 min-h-16 w-full rounded-xl border-2 bg-white p-3 text-xl'
@@ -17,7 +18,6 @@ export default function WinterChangePage() {
   const [competitionId, setCompetitionId] = useState(''), [riderId, setRiderId] = useState(''), [horseId, setHorseId] = useState('')
   const [fromSelection, setFromSelection] = useState<WinterFeeSelection>({}), [selection, setSelection] = useState<WinterFeeSelection>({})
   const [visitorName, setVisitorName] = useState(''), [review, setReview] = useState<WinterChangeInput | null>(null)
-  const [session, setSession] = useState<AdminSession | null>(null), [email, setEmail] = useState(''), [password, setPassword] = useState('')
   const [error, setError] = useState(''), [saved, setSaved] = useState(''), [busy, setBusy] = useState(false)
   const lock = useRef(false)
   useEffect(() => { setOrgId(new URLSearchParams(window.location.search).get('org') ?? '') }, [])
@@ -50,28 +50,18 @@ export default function WinterChangePage() {
       reviewWinterChange(input); setReview(input)
     } catch (reason) { setError(reason instanceof Error ? reason.message : '変更内容を確認してください') }
   }
-  async function login(event: FormEvent) {
-    event.preventDefault(); if (lock.current) return
-    lock.current = true; setBusy(true); setError('')
-    try { setSession(await signInAdmin(email,password)); setPassword('') }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'ログインできません') }
-    finally { lock.current = false; setBusy(false) }
-  }
-  async function save() {
-    if (!review || !session || lock.current) return
-    lock.current = true; setBusy(true); setError('')
-    try {
-      const verified = await verifyAdminSession(session); setSession(verified)
-      setSaved(await submitWinterChange(review,verified.accessToken)); setReview(null); setEntryId(''); setReload(value => value+1)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '保存できません。同じ内容で再試行してください') }
-    finally { lock.current = false; setBusy(false) }
-  }
   const amounts = review ? reviewWinterChange(review) : null
+  function stage() {
+    if(!review || lock.current)return
+    try{stageWinterDraft({type:'change',input:review});setSaved(review.target.id);setReview(null);setEntryId('')}
+    catch(reason){setError(reason instanceof Error?reason.message:'未確定一覧に追加できません')}
+  }
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-5 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
     <Link className="inline-flex min-h-14 items-center rounded-xl border-2 p-4 text-xl font-bold" href="/winter">受付トップに戻る</Link>
     <h2 className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">変更受付</h2>
-    <p className="text-lg">操作テスト版です。保存には本部ログインが必要です。</p>
+    <WinterQueueLink />
+    <p className="text-lg">入力を続けて、未確定一覧でまとめて確定できます。確定の保存テストには本部ログインが必要です。</p>
     {error && <p role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}</p>}
     {!data ? <button className={button} onClick={() => { setError(''); setReload(value => value+1) }}>Winterデータを読み込む</button> : review && amounts ? <section className="space-y-4 rounded-xl border-2 bg-white p-5">
       <h3 className="text-2xl font-bold">この内容で変更します</h3>
@@ -81,8 +71,7 @@ export default function WinterChangePage() {
       <p className="text-xl">変更手数料：¥{amounts.fee.changeBase.toLocaleString('ja-JP')}<br />競技料金の差額：¥{amounts.fee.competitionDiff.toLocaleString('ja-JP')}<br />追加手数料：¥{amounts.fee.addBase.toLocaleString('ja-JP')}<br />追加競技料金：¥{amounts.fee.addEntry.toLocaleString('ja-JP')}</p>
       <p className="text-3xl font-bold">合計：¥{amounts.fee.total.toLocaleString('ja-JP')}</p>
       <p>受付担当者：{review.target.visitorName}</p>
-      <button className={button} disabled={busy || !session} onClick={() => void save()}>{busy ? '保存中…' : '変更申請を保存'}</button>
-      {!session && <p>下の本部ログイン後に保存できます。</p>}
+      <button className={button} disabled={busy} onClick={stage}>未確定一覧に追加して入力を続ける</button>
       <button className={button} disabled={busy} onClick={() => setReview(null)}>入力に戻る</button>
     </section> : <div className="space-y-4">
       <label className="block text-xl font-bold">団体<select className={field} value={orgId} onChange={e => { setOrgId(e.target.value); chooseEntry('') }}><option value="">団体を選択</option>{[...data.organizations].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
@@ -101,8 +90,7 @@ export default function WinterChangePage() {
         <button className={button} disabled={busy} onClick={confirm}>変更内容と料金を確認</button>
       </>}
     </div>}
-    {!session ? <form className="space-y-3 rounded-xl border-2 bg-white p-5" onSubmit={login}><h3 className="text-2xl font-bold">本部ログイン</h3><label className="block text-xl">メールアドレス<input required type="email" autoComplete="username" className={field} value={email} onChange={e=>setEmail(e.target.value)}/></label><label className="block text-xl">パスワード<input required type="password" autoComplete="current-password" className={field} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className={button} disabled={busy}>本部ログイン</button></form> : <button className={button} disabled={busy} onClick={()=>setSession(null)}>本部ログアウト</button>}
-    {saved && <div role="status" className="rounded-xl bg-green-100 p-4 text-xl"><p className="font-bold">変更申請を保存しました</p><p className="break-all">受付番号：{saved}</p><p>大会本部の申請一覧から出番表へ反映できます。</p></div>}
+    {saved && <div role="status" className="rounded-xl bg-green-100 p-4 text-xl"><p className="font-bold">未確定一覧に追加しました（まだ申請されていません）</p><p className="break-all">受付番号：{saved}</p><p>未確定一覧でまとめて確定してください。</p></div>}
     <Link href="/winter/admin" className="inline-flex min-h-14 items-center rounded-xl border-2 p-4 text-xl font-bold">大会本部へ</Link>
   </main>
 }

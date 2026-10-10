@@ -7,13 +7,14 @@ export type WinterOrganizationRow = EventRow & { id: string; name: string }
 export type WinterRiderRow = EventRow & { id: string; name: string; organization_id: string; jef_member_no: string | null }
 export type WinterHorseRow = EventRow & { id: string; name: string; organization_id: string; jef_registration_no: string | null }
 export type WinterCompetitionRow = EventRow & {
-  id: string; competition_no: string; competition_date: string; name: string; official: boolean
+  id: string; notes?:string|null; competition_no: string; competition_date: string; name: string; official: boolean
   fee: number; op_fee: number | null; member_fee: number | null; nonmember_fee: number | null
 }
 export type WinterEntryRow = EventRow & {
-  entry_id: string; competition_id: string; competition_no: string; start_order: number; status: string
+  entry_id: string; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
   rider_id: string; horse_id: string; organization_name: string; is_op: boolean | null
 }
+export type WinterTimetableRow = EventRow & { competition_id:string; inspection_time:string|null; start_time:string|null; phase:'provisional'|'final'; updated_at:string }
 
 /** 各ページで大会IDを検証。通信失敗時にAutumnの原本へフォールバックしない。 */
 async function rows<T extends EventRow>(table: string, select: string, order: string, signal?: AbortSignal): Promise<T[]> {
@@ -41,7 +42,7 @@ export async function loadWinterData(signal?: AbortSignal) {
     rows<WinterOrganizationRow>("organizations", "event_id,id,name", "id.asc", signal),
     rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no", "id.asc", signal),
     rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no", "id.asc", signal),
-    rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee", "id.asc", signal),
+    rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee,notes", "id.asc", signal),
     rows<WinterEntryRow>("reception_entries", "event_id,entry_id,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_name,is_op", "entry_id.asc", signal),
   ])
   const orgIds = new Set(organizations.map(row => row.id))
@@ -55,5 +56,13 @@ export async function loadWinterData(signal?: AbortSignal) {
   if (entries.some(row => !competitionIds.has(row.competition_id) || !riderIds.has(row.rider_id) || !horseIds.has(row.horse_id))) {
     throw new Error("Winter出番表に所属大会を確認できない人馬があります")
   }
-  return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries }
+  const timetable=competitions.flatMap(row=>{
+    let metadata:unknown
+    try{metadata=JSON.parse(row.notes??'null')}catch{return []}
+    if(!metadata||typeof metadata!=='object'||!('winterTimetable' in metadata))return []
+    const t=metadata.winterTimetable as WinterTimetableRow
+    if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||!['provisional','final'].includes(t.phase)||[t.inspection_time,t.start_time].some(value=>value!==null&&(typeof value!=='string'||!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))))throw new Error('Winterの時間設定を確認できません')
+    return [t]
+  })
+  return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable }
 }
