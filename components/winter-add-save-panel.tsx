@@ -60,14 +60,14 @@ export function WinterAddSavePanel(props: Props) {
     catch (reason) { setError(reason instanceof Error ? reason.message : '未確定一覧に追加できません') }
   }
 
-  return <section className="space-y-4 rounded-xl border-2 border-blue-200 bg-white p-5">
+  return <section id={props.mode === "admin" ? "winter-admin-tools" : undefined} className="scroll-mt-5 space-y-4 rounded-xl border-2 border-blue-200 bg-white p-5">
     <h2 className="text-2xl font-bold">{props.mode === "admin" ? "本部の名簿・出番表・申請管理" : props.mode === "withdraw" ? "棄権申請" : "追加申請"}</h2>
     {session && !review && props.mode === 'admin' && <SharedRosterManager session={session} onParticipantsSaved={props.onRegistered} />}
     {session && !review && props.mode === "admin" && <WinterMasterRegistration session={session} organizations={props.organizations} onRegistered={props.onRegistered} />}
     {session && !review && props.mode === 'admin' && <WinterInitialEntryRegistration data={props.data} session={session} onChanged={props.onRegistered} />}
     {session && !review && props.mode === 'admin' && <WinterStartList data={props.data} session={session} onSession={setSession} onChanged={props.onRegistered} />}
     {!session && props.mode !== 'add' ? <form onSubmit={login} className="space-y-3">
-      <p className="text-lg">準備段階の保存テストには本部ログインが必要です。</p>
+      <p className="text-lg">{props.mode === "admin" ? "本部ログインすると、共通名簿の団体選択・人馬の参加チェックが表示されます。" : "申請の保存には本部アカウントのログインが必要です。"}</p>
       <label className="block text-xl">メールアドレス<input required type="email" autoComplete="username" className={inputClass} value={email} onChange={e => setEmail(e.target.value)} /></label>
       <label className="block text-xl">パスワード<input required type="password" autoComplete="current-password" className={inputClass} value={password} onChange={e => setPassword(e.target.value)} /></label>
       <button disabled={busy} className={buttonClass}>{busy ? "確認中…" : "本部ログイン"}</button>
