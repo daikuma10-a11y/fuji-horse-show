@@ -2,10 +2,12 @@ import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from "./winter-event
 
 const URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
+type ReceptionRosterState = { is_participant?: boolean; roster_source?: string | null }
+export function isWinterReceptionParticipant(row: ReceptionRosterState) { return row.roster_source !== "shared_roster" || row.is_participant === true }
 type EventRow = { event_id: string }
 export type WinterOrganizationRow = EventRow & { id: string; name: string }
-export type WinterRiderRow = EventRow & { id: string; name: string; organization_id: string; jef_member_no: string | null }
-export type WinterHorseRow = EventRow & { id: string; name: string; organization_id: string; jef_registration_no: string | null }
+export type WinterRiderRow = EventRow & ReceptionRosterState & { id: string; name: string; organization_id: string; jef_member_no: string | null }
+export type WinterHorseRow = EventRow & ReceptionRosterState & { id: string; name: string; organization_id: string; jef_registration_no: string | null }
 export type WinterCompetitionRow = EventRow & {
   id: string; notes?:string|null; competition_no: string; competition_date: string; name: string; official: boolean
   fee: number; op_fee: number | null; member_fee: number | null; nonmember_fee: number | null
@@ -38,13 +40,15 @@ async function rows<T extends EventRow>(table: string, select: string, order: st
 }
 
 export async function loadWinterData(signal?: AbortSignal) {
-  const [organizations, riders, horses, competitions, entries] = await Promise.all([
+  const [organizations, allRiders, allHorses, competitions, entries] = await Promise.all([
     rows<WinterOrganizationRow>("organizations", "event_id,id,name", "id.asc", signal),
-    rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no", "id.asc", signal),
-    rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no", "id.asc", signal),
+    rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no,is_participant,roster_source", "id.asc", signal),
+    rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee,notes", "id.asc", signal),
     rows<WinterEntryRow>("reception_entries", "event_id,entry_id,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_name,is_op", "entry_id.asc", signal),
   ])
+  const riders=allRiders.filter(isWinterReceptionParticipant)
+  const horses=allHorses.filter(isWinterReceptionParticipant)
   const orgIds = new Set(organizations.map(row => row.id))
   const riderIds = new Set(riders.map(row => row.id))
   const horseIds = new Set(horses.map(row => row.id))

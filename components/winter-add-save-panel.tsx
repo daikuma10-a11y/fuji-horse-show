@@ -61,7 +61,7 @@ export function WinterAddSavePanel(props: Props) {
 
   return <section className="space-y-4 rounded-xl border-2 border-blue-200 bg-white p-5">
     <h2 className="text-2xl font-bold">{props.mode === "withdraw" ? "棄権申請" : "追加申請"}</h2>
-    {session && !review && props.mode === 'admin' && <SharedRosterManager session={session} />}
+    {session && !review && props.mode === 'admin' && <SharedRosterManager session={session} onParticipantsSaved={props.onRegistered} />}
     {session && !review && props.mode === "admin" && <WinterMasterRegistration session={session} organizations={props.organizations} onRegistered={props.onRegistered} />}
     {session && !review && props.mode === 'admin' && <WinterStartList data={props.data} session={session} onSession={setSession} onChanged={props.onRegistered} />}
     {!session && props.mode !== 'add' ? <form onSubmit={login} className="space-y-3">

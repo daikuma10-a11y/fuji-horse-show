@@ -34,6 +34,7 @@ begin
   if not found then raise exception '選手の大会と所属を確認してください'; end if;
   select * into h from public.horses where id=p_horse_id and event_id=v_event and organization_id=p_organization_id for share;
   if not found then raise exception '馬の大会と所属を確認してください'; end if;
+  if (r.roster_source='shared_roster' and not r.is_participant) or (h.roster_source='shared_roster' and not h.is_participant) then raise exception '参加チェックが外れた人馬です。選び直してください';end if;
   if c.official and (nullif(btrim(r.jef_member_no),'') is null or nullif(btrim(h.jef_registration_no),'') is null)
     then raise exception '公認競技は日馬連登録済みの選手と馬を選択してください'; end if;
   if coalesce(p_is_op,false) and (c.official or c.op_fee is null)
