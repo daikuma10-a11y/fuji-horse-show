@@ -10,6 +10,7 @@ import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
 import {WinterInitialEntryRegistration} from '@/components/winter-initial-entry-registration'
 import {WinterStartList} from '@/components/winter-start-list'
+import {WinterSettlementPanel} from '@/components/winter-settlement-panel'
 import {WinterRequestPanel} from '@/components/winter-request-panel'
 import {WinterAdminNavigation,winterAdminTabs,type WinterAdminTab} from '@/components/winter-admin-navigation'
 const sessionKey=winterStorageKey('admin-session')
@@ -59,7 +60,7 @@ export function WinterAdminDashboard(){
  {/* Visited panels remain mounted so tab changes preserve unsaved inputs and monitor state. */}
  {winterAdminTabs.filter(t=>visited.includes(t.id)).map(t=><section key={t.id} role="tabpanel" id={`winter-panel-${t.id}`} aria-labelledby={`winter-tab-${t.id}`} hidden={tab!==t.id} className="space-y-5">
  {t.id==='roster'?<><SharedRosterManager session={session} onParticipantsSaved={refresh}/>{data&&<WinterMasterRegistration session={session} organizations={data.organizations} onRegistered={refresh}/>}</>:
- t.id==='settlement'?<div className="rounded-xl border-2 bg-card p-5"><h2 className="text-2xl font-bold">精算（準備中）</h2><p className="mt-3 text-xl">Winterの精算・入金確認・精算書印刷は準備中です。現在は精算確定や印刷の操作はできません。</p></div>:
+ t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
  t.id==='meeting'?<div className="space-y-4 rounded-xl border-2 bg-card p-5"><h2 className="text-2xl font-bold">打ち合わせ会</h2><p className="text-xl">仮出番表の組み替え・モニター表示・下見時間と開始時間の設定は「出番表」で操作できます。</p><button type="button" className={button} onClick={()=>select('startlist')}>出番表で確認・組み替え</button><p>打ち合わせ会専用の申請保留・一括確定は準備中です。</p></div>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='requests'?<WinterRequestPanel session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh} showWithdraw={false}/>:
