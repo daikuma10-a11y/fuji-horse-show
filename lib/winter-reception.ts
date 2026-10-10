@@ -39,10 +39,10 @@ export type WinterRequestRow = {
   id: string; event_id: string; request_type: 'add' | 'change' | 'withdraw'; status: string
   organization_id: string; target_competition_id: string; rider_id: string; horse_id: string
   fee_amount: number; created_at: string; reflected_at: string | null
-  payload: { visitorName?: string }
+  payload: { visitorName?: string; before?: { competitionId: string; riderId: string; horseId: string; isOp: boolean }; changedFields?: string[]; treatedAsWithdrawAdd?: boolean; fee?: { changeBase: number; competitionDiff: number; addBase: number; addEntry: number; total: number } }
 }
 
-async function winterRpc(name: string, args: Record<string, unknown>, token: string): Promise<unknown> {
+export async function winterRpc(name: string, args: Record<string, unknown>, token: string): Promise<unknown> {
   if (!token) throw new Error('本部ログインが必要です')
   const response = await fetch(`https://mhgyhyxagkkwdiepifdp.supabase.co/rest/v1/rpc/${name}`, {
     method: 'POST', cache: 'no-store', headers: { apikey: 'sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(args),
@@ -63,8 +63,8 @@ export async function loadWinterRequests(token: string): Promise<WinterRequestRo
   }
 }
 
-export async function reflectWinterRequest(id: string, token: string): Promise<string> {
-  const result = await winterRpc('reflect_winter_reception_request', { p_request_id: id }, token)
+export async function reflectWinterRequest(id: string, token: string, type: WinterRequestRow['request_type'] = 'add'): Promise<string> {
+  const result = await winterRpc(type === 'change' ? 'reflect_winter_change_request' : 'reflect_winter_reception_request', { p_request_id: id }, token)
   if (typeof result !== 'string' || !/^[0-9a-f-]{36}$/i.test(result)) throw new Error('反映結果を確認できません。同じ申請で再確認してください')
   return result
 }

@@ -57,9 +57,14 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
     {loaded && requests.filter(row => !orgId || row.organization_id === orgId).map(row => <article key={row.id} className={`space-y-2 rounded-xl border-2 p-4 ${row.status === 'pending' ? 'border-orange-400 bg-orange-50' : 'border-blue-200 bg-blue-50'}`}>
       <p className="text-xl font-bold">{orgName(row.organization_id)} ／ {row.request_type === 'add' ? '追加' : row.request_type === 'withdraw' ? '棄権' : '変更'} ／ {row.status === 'pending' ? '未反映' : row.status === 'reflected' ? '反映済み' : row.status}</p>
       <p>第{data.competitions.find(c => c.id === row.target_competition_id)?.competition_no}競技　{data.riders.find(r => r.id === row.rider_id)?.name} ／ {data.horses.find(h => h.id === row.horse_id)?.name}</p>
+      {row.request_type === 'change' && row.payload.before && <div className="rounded-lg border bg-white p-3">
+        <p>変更前：第{data.competitions.find(c => c.id === row.payload.before!.competitionId)?.competition_no}競技　{data.riders.find(r => r.id === row.payload.before!.riderId)?.name} ／ {data.horses.find(h => h.id === row.payload.before!.horseId)?.name}{row.payload.before.isOp ? '（OP）' : ''}</p>
+        <p className="font-bold">{row.payload.changedFields?.map(field => ({ competition: '競技変更', player: '選手変更', horse: '馬変更', op: '参加区分変更', membership: '会員区分変更' }[field] ?? field)).join('・')}</p>
+        {row.payload.treatedAsWithdrawAdd && <p>棄権＋追加として反映します。</p>}
+      </div>}
       <p>受付担当者：{row.payload.visitorName ?? '―'} ／ ¥{row.fee_amount.toLocaleString('ja-JP')}</p>
       <p className="text-sm">{new Date(row.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</p>
-      {row.status === 'pending' && ['add','withdraw'].includes(row.request_type) && <button className={button} disabled={busy} onClick={() => void run(token => reflectWinterRequest(row.id, token), '出番表へ反映しました')}>出番表へ反映</button>}
+      {row.status === 'pending' && ['add','change','withdraw'].includes(row.request_type) && <button className={button} disabled={busy} onClick={() => void run(token => reflectWinterRequest(row.id, token, row.request_type), '出番表へ反映しました')}>出番表へ反映</button>}
     </article>)}
     </>}
     <h2 className="text-2xl font-bold">棄権受付（0円）</h2>

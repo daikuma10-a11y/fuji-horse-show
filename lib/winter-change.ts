@@ -1,5 +1,5 @@
 import type { WinterEntryRow } from './winter-data'
-import { reviewWinterAdd, type WinterAddInput } from './winter-reception'
+import { reviewWinterAdd, winterRpc, type WinterAddInput } from './winter-reception'
 import { assertWinterEvent, winterCompetition, winterEntryPrice, type WinterFeeSelection } from './winter-event'
 
 export type WinterChangeInput = {
@@ -35,4 +35,20 @@ export function reviewWinterChange(input: WinterChangeInput) {
   const competitionDiff = treatedAsWithdrawAdd ? 0 : Math.max(0, next.entryFee - oldPrice)
   return { changedFields, treatedAsWithdrawAdd, fromEntryFee: oldPrice, toEntryFee: next.entryFee,
     fee: { addBase, addEntry, changeBase, competitionDiff, total: addBase + addEntry + changeBase + competitionDiff } }
+}
+
+export async function submitWinterChange(input: WinterChangeInput, token: string) {
+  const review = reviewWinterChange(input)
+  const { original, fromSelection, target } = input
+  const result = await winterRpc('submit_winter_reception_change', {
+    p_id: target.id, p_entry_id: original.entry_id,
+    p_before: { competitionId: original.competition_id, riderId: original.rider_id, horseId: original.horse_id, isOp: !!original.is_op },
+    p_competition_id: target.competition.id, p_rider_id: target.rider.id, p_horse_id: target.horse.id,
+    p_visitor_name: target.visitorName.trim(), p_from_membership: fromSelection.membership ?? null,
+    p_membership: target.selection.membership ?? null, p_is_op: !!target.selection.isOp,
+    p_from_instructor: !!fromSelection.instructorConfirmed, p_instructor: !!target.selection.instructorConfirmed,
+    p_expected_total: review.fee.total,
+  }, token)
+  if (result !== target.id) throw new Error('保存結果を確認できません。同じ受付番号で再確認してください')
+  return target.id
 }

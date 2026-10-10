@@ -35,3 +35,21 @@ assert.throws(()=>review(input),/日馬連登録/)
 input=base();input.target.competition=comp('8');input.target.selection={membership:'member'}
 assert.throws(()=>review(input),/資格/)
 console.log('PASS: Winter change fees, positive difference only, multi-field rules, OP, explicit membership, JEF, instructor and event checks')
+;(async()=>{
+ let mode='success', bodies=[]
+ global.fetch=async(url,options)=>{
+   assert.ok(url.endsWith('/submit_winter_reception_change')); assert.equal(options.headers.Authorization,'Bearer admin-test')
+   const body=JSON.parse(options.body);bodies.push(body)
+   if(mode==='failure')return {ok:false,json:async()=>({message:'変更前の人馬が更新されています'})}
+   return {ok:true,json:async()=>mode==='wrong'?'wrong-id':body.p_id}
+ }
+ const input=base()
+ assert.equal(await load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api}).submitWinterChange(input,'admin-test'),'request')
+ assert.equal(bodies[0].p_expected_total,2000);assert.deepEqual(bodies[0].p_before,{competitionId:'c1',riderId:'rider',horseId:'horse',isOp:false})
+ mode='failure'; await assert.rejects(load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api}).submitWinterChange(input,'admin-test'),/更新/)
+ mode='success'; await load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api}).submitWinterChange(input,'admin-test')
+ assert.deepEqual(bodies[1],bodies[2])
+ mode='wrong';await assert.rejects(load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api}).submitWinterChange(input,'admin-test'),/保存結果/)
+ await assert.rejects(load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api}).submitWinterChange(input,''),/本部ログイン/)
+ console.log('PASS: change snapshot, server-price check, authenticated submission, stable retries and explicit response failures')
+})().catch(error=>{console.error(error);process.exitCode=1})
