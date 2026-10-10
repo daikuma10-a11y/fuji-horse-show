@@ -2,6 +2,7 @@
 import {useEffect,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import {archiveRosterEntity,clubEntities,loadSharedRoster,saveRosterEntity,saveWinterParticipants,type SharedRoster,type RosterClub,type RosterEntity} from '@/lib/shared-roster'
+import {compareWinterOrganizations} from '@/lib/winter-display-order'
 const field='min-h-14 w-full rounded-xl border-2 p-3 text-xl'
 const button='min-h-14 rounded-xl bg-blue-800 p-3 text-xl font-bold text-white disabled:opacity-50'
 export function SharedRosterManager({session,onParticipantsSaved}:{session:AdminSession;onParticipantsSaved:()=>void}){
@@ -28,7 +29,7 @@ export function SharedRosterManager({session,onParticipantsSaved}:{session:Admin
   <fieldset disabled={busy} className="space-y-4">
    {data&&<p className="text-lg">登録済み：選手 {data.entities.filter(x=>x.kind==='rider'&&!x.archived_at).length.toLocaleString()} 名 ／ 馬 {data.entities.filter(x=>x.kind==='horse'&&!x.archived_at).length.toLocaleString()} 頭</p>}
    {loading&&<p role="status" className="rounded-xl bg-blue-50 p-3 text-xl">{clubs.length?`団体 ${clubs.length}件を読み込みました。選手・馬の名簿を読み込んでいます…`:'共通名簿の団体を読み込んでいます…'}</p>}
-   <label className="block text-xl">共通名簿の所属団体<select disabled={!clubs.length} className={field} value={club} onChange={e=>choose(e.target.value)}><option value="">団体を選択</option>{[...clubs].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+   <label className="block text-xl">共通名簿の所属団体<select disabled={!clubs.length} className={field} value={club} onChange={e=>choose(e.target.value)}><option value="">団体を選択</option>{[...clubs].sort(compareWinterOrganizations).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
    <fieldset disabled={!data||loading} className="space-y-4">
    <details><summary className="cursor-pointer py-3 text-2xl font-bold">名簿全体から人馬を探す・所属を追加する</summary><label className="block text-xl">名前・フリガナ・日馬連番号<input className={field} value={search} onChange={e=>setSearch(e.target.value)} placeholder="所属が未登録の人馬も検索できます"/></label>{query&&<p role="status">{matches.length} 件{matches.length>50?'（先頭50件を表示。検索を絞ってください）':''}</p>}{matches.slice(0,50).map(x=><div key={x.id} className="my-2 rounded-xl border p-3"><p className="text-xl">{x.kind==='rider'?'選手':'馬'}：{x.name}</p><p>{x.reading||'読み未登録'} ／ 日馬連 {x.jef_number??'未登録'}</p><p>所属：{data?.affiliations.filter(a=>a.entity_id===x.id&&a.ended_at===null).map(a=>data.clubs.find(c=>c.id===a.club_id)?.name).join(' ／ ')||'未登録'}</p><button type="button" className="mt-2 rounded-lg border-2 p-3 text-lg" onClick={()=>beginEdit(x)}>この人馬を編集・所属追加</button></div>)}</details>
    {data&&data.clubs.length===0&&<p>整理した名簿の一括取込はまだ行っていません。下で個別登録できます。</p>}

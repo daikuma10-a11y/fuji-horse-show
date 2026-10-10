@@ -1,4 +1,5 @@
 "use client"
+import {winterCompetitionLabel} from "@/lib/winter-display-order"
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -74,14 +75,14 @@ export default function WinterChangePage() {
       <button className={button} disabled={busy} onClick={stage}>未確定一覧に追加して入力を続ける</button>
       <button className={button} disabled={busy} onClick={() => setReview(null)}>入力に戻る</button>
     </section> : <div className="space-y-4">
-      <label className="block text-xl font-bold">団体<select className={field} value={orgId} onChange={e => { setOrgId(e.target.value); chooseEntry('') }}><option value="">団体を選択</option>{[...data.organizations].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+      <label className="block text-xl font-bold">団体<select className={field} value={orgId} onChange={e => { setOrgId(e.target.value); chooseEntry('') }}><option value="">団体を選択</option>{data.organizations.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
       <label className="block text-xl font-bold">変更する人馬<select className={field} value={entryId} onChange={e => chooseEntry(e.target.value)}><option value="">出番表から人馬を選択</option>{entries.map(row => <option key={row.entry_id} value={row.entry_id}>{labelEntry(row.entry_id)}</option>)}</select></label>
       {!entries.length && <p className="rounded-xl bg-blue-100 p-4 text-xl">対象の出番がありません。「大会本部」で人馬を登録し、追加を出番表へ反映すると選択できます。</p>}
       {original && from && <>
         <p className="rounded-xl bg-white p-4 text-xl">変更前：{labelEntry(original.entry_id)}</p>
         <FeeSelection label="変更前" competition={from} value={fromSelection} onChange={setFromSelection} />
         <h3 className="text-2xl font-bold">変更後の内容</h3>
-        <label className="block text-xl font-bold">競技<select className={field} value={competitionId} onChange={e => { setCompetitionId(e.target.value); setSelection({}) }}>{[...data.competitions].sort((a,b)=>a.competition_date.localeCompare(b.competition_date)||(['①','②','③','④'].indexOf(a.competition_no)-['①','②','③','④'].indexOf(b.competition_no))||Number(a.competition_no)-Number(b.competition_no)).map(row => <option key={row.id} value={row.id}>第{row.competition_no}競技 {row.name}</option>)}</select></label>
+        <label className="block text-xl font-bold">競技<select className={field} value={competitionId} onChange={e => { setCompetitionId(e.target.value); setSelection({}) }}>{data.competitions.map(row => <option key={row.id} value={row.id}>{winterCompetitionLabel(row)}</option>)}</select></label>
         <label className="block text-xl font-bold">選手<select className={field} value={riderId} onChange={e => setRiderId(e.target.value)}>{data.riders.filter(r=>r.organization_id===orgId).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         <label className="block text-xl font-bold">馬<select className={field} value={horseId} onChange={e => setHorseId(e.target.value)}>{data.horses.filter(h=>h.organization_id===orgId).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         {competition && <FeeSelection label="変更後" competition={competition} value={selection} onChange={setSelection} />}

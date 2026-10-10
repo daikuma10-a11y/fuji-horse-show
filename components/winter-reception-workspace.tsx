@@ -1,4 +1,5 @@
 "use client"
+import {winterCompetitionLabel} from "@/lib/winter-display-order"
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -42,8 +43,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
   const canUseOp = !!competition && !competition.official && competition.op_fee !== null
   const riders = data?.riders.filter(row => row.organization_id === orgId) ?? []
   const horses = data?.horses.filter(row => row.organization_id === orgId) ?? []
-  const sortedCompetitions = [...(data?.competitions ?? [])].sort((a, b) => a.competition_date.localeCompare(b.competition_date) ||
-    (['①','②','③','④'].includes(a.competition_no) ? ['①','②','③','④'].indexOf(a.competition_no) - ['①','②','③','④'].indexOf(b.competition_no) : Number(a.competition_no) - Number(b.competition_no)))
+
 
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-6 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
@@ -59,7 +59,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
       {(mode !== "admin" || data.organizations.length>0) && <>
       <label className="block text-xl font-bold">受付用の団体<select disabled={!data.organizations.length} className={fieldClass} value={orgId} onChange={e => { setOrgId(e.target.value); setRiderId(""); setHorseId("") }}><option value="">団体を選択</option>{data.organizations.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
       {mode !== "withdraw" && <>
-      <label className="block text-xl font-bold">競技<select className={fieldClass} value={competitionId} onChange={e => { setCompetitionId(e.target.value); setSelection({}) }}><option value="">競技を選択</option>{sortedCompetitions.map(row => <option key={row.id} value={row.id}>{new Date(`${row.competition_date}T00:00:00+09:00`).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" })}　第{row.competition_no}競技 {row.name}</option>)}</select></label>
+      <label className="block text-xl font-bold">競技<select className={fieldClass} value={competitionId} onChange={e => { setCompetitionId(e.target.value); setSelection({}) }}><option value="">競技を選択</option>{data.competitions.map(row => <option key={row.id} value={row.id}>{winterCompetitionLabel(row)}</option>)}</select></label>
       <label className="block text-xl font-bold">選手<select className={fieldClass} value={riderId} onChange={e => setRiderId(e.target.value)}><option value="">選手を選択</option>{riders.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
       <label className="block text-xl font-bold">馬<select className={fieldClass} value={horseId} onChange={e => setHorseId(e.target.value)}><option value="">馬を選択</option>{horses.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
       {competition && (competition.member_fee !== null || competition.nonmember_fee !== null) && <label className="block text-xl font-bold">料金区分<select className={fieldClass} value={selection.membership ?? ""} onChange={e => setSelection(value => ({ ...value, membership: e.target.value === "member" ? "member" : e.target.value === "nonmember" ? "nonmember" : undefined }))}><option value="">区分を選択してください</option><option value="member">会員</option><option value="nonmember">非会員</option></select></label>}

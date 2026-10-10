@@ -1,5 +1,7 @@
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from "./winter-event"
 
+import { compareWinterCompetitions, compareWinterOrganizations } from "./winter-display-order"
+
 const URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
 type ReceptionRosterState = { is_participant?: boolean; roster_source?: string | null }
@@ -47,6 +49,9 @@ export async function loadWinterData(signal?: AbortSignal) {
     rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee,notes", "id.asc", signal),
     rows<WinterEntryRow>("reception_entries", "event_id,entry_id,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_name,is_op", "entry_id.asc", signal),
   ])
+  organizations.sort(compareWinterOrganizations)
+  for (const row of competitions) row.name=row.name.normalize("NFKC").replace(/\s+/g," ").trim()
+  competitions.sort(compareWinterCompetitions)
   const riders=allRiders.filter(isWinterReceptionParticipant)
   const horses=allHorses.filter(isWinterReceptionParticipant)
   const orgIds = new Set(organizations.map(row => row.id))

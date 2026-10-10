@@ -1,4 +1,5 @@
 "use client"
+import {winterCompetitionLabel} from "@/lib/winter-display-order"
 import {useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import {winterCompetition,type WinterFeeSelection} from '@/lib/winter-event'
@@ -17,7 +18,7 @@ export function WinterInitialEntryRegistration({data,session,onChanged}:{data:Aw
  <label className="block text-xl">所属団体<select className={field} value={orgId} onChange={e=>{setOrgId(e.target.value);setRiderId('');setHorseId('')}}><option value="">団体を選択</option>{data.organizations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
  <label className="block text-xl">登録する選手<select className={field} value={riderId} onChange={e=>setRiderId(e.target.value)}><option value="">選手を選択</option>{data.riders.filter(x=>x.organization_id===orgId).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
  <label className="block text-xl">登録する馬<select className={field} value={horseId} onChange={e=>setHorseId(e.target.value)}><option value="">馬を選択</option>{data.horses.filter(x=>x.organization_id===orgId).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
- <label className="block text-xl">登録する競技<select className={field} value={compId} onChange={e=>{setCompId(e.target.value);setSelection({})}}><option value="">競技を選択</option>{data.competitions.map(x=><option key={x.id} value={x.id}>第{x.competition_no}競技 {x.name}</option>)}</select></label>
+ <label className="block text-xl">登録する競技<select className={field} value={compId} onChange={e=>{setCompId(e.target.value);setSelection({})}}><option value="">競技を選択</option>{data.competitions.map(x=><option key={x.id} value={x.id}>{winterCompetitionLabel(x)}</option>)}</select></label>
  {comp&&(comp.member_fee!==null||comp.nonmember_fee!==null)&&<label className="block text-xl">事前登録の料金区分<select className={field} value={selection.membership??''} onChange={e=>setSelection(v=>({...v,membership:e.target.value==='member'?'member':e.target.value==='nonmember'?'nonmember':undefined}))}><option value="">区分を選択</option><option value="member">会員</option><option value="nonmember">非会員</option></select></label>}
  {comp&&winterCompetition(comp.competition_no).instructorRequired&&<label className="flex items-center gap-3 text-xl"><input className="size-7" type="checkbox" checked={!!selection.instructorConfirmed} onChange={e=>setSelection(v=>({...v,instructorConfirmed:e.target.checked}))}/>地域乗馬指導者資格を確認しました</label>}
  {comp&&!comp.official&&comp.op_fee!==null&&<label className="flex items-center gap-3 text-xl"><input className="size-7" type="checkbox" checked={!!selection.isOp} onChange={e=>setSelection(v=>({...v,isOp:e.target.checked}))}/>OP参加</label>}
