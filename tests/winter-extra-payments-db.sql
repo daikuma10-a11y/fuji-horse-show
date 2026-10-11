@@ -1,0 +1,34 @@
+begin;
+select set_config('fhs.test_user',(select id::text from auth.users where raw_app_meta_data->>'role'='admin' order by id limit 1),true);
+select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('fhs.test_user'),'app_metadata',jsonb_build_object('role','admin'))::text,true);
+set local role authenticated;
+do $$
+declare org uuid; a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); r uuid:=gen_random_uuid(); autumn uuid;
+begin
+ select id into org from public.organizations where event_id='b571f05e-ed23-4e07-929e-be2b73e601a5' order by id limit 1;
+ if org is null then raise exception 'Missing Winter organization';end if;
+ perform public.save_winter_extra_payment(a,org,10000,'cash_at_venue','現金確認');
+ perform public.save_winter_extra_payment(a,org,10000,'cash_at_venue','現金確認');
+ if (select count(*) from public.fhs_winter_extra_payments where id=a)<>1 then raise exception 'Retry duplicated receipt';end if;
+ if not exists(select 1 from public.fhs_winter_extra_payments where id=a and created_by=auth.uid()) then raise exception 'Missing audit identity';end if;
+ begin perform public.save_winter_extra_payment(a,org,12000,'cash_at_venue','現金確認');raise exception 'Changed retry accepted';exception when others then if sqlerrm not like '%登録番号%' then raise;end if;end;
+ perform public.save_winter_extra_payment(b,org,5000,'bank_transfer','銀行確認');
+ perform public.save_winter_extra_payment(r,org,10000,'cash_at_venue','入力訂正',a);
+ perform public.save_winter_extra_payment(r,org,10000,'cash_at_venue','入力訂正',a);
+ if (select sum(case when reverses_id is null then amount else -amount end) from public.fhs_winter_extra_payments where id in(a,b,r))<>5000 then raise exception 'Receipt balance wrong';end if;
+ begin perform public.save_winter_extra_payment(gen_random_uuid(),org,10000,'cash_at_venue','二重取消',a);raise exception 'Double reversal accepted';exception when others then if sqlerrm not like '%取消済み%' then raise;end if;end;
+ begin perform public.save_winter_extra_payment(gen_random_uuid(),org,10000,'cash_at_venue','取消取消',r);raise exception 'Reversal reversal accepted';exception when others then if sqlerrm not like '%取り消す%' then raise;end if;end;
+ begin update public.fhs_winter_extra_payments set amount=1 where id=a;raise exception 'Direct update accepted';exception when insufficient_privilege then null;end;
+ select id into autumn from public.organizations where event_id='2af66251-66a2-4c51-8180-a5badf0584d4' limit 1;
+ if autumn is not null then begin perform public.save_winter_extra_payment(gen_random_uuid(),autumn,1000,'cash_at_venue','他大会');raise exception 'Autumn accepted';exception when others then if sqlerrm not like '%Winter%' then raise;end if;end;end if;
+ begin perform public.save_winter_extra_payment(gen_random_uuid(),org,0,'cash_at_venue','ゼロ');raise exception 'Zero accepted';exception when others then if sqlerrm not like '%入金額%' then raise;end if;end;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid(),'app_metadata',jsonb_build_object('role','user'),'user_metadata',jsonb_build_object('role','admin'))::text,true);
+ if exists(select 1 from public.fhs_winter_extra_payments where id in(a,b,r)) then raise exception 'Nonadmin can read';end if;
+ begin perform public.save_winter_extra_payment(gen_random_uuid(),org,1000,'cash_at_venue','非管理者');raise exception 'Nonadmin write accepted';exception when others then if sqlerrm not like '%本部ログイン%' then raise;end if;end;
+end;$$;
+reset role;
+set local role anon;
+do $$begin perform public.save_winter_extra_payment(gen_random_uuid(),gen_random_uuid(),1000,'cash_at_venue','匿名');raise exception 'Anonymous write accepted';exception when insufficient_privilege then null;end;$$;
+reset role;
+select 'PASS: receipt/reversal audit, idempotent retries, immutable history, Winter isolation, admin-only access, zero/duplicate reversal rejection; fixtures rolled back' as result;
+rollback;

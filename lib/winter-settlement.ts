@@ -9,13 +9,14 @@ type Data=Awaited<ReturnType<typeof loadWinterData>>
 export type WinterInitialCharge={id:string;event_id:string;entry_fee:number;inputs:{organizationId:string;billingOrganizationId?:string;competitionId:string;riderId:string;horseId:string}}
 export type WinterAdvance={event_id:string;organization_key:string;paid_amount:number;note:string;updated_at:string;updated_by:string}
 export type WinterPaymentInstruction={event_id:string;organization_key:string;payment_method:'bank_transfer'|'cash_at_venue';bank_details:string;updated_at:string;updated_by:string}
-export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[]}
+export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[];payments?:WinterExtraPayment[]}
+export type WinterExtraPayment={id:string;event_id:string;organization_key:string;amount:number;payment_method:'bank_transfer'|'cash_at_venue';note:string;reverses_id:string|null;created_at:string;created_by:string}
 const amount=(value:number)=>{if(!Number.isSafeInteger(value)||value<0)throw new Error('精算金額の形式を確認してください');return value}
 async function read<T extends {event_id:string}>(table:string,select:string,token:string):Promise<T[]>{
  const all:T[]=[]
  for(let offset=0;;offset+=500){
-  const query=new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,select,order:table==='fhs_winter_initial_entries'?'id.asc':'organization_key.asc',limit:'500',offset:String(offset)})
-  const response=await fetch(`${endpoint}/${table}?${query}`,{headers:{apikey:key,Authorization:`Bearer ${token}`},cache:'no-store'})
+  const query=new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,select,order:['fhs_winter_initial_entries','fhs_winter_extra_payments'].includes(table)?'id.asc':'organization_key.asc',limit:'500',offset:String(offset)})
+  const response=await fetch(`${endpoint}/${table}?${query}`,{headers:{apikey:key,Authorization:`Bearer ${token}`},cache:'no-store',signal:AbortSignal.timeout(15000)})
   if(!response.ok)throw new Error(`Winter精算の読み込みに失敗しました (${response.status})`)
   const page:unknown=await response.json();if(!Array.isArray(page))throw new Error('精算データの形式を確認できません')
   for(const row of page)assertWinterEvent(row?.event_id)
@@ -24,14 +25,14 @@ async function read<T extends {event_id:string}>(table:string,select:string,toke
 }
 export async function loadWinterSettlement(token:string):Promise<WinterSettlementData>{
  if(!token)throw new Error('本部ログインが必要です')
- const [initial,requests,advances,instructions]=await Promise.all([read<WinterInitialCharge>('fhs_winter_initial_entries','id,event_id,inputs,entry_fee',token),loadWinterRequests(token),read<WinterAdvance>('settlement_prepayments','event_id,organization_key,paid_amount,note,updated_at,updated_by',token),read<WinterPaymentInstruction>('settlement_payment_instructions','event_id,organization_key,payment_method,bank_details,updated_at,updated_by',token)])
- return {initial,requests,advances,instructions}
+ const [initial,requests,advances,instructions,payments]=await Promise.all([read<WinterInitialCharge>('fhs_winter_initial_entries','id,event_id,inputs,entry_fee',token),loadWinterRequests(token),read<WinterAdvance>('settlement_prepayments','event_id,organization_key,paid_amount,note,updated_at,updated_by',token),read<WinterPaymentInstruction>('settlement_payment_instructions','event_id,organization_key,payment_method,bank_details,updated_at,updated_by',token),read<WinterExtraPayment>('fhs_winter_extra_payments','id,event_id,organization_key,amount,payment_method,note,reverses_id,created_at,created_by',token)])
+ return {initial,requests,advances,instructions,payments}
 }
 /** Use saved fee snapshots, never the current competition price or Autumn seed data. */
 export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,orgId:string){
  assertWinterEvent(data.eventId)
  const org=data.organizations.find(x=>x.id===orgId);if(!org)throw new Error('Winterの団体を選択してください');assertWinterEvent(org.event_id)
- for(const row of [...ledger.initial,...ledger.requests,...ledger.advances,...(ledger.instructions??[])])assertWinterEvent(row.event_id)
+ for(const row of [...ledger.initial,...ledger.requests,...ledger.advances,...(ledger.instructions??[]),...(ledger.payments??[])])assertWinterEvent(row.event_id)
  for(const row of ledger.initial){
   if(!row.inputs||!data.organizations.some(x=>x.id===row.inputs.organizationId)||(row.inputs.billingOrganizationId!==undefined&&!data.organizations.some(x=>x.id===row.inputs.billingOrganizationId))||!data.competitions.some(x=>x.id===row.inputs.competitionId)||!data.riders.some(x=>x.id===row.inputs.riderId)||!data.horses.some(x=>x.id===row.inputs.horseId))throw new Error('事前エントリーの団体・競技・人馬を確認できません')
   amount(row.entry_fee)
@@ -58,13 +59,23 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  }).sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const extraTotal=lines.reduce((sum,x)=>sum+x.amount,0),advancePaid=amount(advance?.paid_amount??0)
  if(!Number.isSafeInteger(normalTotal+extraTotal))throw new Error('精算合計が大きすぎます')
+ const payments=(ledger.payments??[]).filter(x=>x.organization_key===orgId)
+ const reversed=new Set<string>()
+ for(const row of payments){
+  if(amount(row.amount)===0||!['bank_transfer','cash_at_venue'].includes(row.payment_method)||!row.note.trim())throw new Error('追加分入金の履歴を確認できません')
+  if(row.reverses_id){const original=payments.find(x=>x.id===row.reverses_id);if(!original||original.reverses_id||original.amount!==row.amount||original.payment_method!==row.payment_method||reversed.has(original.id))throw new Error('追加分入金の取消履歴を確認できません');reversed.add(original.id)}
+ }
+ const extraPaid=payments.reduce((sum,x)=>sum+(x.reverses_id?-x.amount:x.amount),0)
+ const remaining=normalTotal+extraTotal-advancePaid-extraPaid
+ if(!Number.isSafeInteger(extraPaid)||extraPaid<0||!Number.isSafeInteger(remaining))throw new Error('追加分入金の合計を確認できません')
  const warnings:string[]=[]
+ if(remaining<0)warnings.push('入金が競技料金合計を超えています。返金・充当を本部で確認してください。')
  if(requests.some(x=>x.status==='pending'))warnings.push('未反映の申請があります。反映後に再確認してください。')
  if(!advance&&normalTotal>0)warnings.push('事前入金は未確認です。')
  if(advancePaid>normalTotal)warnings.push('事前エントリー合計を超える入金があります。返金・充当を確認してください。')
  const covered=new Set([...ledger.initial.map(x=>x.id),...ledger.requests.filter(x=>x.status==='reflected').map(x=>x.entry_id).filter(Boolean)])
  if(data.entries.some(x=>data.riders.find(r=>r.id===x.rider_id)?.organization_id===orgId&&!covered.has(x.entry_id)))warnings.push('料金履歴を確認できない出番があります。請求総額として使用しないでください。')
- return {organization:org,instruction,normalTotal,extraTotal,advancePaid,advance,remaining:normalTotal+extraTotal-advancePaid,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
+ return {organization:org,instruction,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
 }
 /** Absolute advance amount, with optimistic locking and read-back. This is not a receipt. */
 export async function saveWinterAdvance(session:AdminSession,orgId:string,paid:number,note:string,expected:WinterAdvance|null){
@@ -72,9 +83,9 @@ export async function saveWinterAdvance(session:AdminSession,orgId:string,paid:n
  if(expected){assertWinterEvent(expected.event_id);if(expected.organization_key!==orgId)throw new Error('入金の団体が一致しません')}
  const verified=await verifyAdminSession(session)
  const headers={apikey:key,Authorization:`Bearer ${verified.accessToken}`,'Content-Type':'application/json'}
- const orgResponse=await fetch(`${endpoint}/organizations?${new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,id:`eq.${orgId}`,select:'id'})}`,{headers,cache:'no-store'})
+ const orgResponse=await fetch(`${endpoint}/organizations?${new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,id:`eq.${orgId}`,select:'id'})}`,{headers,cache:'no-store',signal:AbortSignal.timeout(15000)})
  if(!orgResponse.ok)throw new Error('団体を確認できません');const orgs=await orgResponse.json();if(!Array.isArray(orgs)||orgs.length!==1)throw new Error('Winterの団体を選択してください')
- const userResponse=await fetch('https://mhgyhyxagkkwdiepifdp.supabase.co/auth/v1/user',{headers,cache:'no-store'})
+ const userResponse=await fetch('https://mhgyhyxagkkwdiepifdp.supabase.co/auth/v1/user',{headers,cache:'no-store',signal:AbortSignal.timeout(15000)})
  if(!userResponse.ok)throw new Error('本部ログインを確認できません');const user=await userResponse.json();if(!user.id||user.app_metadata?.role!=='admin')throw new Error('管理者権限が必要です')
  const body={event_id:WINTER_EVENT_ID,organization_key:orgId,paid_amount:paid,note:note.trim(),updated_by:user.id,updated_at:new Date().toISOString()}
  const query=expected?`?${new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,organization_key:`eq.${orgId}`,updated_at:`eq.${expected.updated_at}`})}`:''
@@ -96,9 +107,9 @@ export async function saveWinterPaymentInstruction(session:AdminSession,orgId:st
  if(expected){assertWinterEvent(expected.event_id);if(expected.organization_key!==orgId)throw new Error('支払方法の団体が一致しません')}
  const verified=await verifyAdminSession(session)
  const headers={apikey:key,Authorization:`Bearer ${verified.accessToken}`,'Content-Type':'application/json'}
- const orgResponse=await fetch(`${endpoint}/organizations?${new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,id:`eq.${orgId}`,select:'id'})}`,{headers,cache:'no-store'})
+ const orgResponse=await fetch(`${endpoint}/organizations?${new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,id:`eq.${orgId}`,select:'id'})}`,{headers,cache:'no-store',signal:AbortSignal.timeout(15000)})
  if(!orgResponse.ok)throw new Error('団体を確認できません');const orgs=await orgResponse.json();if(!Array.isArray(orgs)||orgs.length!==1)throw new Error('Winterの団体を選択してください')
- const userResponse=await fetch('https://mhgyhyxagkkwdiepifdp.supabase.co/auth/v1/user',{headers,cache:'no-store'})
+ const userResponse=await fetch('https://mhgyhyxagkkwdiepifdp.supabase.co/auth/v1/user',{headers,cache:'no-store',signal:AbortSignal.timeout(15000)})
  if(!userResponse.ok)throw new Error('本部ログインを確認できません');const user=await userResponse.json();if(!user.id||user.app_metadata?.role!=='admin')throw new Error('管理者権限が必要です')
  const updatedAt=new Date(Math.max(Date.now(),expected?new Date(expected.updated_at).getTime()+1:0)).toISOString()
  const body={event_id:WINTER_EVENT_ID,organization_key:orgId,payment_method:method,bank_details:details,updated_by:user.id,updated_at:updatedAt}

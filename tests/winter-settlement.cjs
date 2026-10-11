@@ -19,6 +19,14 @@ const horseOrg='horse-club',multiData={...data,organizations:[...data.organizati
 assert.equal(api.winterSettlementAccount(multiData,multiLedger,org).normalTotal,5000)
 assert.equal(api.winterSettlementAccount(multiData,multiLedger,horseOrg).normalTotal,0)
 assert.throws(()=>api.winterSettlementAccount(multiData,{...multiLedger,initial:[{...initial,inputs:{...initial.inputs,billingOrganizationId:'unknown'}}]},org),/団体/)
+const payment={id:'pay',event_id:ev,organization_key:org,amount:10000,payment_method:'cash_at_venue',note:'確認済み',reverses_id:null}
+account=api.winterSettlementAccount(data,{...ledger,advances:[advance],payments:[payment]},org);assert.equal(account.extraPaid,10000);assert.equal(account.remaining,5000)
+const reversal={...payment,id:'rev',reverses_id:'pay'}
+account=api.winterSettlementAccount(data,{...ledger,advances:[advance],payments:[payment,reversal]},org);assert.equal(account.extraPaid,0);assert.equal(account.remaining,15000)
+assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[reversal]},org),/取消履歴/)
+assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[payment,reversal,{...reversal,id:'rev2'}]},org),/取消履歴/)
+assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[{...payment,event_id:'autumn'}]},org),/Winter/)
+account=api.winterSettlementAccount(data,{...ledger,payments:[{...payment,amount:30000}]},org);assert(account.warnings.some(x=>x.includes('超えています')))
 let stored=null,mode='normal',writes=0
 const response=(body,ok=true,status=200)=>({ok,status,json:async()=>body})
 global.fetch=async(url,options={})=>{const u=new URL(url);if(u.pathname.endsWith('/user'))return response({id:user,app_metadata:{role:'admin'}});if(u.pathname.endsWith('/organizations')){assert.equal(u.searchParams.get('event_id'),`eq.${ev}`);return response([{id:org}])}
