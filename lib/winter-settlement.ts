@@ -1,3 +1,4 @@
+import type {WinterSettlementOnlyRow} from './winter-settlement-only'
 import {winterHorseRegistration} from './winter-horse-registration'
 import {WINTER_EVENT_ID,assertWinterEvent} from './winter-event'
 import {loadWinterRequests,type WinterRequestRow} from './winter-reception'
@@ -10,14 +11,14 @@ type Data=Awaited<ReturnType<typeof loadWinterData>>
 export type WinterInitialCharge={id:string;event_id:string;entry_fee:number;inputs:{organizationId:string;billingOrganizationId?:string;competitionId:string;riderId:string;horseId:string}}
 export type WinterAdvance={event_id:string;organization_key:string;paid_amount:number;note:string;updated_at:string;updated_by:string}
 export type WinterPaymentInstruction={event_id:string;organization_key:string;payment_method:'bank_transfer'|'cash_at_venue';bank_details:string;updated_at:string;updated_by:string}
-export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[];payments?:WinterExtraPayment[];adjustments?:WinterChargeAdjustment[]}
+export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[];payments?:WinterExtraPayment[];adjustments?:WinterChargeAdjustment[];onsite?:WinterSettlementOnlyRow[]}
 export type WinterExtraPayment={id:string;event_id:string;organization_key:string;amount:number;payment_method:'bank_transfer'|'cash_at_venue';note:string;reverses_id:string|null;created_at:string;created_by:string}
 export type WinterChargeAdjustment={id:string;sequence:number;event_id:string;organization_key:string;delta:number;reason:string;previous_id:string|null;before_total:number;after_total:number;created_at:string;created_by:string}
 const amount=(value:number)=>{if(!Number.isSafeInteger(value)||value<0)throw new Error('精算金額の形式を確認してください');return value}
 async function read<T extends {event_id:string}>(table:string,select:string,token:string):Promise<T[]>{
  const all:T[]=[]
  for(let offset=0;;offset+=500){
-  const query=new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,select,order:table==='fhs_winter_charge_adjustments'?'sequence.asc':['fhs_winter_initial_entries','fhs_winter_extra_payments'].includes(table)?'id.asc':'organization_key.asc',limit:'500',offset:String(offset)})
+  const query=new URLSearchParams({event_id:`eq.${WINTER_EVENT_ID}`,select,order:table==='fhs_winter_charge_adjustments'?'sequence.asc':['fhs_winter_initial_entries','fhs_winter_extra_payments','fhs_winter_settlement_only'].includes(table)?'id.asc':'organization_key.asc',limit:'500',offset:String(offset)})
   const response=await fetch(`${endpoint}/${table}?${query}`,{headers:{apikey:key,Authorization:`Bearer ${token}`},cache:'no-store',signal:AbortSignal.timeout(15000)})
   if(!response.ok)throw new Error(`Winter精算の読み込みに失敗しました (${response.status})`)
   const page:unknown=await response.json();if(!Array.isArray(page))throw new Error('精算データの形式を確認できません')
@@ -27,14 +28,14 @@ async function read<T extends {event_id:string}>(table:string,select:string,toke
 }
 export async function loadWinterSettlement(token:string):Promise<WinterSettlementData>{
  if(!token)throw new Error('本部ログインが必要です')
- const [initial,requests,advances,instructions,payments,adjustments]=await Promise.all([read<WinterInitialCharge>('fhs_winter_initial_entries','id,event_id,inputs,entry_fee',token),loadWinterRequests(token),read<WinterAdvance>('settlement_prepayments','event_id,organization_key,paid_amount,note,updated_at,updated_by',token),read<WinterPaymentInstruction>('settlement_payment_instructions','event_id,organization_key,payment_method,bank_details,updated_at,updated_by',token),read<WinterExtraPayment>('fhs_winter_extra_payments','id,event_id,organization_key,amount,payment_method,note,reverses_id,created_at,created_by',token),read<WinterChargeAdjustment>('fhs_winter_charge_adjustments','*',token)])
- return {initial,requests,advances,instructions,payments,adjustments}
+ const [initial,requests,advances,instructions,payments,adjustments,onsite]=await Promise.all([read<WinterInitialCharge>('fhs_winter_initial_entries','id,event_id,inputs,entry_fee',token),loadWinterRequests(token),read<WinterAdvance>('settlement_prepayments','event_id,organization_key,paid_amount,note,updated_at,updated_by',token),read<WinterPaymentInstruction>('settlement_payment_instructions','event_id,organization_key,payment_method,bank_details,updated_at,updated_by',token),read<WinterExtraPayment>('fhs_winter_extra_payments','id,event_id,organization_key,amount,payment_method,note,reverses_id,created_at,created_by',token),read<WinterChargeAdjustment>('fhs_winter_charge_adjustments','*',token),read<WinterSettlementOnlyRow>('fhs_winter_settlement_only','*',token)])
+ return {initial,requests,advances,instructions,payments,adjustments,onsite}
 }
 /** Use saved fee snapshots, never the current competition price or Autumn seed data. */
 export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,orgId:string){
  assertWinterEvent(data.eventId)
  const org=data.organizations.find(x=>x.id===orgId);if(!org)throw new Error('Winterの団体を選択してください');assertWinterEvent(org.event_id)
- for(const row of [...ledger.initial,...ledger.requests,...ledger.advances,...(ledger.instructions??[]),...(ledger.payments??[]),...(ledger.adjustments??[])])assertWinterEvent(row.event_id)
+ for(const row of [...ledger.initial,...ledger.requests,...ledger.advances,...(ledger.instructions??[]),...(ledger.payments??[]),...(ledger.adjustments??[]),...(ledger.onsite??[])])assertWinterEvent(row.event_id)
  for(const row of ledger.initial){
   if(!row.inputs||!data.organizations.some(x=>x.id===row.inputs.organizationId)||(row.inputs.billingOrganizationId!==undefined&&!data.organizations.some(x=>x.id===row.inputs.billingOrganizationId))||!data.competitions.some(x=>x.id===row.inputs.competitionId)||!data.riders.some(x=>x.id===row.inputs.riderId)||!data.horses.some(x=>x.id===row.inputs.horseId))throw new Error('事前エントリーの団体・競技・人馬を確認できません')
   amount(row.entry_fee)
@@ -60,6 +61,15 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
   const changed=(a:string|undefined,b:string)=>a&&a!==b?`${a} → ${b}`:b
   return {id:x.id,competition:comp,competitionLabel:changed(oldComp&&winterCompetitionLabel(oldComp),winterCompetitionLabel(comp)),rider:changed(oldRider?.name,rider.name),horse:changed(oldHorse?.name,horse.name),action:x.request_type==='add'?'追加':x.request_type==='change'?'変更':'棄権',amount:fee}
  }).sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
+ const onsite=(ledger.onsite??[]).filter(x=>x.organization_key===orgId),onsiteReversed=new Set<string>()
+ for(const row of onsite){
+  amount(row.entry_fee);if(row.entry_fee===0||row.fee_amount!==row.entry_fee+3000||!row.note.trim())throw new Error('現場登録の料金履歴を確認できません')
+  const comp=data.competitions.find(x=>x.id===row.inputs.competitionId),rider=data.riders.find(x=>x.id===row.inputs.riderId),horse=data.horses.find(x=>x.id===row.inputs.horseId)
+  if(!comp||!rider||!horse)throw new Error('現場登録の人馬・競技を確認できません')
+  if(row.reverses_id){const original=onsite.find(x=>x.id===row.reverses_id);if(!original||original.reverses_id||original.fee_amount!==row.fee_amount||onsiteReversed.has(original.id))throw new Error('現場登録の取消履歴を確認できません');onsiteReversed.add(original.id)}
+  lines.push({id:row.id,competition:comp,competitionLabel:winterCompetitionLabel(comp),rider:rider.name,horse:horse.name,action:row.reverses_id?'現場追加取消':'現場追加',amount:row.reverses_id?-row.fee_amount:row.fee_amount})
+ }
+ lines.sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const extraTotal=lines.reduce((sum,x)=>sum+x.amount,0),advancePaid=amount(advance?.paid_amount??0)
  if(!Number.isSafeInteger(normalTotal+extraTotal))throw new Error('精算合計が大きすぎます')
  const payments=(ledger.payments??[]).filter(x=>x.organization_key===orgId)
@@ -84,7 +94,7 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  if(advancePaid>initialTotal)warnings.push('事前料金合計（競技料・馬匹登録料）を超える入金があります。返金・充当を確認してください。')
  const covered=new Set([...ledger.initial.map(x=>x.id),...ledger.requests.filter(x=>x.status==='reflected').map(x=>x.entry_id).filter(Boolean)])
  if(data.entries.some(x=>data.riders.find(r=>r.id===x.rider_id)?.organization_id===orgId&&!covered.has(x.entry_id)))warnings.push('料金履歴を確認できない出番があります。請求総額として使用しないでください。')
- return {organization:org,instruction,adjustments,adjustmentTotal,latestAdjustmentId:previousId,horseRegistration,initialTotal,total,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
+ return {organization:org,instruction,onsite,onsiteReversed,adjustments,adjustmentTotal,latestAdjustmentId:previousId,horseRegistration,initialTotal,total,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
 }
 /** Absolute advance amount, with optimistic locking and read-back. This is not a receipt. */
 export async function saveWinterAdvance(session:AdminSession,orgId:string,paid:number,note:string,expected:WinterAdvance|null){
