@@ -8,6 +8,7 @@ import {loadWinterData} from '@/lib/winter-data'
 import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
+import {WinterSettlementActions} from '@/components/winter-settlement-actions'
 import {WinterInitialEntryRegistration} from '@/components/winter-initial-entry-registration'
 import {WinterStartList} from '@/components/winter-start-list'
 import {WinterSettlementPanel} from '@/components/winter-settlement-panel'
@@ -65,7 +66,7 @@ export function WinterAdminDashboard(){
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='requests'?<WinterRequestPanel session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh} showWithdraw={false}/>:
  t.id==='startlist'?<><details id="winter-initial-registration" className="rounded-xl border-2 bg-card p-4"><summary className="cursor-pointer text-2xl font-bold">事前エントリーを出番表に登録</summary><div className="mt-4"><WinterInitialEntryRegistration data={data} session={session} onChanged={refresh} onChooseParticipants={()=>{select('roster');requestAnimationFrame(()=>document.getElementById('winter-panel-roster')?.scrollIntoView({block:'start'}))}}/></div></details><WinterStartList data={data} session={session} onSession={updateSession} onChanged={refresh}/></>:
- <><h2 className="text-2xl font-bold">事後登録</h2><div className="flex flex-wrap gap-3"><Link className={button} href="/winter/add">追加受付</Link><Link className={button} href="/winter/change">変更受付</Link></div><p>追加・変更は受付画面で入力し、未確定一覧からまとめて確定します。現場追加・再走行は下の専用欄で精算だけに登録します。</p><WinterInitialEntryRegistration settlementOnly data={data} session={session} onChanged={refresh} onChooseParticipants={()=>select('roster')}/><WinterRequestPanel mode="withdraw" session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh}/></>}
+ <><h2 className="text-2xl font-bold">事後登録</h2><div className="flex flex-wrap gap-3"><Link className={button} href="/winter/add">追加受付</Link><Link className={button} href="/winter/change">変更受付</Link></div><p>追加・変更は受付画面で入力し、未確定一覧からまとめて確定します。現場追加・再走行は下の専用欄で精算だけに登録します。</p><WinterInitialEntryRegistration settlementOnly data={data} session={session} onChanged={refresh} onChooseParticipants={()=>select('roster')}/><WinterSettlementActions data={data} session={session} onSession={updateSession} onChanged={refresh}/><details className="rounded-xl border-2 p-4"><summary className="cursor-pointer text-xl font-bold">出番表にも反映する棄権受付</summary><WinterRequestPanel mode="withdraw" session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh}/></details></>}
  </section>)}
  </>}
  </main></div>

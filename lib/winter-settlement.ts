@@ -63,11 +63,14 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  }).sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const onsite=(ledger.onsite??[]).filter(x=>x.organization_key===orgId),onsiteReversed=new Set<string>()
  for(const row of onsite){
-  amount(row.entry_fee);if(row.entry_fee===0||row.fee_amount!==row.entry_fee+3000||!row.note.trim())throw new Error('現場登録の料金履歴を確認できません')
+  const action=row.action_type??'add';amount(row.entry_fee);if((action==='add'&&(row.entry_fee===0||row.fee_amount!==row.entry_fee+3000))||(action==='change'&&(row.entry_fee===0||!Number.isSafeInteger(row.fee_amount)||row.fee_amount<2000))||(action==='withdraw'&&(row.entry_fee!==0||row.fee_amount!==0))||!row.note.trim())throw new Error('現場登録の料金履歴を確認できません')
   const comp=data.competitions.find(x=>x.id===row.inputs.competitionId),rider=data.riders.find(x=>x.id===row.inputs.riderId),horse=data.horses.find(x=>x.id===row.inputs.horseId)
   if(!comp||!rider||!horse)throw new Error('現場登録の人馬・競技を確認できません')
   if(row.reverses_id){const original=onsite.find(x=>x.id===row.reverses_id);if(!original||original.reverses_id||original.fee_amount!==row.fee_amount||onsiteReversed.has(original.id))throw new Error('現場登録の取消履歴を確認できません');onsiteReversed.add(original.id)}
-  lines.push({id:row.id,competition:comp,competitionLabel:winterCompetitionLabel(comp),rider:rider.name,horse:horse.name,action:row.reverses_id?'現場追加取消':'現場追加',amount:row.reverses_id?-row.fee_amount:row.fee_amount})
+  const before=row.inputs.before,bc=before&&data.competitions.find(x=>x.id===before.competitionId),br=before&&data.riders.find(x=>x.id===before.riderId),bh=before&&data.horses.find(x=>x.id===before.horseId)
+  if(before&&(!bc||!br||!bh))throw new Error('現場変更前の人馬・競技を確認できません')
+  const changed=(a:string|undefined,b:string)=>a&&a!==b?`${a} → ${b}`:b
+  lines.push({id:row.id,competition:comp,competitionLabel:changed(bc&&winterCompetitionLabel(bc),winterCompetitionLabel(comp)),rider:changed(br?.name,rider.name),horse:changed(bh?.name,horse.name),action:(action==='change'?'現場変更':action==='withdraw'?'現場棄権':'現場追加')+(row.reverses_id?'取消':''),amount:row.reverses_id?-row.fee_amount:row.fee_amount})
  }
  lines.sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const extraTotal=lines.reduce((sum,x)=>sum+x.amount,0),advancePaid=amount(advance?.paid_amount??0)

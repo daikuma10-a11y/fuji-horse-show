@@ -4,6 +4,7 @@ function load(relative, mocks = {}) {
  m.require = name => name in mocks ? mocks[name] : require(Module._resolveFilename(name, m))
  m._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, file); return m.exports
 }
+Module._extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,f)
 const event = load('lib/winter-event.ts'), api = load('lib/winter-reception.ts', {'./winter-event':event})
 const {reviewWinterChange: review} = load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api})
 const row = {event_id:event.WINTER_EVENT_ID}, org = {...row,id:'org',name:'団体'}

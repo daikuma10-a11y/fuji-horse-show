@@ -1,3 +1,4 @@
+import {reviewWinterInitialEntry} from './winter-initial-entry'
 import type { WinterEntryRow } from './winter-data'
 import { reviewWinterAdd, winterRpc, type WinterAddInput } from './winter-reception'
 import { assertWinterEvent, winterCompetition, winterEntryPrice, type WinterFeeSelection } from './winter-event'
@@ -11,7 +12,7 @@ export type WinterChangeInput = {
 }
 
 /** Pure review only. The server must revalidate the original entry and prices at save. */
-export function reviewWinterChange(input: WinterChangeInput) {
+export function reviewWinterChange(input: WinterChangeInput, options:{allowCrossClub?:boolean}={}) {
   const { original, from, fromSelection, target } = input
   assertWinterEvent(original.event_id)
   assertWinterEvent(from.event_id)
@@ -26,7 +27,8 @@ export function reviewWinterChange(input: WinterChangeInput) {
   if (from.id === target.competition.id && fromSelection.membership !== target.selection.membership && (from.member_fee !== null || from.nonmember_fee !== null)) changedFields.push('membership')
   if (!changedFields.length) throw new Error('変更する項目を選択してください')
   const oldPrice = winterEntryPrice({ ...winterCompetition(from.competition_no), official: from.official, fee: from.fee, opFee: from.op_fee, memberFee: from.member_fee, nonmemberFee: from.nonmember_fee }, fromSelection)
-  const next = reviewWinterAdd(target)
+  if(options.allowCrossClub&&(!target.visitorName.trim()||target.visitorName.trim().length>100))throw new Error('受付担当者名を入力してください')
+  const next = options.allowCrossClub?reviewWinterInitialEntry(target):reviewWinterAdd(target)
   // Match Autumn: OP is not counted toward the two-item withdrawal + addition rule.
   const treatedAsWithdrawAdd = changedFields.filter(field => ['competition', 'player', 'horse'].includes(field)).length >= 2
   const addBase = treatedAsWithdrawAdd ? 3000 : 0
