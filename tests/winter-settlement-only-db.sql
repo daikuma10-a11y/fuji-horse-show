@@ -10,7 +10,7 @@ grant all on onsite_test_state to authenticated;
 set local role authenticated;
 do $$
 #variable_conflict use_variable
-declare suffix text:=gen_random_uuid()::text;entity uuid;horse_entity uuid;ca uuid;cb uuid;r uuid;h uuid;oa uuid;ob uuid;c uuid;fee integer;args jsonb;id1 uuid:=gen_random_uuid();id2 uuid:=gen_random_uuid();id3 uuid:=gen_random_uuid();stamp timestamptz;
+declare suffix text:=gen_random_uuid()::text;entity uuid;horse_entity uuid;ca uuid;cb uuid;r uuid;h uuid;oa uuid;ob uuid;c uuid;fee integer;args jsonb;id1 uuid:=gen_random_uuid();id2 uuid:=gen_random_uuid();id3 uuid:=gen_random_uuid();stamp timestamptz;adj1 uuid:=gen_random_uuid();adj2 uuid:=gen_random_uuid();lastadj uuid;
 begin
  entity:=public.save_fhs_roster_entity('rider','現場検証','ゲンバケンショウ','','現場A-'||suffix);
  select updated_at into stamp from public.fhs_roster_entities where id=entity;
@@ -32,6 +32,9 @@ begin
  begin perform public.save_winter_settlement_only(id1,args,'違う備考');raise exception 'Changed retry accepted';exception when others then if sqlerrm not like '%登録番号%' then raise;end if;end;
  begin perform public.save_winter_settlement_only_batch(jsonb_build_array(jsonb_build_object('id',id3,'inputs',args,'note','有効'),jsonb_build_object('id',gen_random_uuid(),'inputs',args||jsonb_build_object('entryFee',fee+1),'note','不正')));raise exception 'Bad batch accepted';exception when others then if sqlerrm not like '%競技料金が更新%' then raise;end if;end;
  if exists(select 1 from public.fhs_winter_settlement_only where id=id3) then raise exception 'Partial batch survived';end if;
+ perform public.save_winter_charge_adjustment(adj1,ob,-2*(fee+3000),'全額訂正検証',2*(fee+3000),null);
+ begin perform public.save_winter_settlement_only(id3,args,'誤登録取消',id1);raise exception 'Negative invoice reversal accepted';exception when others then if sqlerrm not like '%0円未満%' then raise;end if;end;
+ perform public.save_winter_charge_adjustment(adj2,ob,2*(fee+3000),'訂正を戻す',0,adj1);
  perform public.save_winter_settlement_only(id3,args,'誤登録取消',id1);perform public.save_winter_settlement_only(id3,args,'誤登録取消',id1);
  begin perform public.save_winter_settlement_only(gen_random_uuid(),args,'二重取消',id1);raise exception 'Duplicate cancellation accepted';exception when others then if sqlerrm not like '%取消済み%' then raise;end if;end;
  begin perform public.save_winter_settlement_only(gen_random_uuid(),args,'取消の取消',id3);raise exception 'Reversal of reversal accepted';exception when others then if sqlerrm not like '%取り消す現場登録%' then raise;end if;end;
@@ -49,7 +52,8 @@ begin
  select comp.id,comp.fee into c,fee from public.competitions comp where event_id='b571f05e-ed23-4e07-929e-be2b73e601a5' and competition_no='8';
  begin perform public.save_winter_settlement_only(gen_random_uuid(),args||jsonb_build_object('competitionId',c,'entryFee',fee,'instructorConfirmed',false),'資格なし');raise exception 'Missing qualification accepted';exception when others then if sqlerrm not like '%資格の確認%' then raise;end if;end;
  select coalesce(sum(case when reverses_id is null then fee_amount else -fee_amount end),0) into fee from public.fhs_winter_settlement_only where organization_key=ob;
- perform public.save_winter_charge_adjustment(gen_random_uuid(),ob,100,'現場追加後の訂正検証',fee,null);
+ select id into lastadj from public.fhs_winter_charge_adjustments where organization_key=ob order by sequence desc limit 1;
+ perform public.save_winter_charge_adjustment(gen_random_uuid(),ob,100,'現場追加後の訂正検証',fee,lastadj);
  -- Record IDs for the server snapshot checks outside the authenticated role.
  update onsite_test_state t set id1=id1,id2=id2,id3=id3;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid(),'app_metadata',jsonb_build_object('role','user'),'user_metadata',jsonb_build_object('role','admin'))::text,true);

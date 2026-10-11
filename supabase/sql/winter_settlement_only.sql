@@ -48,6 +48,7 @@ begin
   org:=r.organization_id;
  end if;
  perform pg_advisory_xact_lock(hashtextextended('winter-finance:'||org::text,0));
+ if p_reverses_id is not null and (fhs_winter_internal.settlement_account(org)->'account'->>'total')::bigint<price+3000 then raise exception '取消後の請求額が0円未満になります。先に金額訂正を確認してください';end if;
  insert into public.fhs_winter_settlement_only(id,event_id,organization_key,inputs,entry_fee,fee_amount,note,reverses_id,created_by)
  values(p_id,ev,org,args,price,price+3000,btrim(p_note),p_reverses_id,auth.uid());
  return p_id;
