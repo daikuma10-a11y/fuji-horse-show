@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path')
 function load(file,mocks={}){const full=path.resolve(file),m=new Module(full,module);m.filename=full;m.paths=module.paths;m.require=n=>n in mocks?mocks[n]:require(Module._resolveFilename(n,m));m._compile(ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText,full);return m.exports}
 const event=load('lib/winter-event.ts'),order=load('lib/winter-display-order.ts'),ev=event.WINTER_EVENT_ID,org='11111111-1111-4111-8111-111111111111',user='22222222-2222-4222-8222-222222222222'
-const session={accessToken:'admin'},api=load('lib/winter-settlement.ts',{'./winter-event':event,'./winter-display-order':order,'./winter-reception':{loadWinterRequests:async()=>[]},'./supabase-rest':{verifyAdminSession:async s=>s}})
+const session={accessToken:'admin'},api=load('lib/winter-settlement.ts',{'./winter-horse-registration':load('lib/winter-horse-registration.ts',{'./winter-event':event,'./winter-data':{isWinterReceptionParticipant:x=>x.roster_source!=='shared_roster'||x.is_participant===true}}),'./winter-event':event,'./winter-display-order':order,'./winter-reception':{loadWinterRequests:async()=>[]},'./supabase-rest':{verifyAdminSession:async s=>s}})
 const data={eventId:ev,organizations:[{id:org,event_id:ev,name:'テスト団体'}],competitions:[{id:'c',competition_no:'1',name:'競技',event_id:ev,fee:999999}],riders:[{id:'r',organization_id:org,name:'選手',event_id:ev}],horses:[{id:'h',name:'馬',event_id:ev}],entries:[{entry_id:'i',rider_id:'r',event_id:ev}],timetable:[]}
 const initial={id:'i',event_id:ev,entry_fee:5000,inputs:{organizationId:org,competitionId:'c',riderId:'r',horseId:'h'}}
 const request=(id,type,status,fee)=>({id,event_id:ev,entry_id:'i',organization_id:org,target_competition_id:'c',rider_id:'r',horse_id:'h',request_type:type,status,fee_amount:fee,payload:{}})
@@ -15,9 +15,13 @@ assert.throws(()=>api.winterSettlementAccount(data,{...ledger,initial:[{...initi
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,requests:[request('bad','withdraw','reflected',1)]},org),/棄権/)
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,requests:[request('bad','add','reflected',NaN)]},org),/金額/)
 assert(api.winterSettlementAccount({...data,entries:[{entry_id:'unknown',rider_id:'r'}]},ledger,org).warnings.some(x=>x.includes('料金履歴')))
-const horseOrg='horse-club',multiData={...data,organizations:[...data.organizations,{id:horseOrg,event_id:ev,name:'馬所属'}]},multiLedger={initial:[{...initial,inputs:{...initial.inputs,organizationId:horseOrg,billingOrganizationId:org}}],requests:[],advances:[]}
+const horseData={...data,horses:[{...data.horses[0],organization_id:org,is_participant:true,roster_source:'shared_roster'}]}
+account=api.winterSettlementAccount(horseData,{...ledger,advances:[advance]},org);assert.equal(account.horseRegistration.count,1);assert.equal(account.horseRegistration.total,14000);assert.equal(account.initialTotal,19000);assert.equal(account.remaining,29000)
+const horseOrg='horse-club',multiData={...data,horses:[{...data.horses[0],organization_id:horseOrg,is_participant:true,roster_source:'shared_roster'}],organizations:[...data.organizations,{id:horseOrg,event_id:ev,name:'馬所属'}]},multiLedger={initial:[{...initial,inputs:{...initial.inputs,organizationId:horseOrg,billingOrganizationId:org}}],requests:[],advances:[]}
 assert.equal(api.winterSettlementAccount(multiData,multiLedger,org).normalTotal,5000)
 assert.equal(api.winterSettlementAccount(multiData,multiLedger,horseOrg).normalTotal,0)
+assert.equal(api.winterSettlementAccount(multiData,multiLedger,horseOrg).horseRegistration.total,14000)
+assert.equal(api.winterSettlementAccount(multiData,multiLedger,org).horseRegistration.total,0)
 assert.throws(()=>api.winterSettlementAccount(multiData,{...multiLedger,initial:[{...initial,inputs:{...initial.inputs,billingOrganizationId:'unknown'}}]},org),/団体/)
 const payment={id:'pay',event_id:ev,organization_key:org,amount:10000,payment_method:'cash_at_venue',note:'確認済み',reverses_id:null}
 account=api.winterSettlementAccount(data,{...ledger,advances:[advance],payments:[payment]},org);assert.equal(account.extraPaid,10000);assert.equal(account.remaining,5000)
