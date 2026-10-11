@@ -1,0 +1,28 @@
+begin;
+select set_config('fhs.test_user',(select id::text from auth.users where raw_app_meta_data->>'role'='admin' order by id limit 1),true);
+select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('fhs.test_user'),'app_metadata',jsonb_build_object('role','admin'))::text,true);
+set local role authenticated;
+do $$declare org uuid; id1 uuid:=gen_random_uuid(); id2 uuid:=gen_random_uuid(); base bigint; total bigint; last uuid;
+begin
+ select id into org from public.organizations where event_id='b571f05e-ed23-4e07-929e-be2b73e601a5' order by id limit 1;
+ select coalesce(sum(entry_fee),0) into base from public.fhs_winter_initial_entries where coalesce(inputs->>'billingOrganizationId',inputs->>'organizationId')=org::text;
+ base:=base+14000*(select count(*) from public.horses where event_id='b571f05e-ed23-4e07-929e-be2b73e601a5' and organization_id=org and is_participant is distinct from false and (roster_source is distinct from 'shared_roster' or is_participant=true))+coalesce((select sum(fee_amount) from public.reception_requests where event_id='b571f05e-ed23-4e07-929e-be2b73e601a5' and organization_id=org and status='reflected'),0);
+ total:=base+coalesce((select sum(delta) from public.fhs_winter_charge_adjustments where organization_key=org),0);
+ select id into last from public.fhs_winter_charge_adjustments where organization_key=org order by sequence desc limit 1;
+ perform public.save_winter_charge_adjustment(id1,org,1000,'追加訂正',total,last);
+ perform public.save_winter_charge_adjustment(id1,org,1000,'追加訂正',total,last);
+ if not exists(select 1 from public.fhs_winter_charge_adjustments where id=id1 and before_total=total and after_total=total+1000 and created_by=auth.uid()) then raise exception 'Missing audit';end if;
+ begin perform public.save_winter_charge_adjustment(gen_random_uuid(),org,1000,'古い画面',total,last);raise exception 'Stale predecessor accepted';exception when others then if sqlerrm not like '%別の訂正%' then raise;end if;end;
+ begin perform public.save_winter_charge_adjustment(id1,org,2000,'追加訂正',total,last);raise exception 'Changed retry accepted';exception when others then if sqlerrm not like '%登録番号%' then raise;end if;end;
+ begin perform public.save_winter_charge_adjustment(gen_random_uuid(),org,-1000,'古い料金',total,id1);raise exception 'Stale total accepted';exception when others then if sqlerrm not like '%請求額が更新%' then raise;end if;end;
+ perform public.save_winter_charge_adjustment(id2,org,-1000,'前の訂正を戻す',total+1000,id1);
+ if (select sum(delta) from public.fhs_winter_charge_adjustments where id in(id1,id2))<>0 then raise exception 'Reversal total wrong';end if;
+ begin perform public.save_winter_charge_adjustment(gen_random_uuid(),org,-2147483647,'過大割引',total,id2);raise exception 'Negative total accepted';exception when others then if sqlerrm not like '%0円未満%' then raise;end if;end;
+ begin update public.fhs_winter_charge_adjustments set delta=1 where id=id1;raise exception 'Direct update accepted';exception when insufficient_privilege then null;end;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid(),'app_metadata',jsonb_build_object('role','user'),'user_metadata',jsonb_build_object('role','admin'))::text,true);
+ if exists(select 1 from public.fhs_winter_charge_adjustments where id=id1) then raise exception 'Nonadmin read accepted';end if;
+ begin perform public.save_winter_charge_adjustment(gen_random_uuid(),org,1000,'非管理者',total,id2);raise exception 'Nonadmin save accepted';exception when others then if sqlerrm not like '%本部ログイン%' then raise;end if;end;
+end;$$;
+reset role;
+select 'PASS: correction audit, same-ID retry, stale revision/fee rejection, reversal delta, negative-total and direct-update rejection, admin-only; rolled back' as result;
+rollback;

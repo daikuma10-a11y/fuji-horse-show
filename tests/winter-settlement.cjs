@@ -31,6 +31,10 @@ assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[reversal
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[payment,reversal,{...reversal,id:'rev2'}]},org),/取消履歴/)
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[{...payment,event_id:'autumn'}]},org),/Winter/)
 account=api.winterSettlementAccount(data,{...ledger,payments:[{...payment,amount:30000}]},org);assert(account.warnings.some(x=>x.includes('超えています')))
+const adjustment={id:'adj',sequence:1,event_id:ev,organization_key:org,delta:-1000,reason:'割引',previous_id:null,before_total:20000,after_total:19000}
+account=api.winterSettlementAccount(data,{...ledger,adjustments:[adjustment]},org);assert.equal(account.adjustmentTotal,-1000);assert.equal(account.total,19000);assert.equal(account.remaining,19000)
+assert.throws(()=>api.winterSettlementAccount(data,{...ledger,adjustments:[{...adjustment,previous_id:'missing'}]},org),/訂正の履歴/)
+assert.throws(()=>api.winterSettlementAccount(data,{...ledger,adjustments:[{...adjustment,after_total:0}]},org),/訂正の履歴/)
 let stored=null,mode='normal',writes=0
 const response=(body,ok=true,status=200)=>({ok,status,json:async()=>body})
 global.fetch=async(url,options={})=>{const u=new URL(url);if(u.pathname.endsWith('/user'))return response({id:user,app_metadata:{role:'admin'}});if(u.pathname.endsWith('/organizations')){assert.equal(u.searchParams.get('event_id'),`eq.${ev}`);return response([{id:org}])}
