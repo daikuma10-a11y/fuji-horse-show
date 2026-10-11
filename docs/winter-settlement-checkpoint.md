@@ -87,3 +87,6 @@ Continue on prep/winter-2026, commit/push each completed checkpoint. Autumn fhsf
 - tests/winter-self-settlement-db.sql：サーバー計算、保存スナップショット、同番号／同版の重複防止、訂正によるversion変更、古い版/無効端末/振込先未設定/匿名/ブラウザー直接RPC拒否、保存によって入金が増えないことを確認。すべてROLLBACK。実団体の精算確認は作っていない。
 - tests/winter-checkout-route.cjs：Winter専用接続、Cookie、同一origin、金額引数無視、不確定と古い内容エラー区別。winter-checkout.cjs：金額/大会/団体検証、保存済み印刷escape、現金を入金にしない、0円、再印刷でPOSTしない。既存精算・印刷・馬匹登録料テスト、型検査、ビルド成功。
 - 公開後にサーバー接続を確認する。iPad/Canonの実印刷確認は主催者側で必要。正式申込書一括取込、精算だけの事後登録などは別の残作業。
+
+### Winter公開接続設定（2026-10-11）
+初回PreviewのGETで接続キー未設定を検出。Autumn用キーの流用を止め、`WINTER_SELF_SETTLEMENT_PROXY_SECRET` を `prep/winter-2026` のPreview限定・Sensitiveで追加。Winter Edgeは専用キーのSHA256のみ保持し、Autumn EdgeとProduction設定は変更しない。APIのスコープCookieとWinter固定大会IDは維持。秘密値はGitへ保存しない。

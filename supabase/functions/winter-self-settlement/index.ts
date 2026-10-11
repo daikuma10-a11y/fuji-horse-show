@@ -1,7 +1,7 @@
 declare const Deno: {env:{get(name:string):string|undefined};serve(handler:(req:Request)=>Promise<Response>):void}
 const EVENT='b571f05e-ed23-4e07-929e-be2b73e601a5'
-// Reuses the existing server proxy authentication; no browser gets this credential.
-const PROXY_HASH='0e0667de14a68bf9fa97e4fbca4821471a30ff47c8eca1821e39d830086e1ac6'
+// Dedicated Winter preview proxy authentication; no browser gets this credential.
+const PROXY_HASH='5b1f1bf8bce78ab09711c1d819dcffaa6b9a0a90ef59284ac08538260f2e9486'
 const sha=async(text:string)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(n=>n.toString(16).padStart(2,'0')).join('')
 Deno.serve(async(req:Request)=>{
  const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})

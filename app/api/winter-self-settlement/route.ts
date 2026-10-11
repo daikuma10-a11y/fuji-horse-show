@@ -6,7 +6,7 @@ const cookie='fhs-winter-self-settlement-device'
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 class DefinitiveCheckoutError extends Error {constructor(message:string,public status:number){super(message)}}
 async function proxy(action:string,token:string,input:Record<string,unknown>={}){
- const secret=process.env.SELF_SETTLEMENT_PROXY_SECRET
+ const secret=process.env.WINTER_SELF_SETTLEMENT_PROXY_SECRET
  if(!secret)throw new Error('精算接続が未設定です。係員に確認してください。')
  const response=await fetch('https://mhgyhyxagkkwdiepifdp.supabase.co/functions/v1/winter-self-settlement',{method:'POST',headers:{apikey:'sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95','Content-Type':'application/json'},signal:AbortSignal.timeout(25000),cache:'no-store',body:JSON.stringify({proxySecret:secret,action,token,...input})})
  const value=await response.json().catch(()=>null)
