@@ -26,3 +26,13 @@
 5. Meeting-specific pending/batch confirmation and formal Excel import still separate remaining tasks.
 
 Continue on prep/winter-2026, commit/push each completed checkpoint. Autumn fhsfix.vercel.app stays untouched.
+
+## Print checkpoint — 2026-10-11
+
+- Added admin-only "確認用の精算書を印刷". Verifies admin session and rereads Winter masters and fee/payment history before building the print view. No write or settlement confirmation occurs on print/reprint; unsaved advance form values are not used and are preserved.
+- Self-contained escaped HTML, no remote styles/images/fonts or credentials; Japanese A4 portrait, summary before details, only additional/change/withdrawal lines, repeating table headings and row-safe page breaks. Popups/read failures show an error rather than printing old/blank data.
+- Clearly labelled 精算確認用（仮） with missing stall/other fees and extra payment limitation. No payment instructions or misleading receipt/success state.
+- tests/winter-settlement-print.cjs passed: 41 lines present, malicious names escaped, Winter-only, no network assets/credentials, fresh reads without payment writes or draft reset.
+- Generated HTML rendered with WeasyPrint and local Noto Japanese font for QA only: 4 long-name rows fit one A4 page; 41 long-name rows span three pages. Inspected all pages; no clipped rows/text, headings repeat. These are temporary fixtures, not customer invoices.
+- TypeScript/build passed. Actual Safari/iPad/Canon TS8630 printing and credentialed admin operation remain unverified.
+- Next: full initial invoice/ancillary fees, extra payments/corrections, server confirmation snapshot and public checkout. This print checkpoint does not complete those features.
