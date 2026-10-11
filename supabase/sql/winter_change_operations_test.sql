@@ -1,0 +1,50 @@
+begin;
+do $$
+declare ev uuid:='b571f05e-ed23-4e07-929e-be2b73e601a5'; o uuid:=gen_random_uuid(); r uuid:=gen_random_uuid(); r2 uuid:=gen_random_uuid(); h uuid:=gen_random_uuid();
+ c1 uuid; c4 uuid; c5 uuid; a uuid:=gen_random_uuid(); q uuid:=gen_random_uuid(); q2 uuid:=gen_random_uuid(); q3 uuid:=gen_random_uuid(); before jsonb; denied boolean:=false; baseline bigint;
+begin
+ select count(*) into baseline from public.entries where event_id<>ev;
+ if has_function_privilege('anon','public.reflect_winter_change_request(uuid)','execute') or has_function_privilege('authenticated','public.winter_change_price(uuid,text,boolean,boolean)','execute') then raise exception 'permission leak'; end if;
+ begin perform public.reflect_winter_change_request(q); exception when others then denied:=true; end;
+ if not denied then raise exception 'authentication bypass'; end if;
+ perform set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000001","app_metadata":{"role":"admin"}}',true);
+ insert into public.organizations(id,event_id,name) values(o,ev,'検証用ROLLBACK団体');
+ insert into public.riders(id,event_id,organization_id,name,jef_member_no) values(r,ev,o,'検証選手','TEST'),(r2,ev,o,'変更先選手','TEST');
+ insert into public.horses(id,event_id,organization_id,name,jef_registration_no) values(h,ev,o,'検証馬','TEST');
+ select id into c1 from public.competitions where event_id=ev and competition_no='1';
+ select id into c4 from public.competitions where event_id=ev and competition_no='4';
+ select id into c5 from public.competitions where event_id=ev and competition_no='5';
+ perform public.submit_winter_reception_add(a,o,c1,r,h,'検証'); perform public.reflect_winter_reception_request(a);
+ before:=jsonb_build_object('competitionId',c1,'riderId',r,'horseId',h,'isOp',false);
+ perform public.submit_winter_reception_change(q,a,before,c4,r,h,'検証',null,null,false,false,false,4000);
+ perform public.submit_winter_reception_change(q,a,before,c4,r,h,'検証',null,null,false,false,false,4000);
+ if (select fee_amount from public.reception_requests where id=q)<>4000 then raise exception 'wrong price'; end if;
+ denied:=false;
+ begin perform public.submit_winter_reception_change(gen_random_uuid(),a,before,c4,r,h,'検証',null,null,false,false,false,4000); exception when others then denied:=true; end;
+ if not denied then raise exception 'conflicting pending request allowed'; end if;
+ perform public.reflect_winter_change_request(q); perform public.reflect_winter_change_request(q);
+ -- Retry the same save even after reflection must return the original request.
+ perform public.submit_winter_reception_change(q,a,before,c4,r,h,'検証',null,null,false,false,false,4000);
+ if (select competition_id from public.entries where id=a)<>c4 or (select entry_id from public.reception_requests where id=q)<>a then raise exception 'single change replaced entry'; end if;
+ denied:=false;
+ begin perform public.submit_winter_reception_change(gen_random_uuid(),a,before,c1,r,h,'検証',null,null,false,false,false,2000); exception when others then denied:=true; end;
+ if not denied then raise exception 'stale entry allowed'; end if;
+ before:=jsonb_build_object('competitionId',c4,'riderId',r,'horseId',h,'isOp',false);
+ perform public.submit_winter_reception_change(q2,a,before,c1,r2,h,'検証',null,null,false,false,false,11000);
+ if not (select (payload->>'treatedAsWithdrawAdd')::boolean from public.reception_requests where id=q2) then raise exception 'multi field rule'; end if;
+ perform public.reflect_winter_change_request(q2); perform public.reflect_winter_change_request(q2);
+ if (select status from public.entries where id=a)<>'withdrawn' or (select rider_id from public.entries where id=q2)<>r2 then raise exception 'replacement wrong'; end if;
+ before:=jsonb_build_object('competitionId',c1,'riderId',r2,'horseId',h,'isOp',false);
+ denied:=false;
+ begin perform public.submit_winter_reception_change(gen_random_uuid(),q2,before,c5,r2,h,'検証',null,null,false,false,false,2000); exception when others then denied:=true; end;
+ if not denied then raise exception 'membership missing allowed'; end if;
+ perform public.submit_winter_reception_change(q3,q2,before,c5,r2,h,'検証',null,'member',false,false,false,2000);
+ -- External edits between save and reflection must be rejected without updating the entry.
+ update public.entries set is_op=true where id=q2;
+ denied:=false;
+ begin perform public.reflect_winter_change_request(q3); exception when others then denied:=true; end;
+ if not denied or (select status from public.reception_requests where id=q3)<>'pending' then raise exception 'stale reflection accepted'; end if;
+ if (select count(*) from public.entries where event_id<>ev)<>baseline then raise exception 'other event changed'; end if;
+end $$;
+rollback;
+select 'PASS: Winter change authentication, fee difference, multi-field replacement, retries, pending conflict, membership and stale-save/reflection; fixtures rolled back' as verification;
