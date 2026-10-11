@@ -6,7 +6,7 @@ import {verifyAdminSession,type AdminSession} from './supabase-rest'
 const endpoint='https://mhgyhyxagkkwdiepifdp.supabase.co/rest/v1'
 const key='sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
-export type WinterInitialCharge={id:string;event_id:string;entry_fee:number;inputs:{organizationId:string;competitionId:string;riderId:string;horseId:string}}
+export type WinterInitialCharge={id:string;event_id:string;entry_fee:number;inputs:{organizationId:string;billingOrganizationId?:string;competitionId:string;riderId:string;horseId:string}}
 export type WinterAdvance={event_id:string;organization_key:string;paid_amount:number;note:string;updated_at:string;updated_by:string}
 export type WinterPaymentInstruction={event_id:string;organization_key:string;payment_method:'bank_transfer'|'cash_at_venue';bank_details:string;updated_at:string;updated_by:string}
 export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[]}
@@ -33,10 +33,10 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  const org=data.organizations.find(x=>x.id===orgId);if(!org)throw new Error('Winterの団体を選択してください');assertWinterEvent(org.event_id)
  for(const row of [...ledger.initial,...ledger.requests,...ledger.advances,...(ledger.instructions??[])])assertWinterEvent(row.event_id)
  for(const row of ledger.initial){
-  if(!row.inputs||!data.organizations.some(x=>x.id===row.inputs.organizationId)||!data.competitions.some(x=>x.id===row.inputs.competitionId)||!data.riders.some(x=>x.id===row.inputs.riderId)||!data.horses.some(x=>x.id===row.inputs.horseId))throw new Error('事前エントリーの団体・競技・人馬を確認できません')
+  if(!row.inputs||!data.organizations.some(x=>x.id===row.inputs.organizationId)||(row.inputs.billingOrganizationId!==undefined&&!data.organizations.some(x=>x.id===row.inputs.billingOrganizationId))||!data.competitions.some(x=>x.id===row.inputs.competitionId)||!data.riders.some(x=>x.id===row.inputs.riderId)||!data.horses.some(x=>x.id===row.inputs.horseId))throw new Error('事前エントリーの団体・競技・人馬を確認できません')
   amount(row.entry_fee)
  }
- const initial=ledger.initial.filter(x=>x.inputs.organizationId===orgId)
+ const initial=ledger.initial.filter(x=>(x.inputs.billingOrganizationId??x.inputs.organizationId)===orgId)
  const requests=ledger.requests.filter(x=>x.organization_id===orgId)
  const reflected=requests.filter(x=>x.status==='reflected')
  const advance=ledger.advances.find(x=>x.organization_key===orgId)

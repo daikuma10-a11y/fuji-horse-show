@@ -4,6 +4,7 @@ const {WINTER_EVENT_ID,winterCompetition}=require(path.resolve('lib/winter-event
 const {reviewWinterInitialBatch,saveWinterInitialBatch,WinterInitialBatchFailure}=require(path.resolve('lib/winter-initial-entry.ts'))
 function input(n,no,selection={}){const c=winterCompetition(no),event_id=WINTER_EVENT_ID;return{id:`entry-${n}`,organization:{event_id,id:'org',name:'検証'},competition:{event_id,id:no,competition_no:no,name:c.name,official:c.official,fee:c.fee,op_fee:c.opFee,member_fee:c.memberFee,nonmember_fee:c.nonmemberFee},rider:{event_id,id:`r${n}`,organization_id:'org',name:'検証選手',jef_member_no:'123',roster_source:'shared_roster',is_participant:true},horse:{event_id,id:`h${n}`,organization_id:'org',name:'検証馬',jef_registration_no:'456',roster_source:'shared_roster',is_participant:true},selection}}
 const rows=[input(1,'1'),input(2,'1',{isOp:true}),input(3,'8',{membership:'member',instructorConfirmed:true}),input(4,'8',{membership:'nonmember',instructorConfirmed:true})]
+rows[3].rider.organization_id='other-club'
 const expected=winterCompetition('1').fee+winterCompetition('1').opFee+winterCompetition('8').memberFee+winterCompetition('8').nonmemberFee
 assert.equal(reviewWinterInitialBatch(rows).total,expected)
 assert.throws(()=>reviewWinterInitialBatch([]),/1行/)

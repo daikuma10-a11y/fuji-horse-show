@@ -15,6 +15,10 @@ assert.throws(()=>api.winterSettlementAccount(data,{...ledger,initial:[{...initi
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,requests:[request('bad','withdraw','reflected',1)]},org),/棄権/)
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,requests:[request('bad','add','reflected',NaN)]},org),/金額/)
 assert(api.winterSettlementAccount({...data,entries:[{entry_id:'unknown',rider_id:'r'}]},ledger,org).warnings.some(x=>x.includes('料金履歴')))
+const horseOrg='horse-club',multiData={...data,organizations:[...data.organizations,{id:horseOrg,event_id:ev,name:'馬所属'}]},multiLedger={initial:[{...initial,inputs:{...initial.inputs,organizationId:horseOrg,billingOrganizationId:org}}],requests:[],advances:[]}
+assert.equal(api.winterSettlementAccount(multiData,multiLedger,org).normalTotal,5000)
+assert.equal(api.winterSettlementAccount(multiData,multiLedger,horseOrg).normalTotal,0)
+assert.throws(()=>api.winterSettlementAccount(multiData,{...multiLedger,initial:[{...initial,inputs:{...initial.inputs,billingOrganizationId:'unknown'}}]},org),/団体/)
 let stored=null,mode='normal',writes=0
 const response=(body,ok=true,status=200)=>({ok,status,json:async()=>body})
 global.fetch=async(url,options={})=>{const u=new URL(url);if(u.pathname.endsWith('/user'))return response({id:user,app_metadata:{role:'admin'}});if(u.pathname.endsWith('/organizations')){assert.equal(u.searchParams.get('event_id'),`eq.${ev}`);return response([{id:org}])}

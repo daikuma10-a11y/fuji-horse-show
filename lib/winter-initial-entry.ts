@@ -1,10 +1,15 @@
-import { reviewWinterAdd, type WinterAddInput } from './winter-reception'
+import { type WinterAddInput } from './winter-reception'
+import {assertWinterEvent,winterCompetition,winterEntryPrice,WINTER_EVENT_ID} from './winter-event'
 import { isWinterReceptionParticipant } from './winter-data'
 export type WinterInitialEntryInput = Omit<WinterAddInput,'visitorName'>
 export function reviewWinterInitialEntry(input:WinterInitialEntryInput) {
  if(!isWinterReceptionParticipant(input.rider)||!isWinterReceptionParticipant(input.horse))throw new Error('参加チェックを保存した人馬を選択してください')
- const review=reviewWinterAdd({...input,visitorName:'事前エントリー登録'})
- return {eventId:review.eventId,entryFee:review.entryFee,total:review.entryFee,addFee:0}
+ for(const row of [input.organization,input.competition,input.rider,input.horse])assertWinterEvent(row.event_id)
+ if(input.horse.organization_id!==input.organization.id||!input.rider.organization_id)throw new Error('馬の所属団体と選手の所属を確認してください')
+ if(input.competition.official&&(!input.rider.jef_member_no?.trim()||!input.horse.jef_registration_no?.trim()))throw new Error('公認競技は日馬連登録済みの選手と馬を選択してください')
+ const source=winterCompetition(input.competition.competition_no)
+ const entryFee=winterEntryPrice({...source,official:input.competition.official,fee:input.competition.fee,opFee:input.competition.op_fee,memberFee:input.competition.member_fee,nonmemberFee:input.competition.nonmember_fee},input.selection)
+ return {eventId:WINTER_EVENT_ID,entryFee,total:entryFee,addFee:0}
 }
 export class UncertainInitialEntrySave extends Error {}
 export async function saveWinterInitialEntry(input:WinterInitialEntryInput,token:string):Promise<string>{
