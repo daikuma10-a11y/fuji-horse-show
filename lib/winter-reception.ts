@@ -43,10 +43,10 @@ export type WinterRequestRow = {
   payload: { visitorName?: string; before?: { competitionId: string; riderId: string; horseId: string; isOp: boolean }; changedFields?: string[]; treatedAsWithdrawAdd?: boolean; fee?: { changeBase: number; competitionDiff: number; addBase: number; addEntry: number; total: number } }
 }
 
-export async function winterRpc(name: string, args: Record<string, unknown>, token: string): Promise<unknown> {
+export async function winterRpc(name: string, args: Record<string, unknown>, token: string, signal?: AbortSignal): Promise<unknown> {
   if (!token) throw new Error('本部ログインが必要です')
   const response = await fetch(`https://mhgyhyxagkkwdiepifdp.supabase.co/rest/v1/rpc/${name}`, {
-    method: 'POST', cache: 'no-store', headers: { apikey: 'sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(args),
+    method: 'POST', cache: 'no-store', signal, headers: { apikey: 'sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(args),
   })
   const body = await response.json().catch(() => null)
   if (!response.ok) throw new Error(body?.message || 'Winterの処理に失敗しました')
