@@ -36,3 +36,12 @@ Continue on prep/winter-2026, commit/push each completed checkpoint. Autumn fhsf
 - Generated HTML rendered with WeasyPrint and local Noto Japanese font for QA only: 4 long-name rows fit one A4 page; 41 long-name rows span three pages. Inspected all pages; no clipped rows/text, headings repeat. These are temporary fixtures, not customer invoices.
 - TypeScript/build passed. Actual Safari/iPad/Canon TS8630 printing and credentialed admin operation remain unverified.
 - Next: full initial invoice/ancillary fees, extra payments/corrections, server confirmation snapshot and public checkout. This print checkpoint does not complete those features.
+
+## 2026-10-11 支払方法の保存（本部のみ）
+
+- Winterの団体ごとに当日現金・後日振込と振込先を保存。既存 settlement_payment_instructions を Winter event ID で限定し、Autumn画面・データを変更しない。
+- 管理者 app_metadata.role の既存RLSを使用。未設定はINSERT、更新は前回updated_atを条件とするPATCH。重複・同時更新・読戻し不一致は成功扱いにせず再読み込みを促す。現金を選ぶと以前の振込先はクリア。
+- 確認用の仮精算書に保存済み支払方法・振込先のみを掲載。現金受領・入金保存・精算確定・領収書発行とは別で、残額は変化しない。再印刷は引き続き読取専用。
+- 支払い予定の保存と振込先についてユニット検証、Winter隔離、権限拒否、衝突・読戻し不一致を検証。PostgRESTの日時表現（Z / +00:00）にも対応。
+- 実DBの管理者保存・CAS更新・古い更新拒否・非管理者読取更新拒否をBEGIN/ROLLBACK内で検証。実団体の支払方法・入金状態は変更しない。型検査・ビルド成功。
+- 残り：入厩などその他料金、追加分入金、金額訂正履歴、サーバー計算による最終精算スナップショットと再試行の重複防止、選手用の確定・保存済み再印刷。実際の管理者セッション・iPad・Canonでの操作確認は未実施。
