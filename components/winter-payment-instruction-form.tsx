@@ -1,13 +1,14 @@
 "use client"
-import {useRef,useState} from 'react'
+import {useEffect,useRef,useState} from 'react'
 import {type AdminSession} from '@/lib/supabase-rest'
 import {saveWinterPaymentInstruction,type WinterPaymentInstruction} from '@/lib/winter-settlement'
-type Props={session:AdminSession;orgId:string;instruction:WinterPaymentInstruction|null;onSession:(s:AdminSession)=>void;onChanged:()=>void}
+type Props={session:AdminSession;orgId:string;instruction:WinterPaymentInstruction|null;onSession:(s:AdminSession)=>void;onChanged:()=>void;onBusy?:(busy:boolean)=>void}
 const field='mt-2 min-h-14 w-full rounded-xl border-2 p-3 text-xl'
 const button='min-h-14 rounded-xl bg-blue-800 px-5 py-3 text-xl font-bold text-white disabled:opacity-50'
-export function WinterPaymentInstructionForm({session,orgId,instruction,onSession,onChanged}:Props){
+export function WinterPaymentInstructionForm({session,orgId,instruction,onSession,onChanged,onBusy}:Props){
  const [method,setMethod]=useState<WinterPaymentInstruction['payment_method']|''>(instruction?.payment_method??'')
  const [details,setDetails]=useState(instruction?.bank_details??''),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false),[error,setError]=useState('')
+ useEffect(()=>{onBusy?.(busy);return()=>onBusy?.(false)},[busy,onBusy])
  const lock=useRef(false)
  async function save(){
   if(lock.current||uncertain)return

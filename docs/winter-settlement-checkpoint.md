@@ -90,3 +90,9 @@ Continue on prep/winter-2026, commit/push each completed checkpoint. Autumn fhsf
 
 ### Winter公開接続設定（2026-10-11）
 初回PreviewのGETで接続キー未設定を検出。Autumn用キーの流用を止め、`WINTER_SELF_SETTLEMENT_PROXY_SECRET` を `prep/winter-2026` のPreview限定・Sensitiveで追加。Winter Edgeは専用キーのSHA256のみ保持し、Autumn EdgeとProduction設定は変更しない。APIのスコープCookieとWinter固定大会IDは維持。秘密値はGitへ保存しない。
+
+## 2026-10-12 本部の保存済み精算書確認
+- 公開Previewの精算GETは200、Winter大会ID一致、参加馬9頭・単価14,000円、専用Cookieを確認済み。実団体の確認済み精算・請求訂正は0件。事前入金未確認の警告を維持し、確認を勝手に保存しない。
+- 本部精算タブに団体ごとの保存済み精算書（新しい順に20件）を追加。当時の金額・確認者・支払方法・保存番号を表示し、そのスナップショットを読取専用で再印刷。管理者セッションを検証し、RLS・Winter大会・団体フィルターを使用。端末トークンは取得しない。
+- 入金・支払方法の保存中は団体切替、競合する金額操作、精算再読込・仮印刷を抑止。
+- tests/winter-saved-settlements.cjsで権限拒否、他団体・他大会拒否、トークン除外、書込なしを確認。保存済み印刷検証・型検査・Nextビルド成功。実管理者ログイン・iPad/Canonの実操作は利用者確認が必要。
