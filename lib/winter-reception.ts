@@ -42,10 +42,11 @@ export async function submitWinterAdd(input: WinterAddInput, accessToken: string
 
 export type WinterRequestRow = {
   entry_id: string | null
+  original_entry_id?:string|null
   id: string; event_id: string; request_type: 'add' | 'change' | 'withdraw'; status: string
   organization_id: string; target_competition_id: string; rider_id: string; horse_id: string
   fee_amount: number; created_at: string; reflected_at: string | null
-  payload: { add?: { isOp?: boolean; note?: string }; change?: { toIsOp?: boolean }; visitorName?: string; before?: { competitionId: string; riderId: string; horseId: string; isOp: boolean }; changedFields?: string[]; treatedAsWithdrawAdd?: boolean; fee?: { changeBase: number; competitionDiff: number; addBase: number; addEntry: number; total: number } }
+  payload: { inputs?:{entryId?:string}; add?: { isOp?: boolean; note?: string }; change?: { toIsOp?: boolean }; visitorName?: string; before?: { competitionId: string; riderId: string; horseId: string; isOp: boolean }; changedFields?: string[]; treatedAsWithdrawAdd?: boolean; fee?: { changeBase: number; competitionDiff: number; addBase: number; addEntry: number; total: number } }
 }
 
 export async function winterRpc(name: string, args: Record<string, unknown>, token: string, signal?: AbortSignal): Promise<unknown> {
@@ -54,7 +55,7 @@ export async function winterRpc(name: string, args: Record<string, unknown>, tok
     method: 'POST', cache: 'no-store', signal, headers: { apikey: 'sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(args),
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(body?.message || 'Winterの処理に失敗しました')
+  if (!response.ok) throw Object.assign(new Error(body?.message || 'Winterの処理に失敗しました'),{status:response.status})
   return body
 }
 
