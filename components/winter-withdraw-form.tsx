@@ -29,7 +29,7 @@ function LoadedWinterWithdraw({data,scope}:{data:Data;scope:WinterQueueScope}) {
  // Stable selector component identities preserve selection state while typing the visitor name.
  const selectors=useMemo(()=>({
  DateSelect:({onSelect}:ComponentProps<MasterWithdrawAdapter['DateSelect']>)=><MasterDateSelect dates={dates} onSelect={onSelect}/>,
- CompetitionList:({date,onSelect}:ComponentProps<MasterWithdrawAdapter['CompetitionList']>)=><MasterCompetitionList list={data.competitions.filter(row=>row.competition_date===date).map(row=>({id:row.id,date:row.competition_date,number:row.competition_no,name:row.name,official:row.official,entryFee:row.fee}))} onSelect={onSelect}/>,
+ CompetitionList:({date,onSelect}:ComponentProps<MasterWithdrawAdapter['CompetitionList']>)=><MasterCompetitionList list={data.competitions.filter(row=>row.competition_date===date).map(row=>({id:row.id,date:row.competition_date,number:row.competition_no,name:row.name,official:row.official,entryFee:row.fee,entryFeeLabel:row.member_fee!==null||row.nonmember_fee!==null?[row.member_fee!==null?`会員 ¥${row.member_fee.toLocaleString('ja-JP')}`:'',row.nonmember_fee!==null?`非会員 ¥${row.nonmember_fee.toLocaleString('ja-JP')}`:''].filter(Boolean).join(' ／ '):undefined}))} onSelect={onSelect}/>,
  StartList:(props:import('@/components/start-list').StartListProps)=><MasterStartRows {...props} model={eventStartListModel(data,data.eventId,props.competitionId,[])}/>
  }),[data])
  const people=eventStartListModel(data,data.eventId,'',[])

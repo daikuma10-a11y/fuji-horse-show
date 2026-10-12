@@ -13,6 +13,8 @@ assert.throws(()=>winterWithdrawDraft({...data,eventId:'autumn'},payload,'担当
 assert.throws(()=>winterWithdrawDraft({...data,entries:[{...original,status:'withdrawn'}]},payload,'担当者',id(6)))
 assert.throws(()=>winterWithdrawDraft(data,{...payload,playerId:id(9)},'担当者',id(6)),/変わりました/)
 assert.throws(()=>winterWithdrawDraft({...data,horses:[{...horse,event_id:'autumn'}]},payload,'担当者',id(6)))
+const {MasterCompetitionList}=require('../components/master/competition-list.tsx')
+const categoryHtml=renderToStaticMarkup(React.createElement(MasterCompetitionList,{list:[{...competition,entryFee:0,entryFeeLabel:'会員 ¥5,000 ／ 非会員 ¥8,000'}],onSelect:()=>{}}));assert.ok(categoryHtml.includes('会員 ¥5,000'));assert.ok(!categoryHtml.includes('エントリー料金 ¥0'))
 let values,cursor,staged=[],navigated=0,lock={current:false};const oldState=React.useState,oldRef=React.useRef
 React.useState=initial=>{const index=cursor++;return [values[index]===undefined?initial:values[index],value=>{values[index]=typeof value==='function'?value(values[index]):value}]};React.useRef=()=>lock
 const noop=()=>null,adapter={homeHref:'/winter',onExit:()=>{},getPlayer:()=>({...rider,orgId:org.id}),getHorse:()=>({...horse,orgId:org.id}),getOrg:()=>org,DateSelect:noop,CompetitionList:noop,StartList:noop,stageWithdraw:p=>{staged.push(p)},onStaged:()=>navigated++}

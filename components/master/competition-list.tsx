@@ -29,7 +29,7 @@ export function MasterCompetitionList({
             <span className="text-2xl font-bold text-foreground">{c.name}</span>
             {c.official && <OfficialBadge />}
             <span className="basis-full text-lg text-muted-foreground">
-              エントリー料金 {formatYen(c.entryFee)}
+              エントリー料金 {c.entryFeeLabel ?? formatYen(c.entryFee)}
             </span>
           </span>
           <ChevronRight className="size-8 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -3,7 +3,7 @@ import type { Competition, StartEntry, WithdrawPayload } from '../types'
 import type { MasterStartListSource } from './start-list'
 import type { StartListProps } from '../../components/start-list'
 
-export type MasterFormCompetition = Omit<Competition, 'date' | 'number'> & { date: string; number: number | string }
+export type MasterFormCompetition = Omit<Competition, 'date' | 'number'> & { date: string; number: number | string; entryFeeLabel?: string }
 /** Display and gestures are shared; event adapters own validation, staging and persistence. */
 export interface MasterWithdrawAdapter extends Pick<MasterStartListSource, 'getPlayer' | 'getHorse' | 'getOrg'> {
  homeHref: string
