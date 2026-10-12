@@ -8,6 +8,7 @@ import {loadWinterData} from '@/lib/winter-data'
 import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
+import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
 import {WinterSettlementActions} from '@/components/winter-settlement-actions'
 import {WinterInitialEntryRegistration} from '@/components/winter-initial-entry-registration'
 import {WinterStartList} from '@/components/winter-start-list'
@@ -29,6 +30,7 @@ export function WinterAdminDashboard(){
  useEffect(()=>{
   let active=true
   if(window.location.hash==='#winter-admin-tools'){setTab('roster');setVisited(['requests','roster'])}
+  if(window.location.hash==='#winter-meeting'){setTab('meeting');setVisited(['requests','meeting'])}
   const raw=sessionStorage.getItem(sessionKey)
   if(!raw){setChecking(false);return}
   try{verifyAdminSession(JSON.parse(raw) as AdminSession).then(next=>{if(active)updateSession(next)}).catch(()=>{if(active)sessionStorage.removeItem(sessionKey)}).finally(()=>{if(active)setChecking(false)})}
@@ -62,7 +64,7 @@ export function WinterAdminDashboard(){
  {winterAdminTabs.filter(t=>visited.includes(t.id)).map(t=><section key={t.id} role="tabpanel" id={`winter-panel-${t.id}`} aria-labelledby={`winter-tab-${t.id}`} hidden={tab!==t.id} className="space-y-5">
  {t.id==='roster'?<><button type="button" className={button} onClick={()=>{select('startlist');requestAnimationFrame(()=>{const panel=document.getElementById('winter-initial-registration') as HTMLDetailsElement|null;if(panel){panel.open=true;panel.scrollIntoView({block:'start'});panel.querySelector('summary')?.focus()}})}}>出番登録へ戻る</button><SharedRosterManager session={session} onParticipantsSaved={refresh}/>{data&&<WinterMasterRegistration session={session} organizations={data.organizations} onRegistered={refresh}/>}</>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
- t.id==='meeting'?<div className="space-y-4 rounded-xl border-2 bg-card p-5"><h2 className="text-2xl font-bold">打ち合わせ会</h2><p className="text-xl">仮出番表の組み替え・モニター表示・下見時間と開始時間の設定は「出番表」で操作できます。</p><button type="button" className={button} onClick={()=>select('startlist')}>出番表で確認・組み替え</button><p>打ち合わせ会専用の申請保留・一括確定は準備中です。</p></div>:
+ t.id==='meeting'?<WinterMeetingPanel session={session} onSession={updateSession} onChanged={refresh} onStartlist={()=>select('startlist')}/>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='requests'?<WinterRequestPanel session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh} showWithdraw={false}/>:
  t.id==='startlist'?<><details id="winter-initial-registration" className="rounded-xl border-2 bg-card p-4"><summary className="cursor-pointer text-2xl font-bold">事前エントリーを出番表に登録</summary><div className="mt-4"><WinterInitialEntryRegistration data={data} session={session} onChanged={refresh} onChooseParticipants={()=>{select('roster');requestAnimationFrame(()=>document.getElementById('winter-panel-roster')?.scrollIntoView({block:'start'}))}}/></div></details><WinterStartList data={data} session={session} onSession={updateSession} onChanged={refresh}/></>:

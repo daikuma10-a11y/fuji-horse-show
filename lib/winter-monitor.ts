@@ -13,3 +13,6 @@ export async function saveWinterOrder(comp:string,ids:string[],entries:WinterEnt
  const result=await winterRpc('save_winter_start_order',{p_competition_id:comp,p_entry_ids:ids,p_expected:winterOrderSnapshot(entries)},token) as {ids?:string[];savedAt?:string}
  if(JSON.stringify(result?.ids)!==JSON.stringify(ids)||typeof result.savedAt!=='string')throw new Error('保存結果を確認できません。最新の表を読み込んでください');return result.savedAt
 }
+
+/** Refresh untouched lists; preserve a local draft when new requests arrive. */
+export function winterOrderAfterRefresh(ids:string[],baseline:string,latest:string[]){return JSON.stringify(ids)===baseline?[...latest]:null}

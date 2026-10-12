@@ -20,8 +20,9 @@ export default function WinterChangePage() {
   const [fromSelection, setFromSelection] = useState<WinterFeeSelection>({}), [selection, setSelection] = useState<WinterFeeSelection>({})
   const [visitorName, setVisitorName] = useState(''), [review, setReview] = useState<WinterChangeInput | null>(null)
   const [error, setError] = useState(''), [saved, setSaved] = useState(''), [busy, setBusy] = useState(false)
+  const[queueScope,setQueueScope]=useState<'reception'|'meeting'>('reception')
   const lock = useRef(false)
-  useEffect(() => { setOrgId(new URLSearchParams(window.location.search).get('org') ?? '') }, [])
+  useEffect(() => {setQueueScope(new URLSearchParams(window.location.search).get('meeting')==='1'?'meeting':'reception'); setOrgId(new URLSearchParams(window.location.search).get('org') ?? '') }, [])
   useEffect(() => {
     const controller = new AbortController()
     loadWinterData(controller.signal).then(value => { if (!controller.signal.aborted) setData(value) }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Winterデータを読み込めません') })
@@ -54,14 +55,14 @@ export default function WinterChangePage() {
   const amounts = review ? reviewWinterChange(review) : null
   function stage() {
     if(!review || lock.current)return
-    try{stageWinterDraft({type:'change',input:review});setSaved(review.target.id);setReview(null);setEntryId('')}
+    try{stageWinterDraft({type:'change',input:review},queueScope);setSaved(review.target.id);setReview(null);setEntryId('')}
     catch(reason){setError(reason instanceof Error?reason.message:'未確定一覧に追加できません')}
   }
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-5 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
-    <Link className="inline-flex min-h-14 items-center rounded-xl border-2 p-4 text-xl font-bold" href="/winter">受付トップに戻る</Link>
+    <Link className="inline-flex min-h-14 items-center rounded-xl border-2 p-4 text-xl font-bold" href={queueScope==='meeting'?'/winter/admin#winter-meeting':'/winter'}>{queueScope==='meeting'?'打ち合わせ会へ戻る':'受付トップに戻る'}</Link>
     <h2 className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">変更受付</h2>
-    <WinterQueueLink />
+    <WinterQueueLink scope={queueScope} />{queueScope==='meeting'&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">打ち合わせ会の保留入力です。まだDB・出番表・精算には反映しません。</p>}
     <p className="text-lg">入力を続けて、未確定一覧でまとめて確定できます。確定の保存テストには本部ログインが必要です。</p>
     {error && <p role="alert" className="rounded-xl bg-red-100 p-4 text-xl">{error}</p>}
     {!data ? <button className={button} onClick={() => { setError(''); setReload(value => value+1) }}>Winterデータを読み込む</button> : review && amounts ? <section className="space-y-4 rounded-xl border-2 bg-white p-5">
@@ -72,7 +73,7 @@ export default function WinterChangePage() {
       <p className="text-xl">変更手数料：¥{amounts.fee.changeBase.toLocaleString('ja-JP')}<br />競技料金の差額：¥{amounts.fee.competitionDiff.toLocaleString('ja-JP')}<br />追加手数料：¥{amounts.fee.addBase.toLocaleString('ja-JP')}<br />追加競技料金：¥{amounts.fee.addEntry.toLocaleString('ja-JP')}</p>
       <p className="text-3xl font-bold">合計：¥{amounts.fee.total.toLocaleString('ja-JP')}</p>
       <p>受付担当者：{review.target.visitorName}</p>
-      <button className={button} disabled={busy} onClick={stage}>未確定一覧に追加して入力を続ける</button>
+      <button className={button} disabled={busy} onClick={stage}>{queueScope==='meeting'?'保留一覧に追加して入力を続ける':'未確定一覧に追加して入力を続ける'}</button>
       <button className={button} disabled={busy} onClick={() => setReview(null)}>入力に戻る</button>
     </section> : <div className="space-y-4">
       <label className="block text-xl font-bold">団体<select className={field} value={orgId} onChange={e => { setOrgId(e.target.value); chooseEntry('') }}><option value="">団体を選択</option>{data.organizations.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>

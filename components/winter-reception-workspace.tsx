@@ -19,8 +19,9 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
   const [riderId, setRiderId] = useState("")
   const [horseId, setHorseId] = useState("")
   const [selection, setSelection] = useState<WinterFeeSelection>({})
+  const[queueScope,setQueueScope]=useState<'reception'|'meeting'>('reception')
   const [reload, setReload] = useState(0)
-  useEffect(() => { setOrgId(new URLSearchParams(window.location.search).get("org") ?? "") }, [])
+  useEffect(() => {setQueueScope(new URLSearchParams(window.location.search).get('meeting')==='1'?'meeting':'reception'); setOrgId(new URLSearchParams(window.location.search).get("org") ?? "") }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -47,8 +48,8 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
 
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-6 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
-    <Link href="/winter" className="inline-flex min-h-14 items-center rounded-xl border-2 px-5 text-xl font-bold">受付トップに戻る</Link>
-    {mode !== 'admin' && <WinterQueueLink />}
+    <Link href={queueScope==='meeting'?'/winter/admin#winter-meeting':'/winter'} className="inline-flex min-h-14 items-center rounded-xl border-2 px-5 text-xl font-bold">{queueScope==='meeting'?'打ち合わせ会へ戻る':'受付トップに戻る'}</Link>
+    {queueScope==='meeting'&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">打ち合わせ会の保留入力です。相談中はDB・出番表・精算には反映しません。本部の打ち合わせ会で確認して確定してください。</p>}{mode !== 'admin' && <WinterQueueLink scope={queueScope} />}
     <div className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">{mode === "admin" ? "大会本部" : mode === "add" ? "追加受付" : "棄権受付"}</div>
     {mode === 'admin' && <Link href="/winter/prepare" className="inline-flex min-h-16 items-center rounded-xl border-2 border-blue-800 bg-white px-5 text-xl font-bold">締切前の準備：名簿・出番表・事前精算を確認</Link>}
     {mode === 'admin' && <a href="#winter-admin-tools" className="inline-flex min-h-16 items-center rounded-xl bg-blue-800 px-5 text-xl font-bold text-white">人馬名簿の団体を選ぶ・本部ログインへ</a>}
@@ -68,7 +69,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
       <div role="status" className="rounded-xl bg-white p-5 text-2xl font-bold">{fee === null ? feeMessage : `競技エントリー料　¥${fee.toLocaleString('ja-JP')}`}<p className="mt-3 text-base font-normal">追加申請は、この料金に追加手数料3,000円を加算します。内容確認画面で合計をご確認ください。</p></div>
       </>}
       </>}
-      <WinterAddSavePanel mode={mode} data={data} organizations={data.organizations} onRegistered={() => setReload(value => value + 1)} organization={data.organizations.find(row => row.id === orgId)} competition={competition} rider={data.riders.find(row => row.id === riderId)} horse={data.horses.find(row => row.id === horseId)} selection={selection} />
+      <WinterAddSavePanel queueScope={queueScope} mode={mode} data={data} organizations={data.organizations} onRegistered={() => setReload(value => value + 1)} organization={data.organizations.find(row => row.id === orgId)} competition={competition} rider={data.riders.find(row => row.id === riderId)} horse={data.horses.find(row => row.id === horseId)} selection={selection} />
     </>}
   </main>
 }

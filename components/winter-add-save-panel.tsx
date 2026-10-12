@@ -11,7 +11,7 @@ import { WinterStartList } from '@/components/winter-start-list'
 import { WinterInitialEntryRegistration } from '@/components/winter-initial-entry-registration'
 import { SharedRosterManager } from '@/components/shared-roster-manager'
 
-type Props = Partial<Pick<WinterAddInput, "organization" | "competition" | "rider" | "horse">> & Pick<WinterAddInput, "selection"> & { organizations: WinterOrganizationRow[]; data: Awaited<ReturnType<typeof loadWinterData>>; mode?: "admin" | "add" | "withdraw"; onRegistered: () => void }
+type Props = Partial<Pick<WinterAddInput, "organization" | "competition" | "rider" | "horse">> & Pick<WinterAddInput, "selection"> & { organizations: WinterOrganizationRow[]; data: Awaited<ReturnType<typeof loadWinterData>>; mode?: "admin" | "add" | "withdraw"; onRegistered: () => void;queueScope?:'reception'|'meeting' }
 const inputClass = "mt-2 min-h-16 w-full rounded-xl border-2 border-slate-300 p-3 text-xl"
 const buttonClass = "min-h-16 w-full rounded-xl bg-blue-800 p-4 text-2xl font-bold text-white disabled:opacity-50"
 
@@ -56,7 +56,7 @@ export function WinterAddSavePanel(props: Props) {
 
   function stage() {
     if (!review || lock.current) return
-    try { stageWinterDraft({ type: 'add', input: review }); setSavedId(review.id); setReview(null) }
+    try { stageWinterDraft({ type: 'add', input: review },props.queueScope); setSavedId(review.id); setReview(null) }
     catch (reason) { setError(reason instanceof Error ? reason.message : '未確定一覧に追加できません') }
   }
 

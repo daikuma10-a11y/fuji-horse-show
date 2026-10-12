@@ -3,7 +3,7 @@ import {winterEntryIntervals,loadWinterRosterIdentities,type WinterRosterIdentit
 import {winterCompetitionLabel} from "@/lib/winter-display-order"
 import {useEffect,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
-import {publishWinterMonitor,moveWinterEntry,saveWinterOrder,type WinterMonitorState} from '@/lib/winter-monitor'
+import {publishWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderAfterRefresh,type WinterMonitorState} from '@/lib/winter-monitor'
 import {WinterMonitorView} from './winter-monitor-view'
 import {WinterTimetableEditor} from './winter-timetable-editor'
 import {loadWinterRequests,type WinterRequestRow} from '@/lib/winter-reception'
@@ -20,6 +20,8 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  const original=data.entries.filter(e=>e.competition_id===compId&&!['wd','withdrawn'].includes(e.status.toLowerCase())).sort((a,b)=>a.start_order-b.start_order)
  const originalIds=original.map(e=>e.entry_id),originalKey=JSON.stringify(originalIds)
  const [baseline,setBaseline]=useState(originalKey)
+ const observedOrder=useRef(originalKey)
+ useEffect(()=>{if(observedOrder.current===originalKey)return;observedOrder.current=originalKey;const next=winterOrderAfterRefresh(ids,baseline,originalIds);if(next){setIds(next);setBaseline(originalKey);setPage(v=>Math.min(v,Math.max(0,Math.ceil(next.length/30)-1)))}},[originalKey])
  const stale=baseline!==originalKey
  const dirty=JSON.stringify(ids)!==originalKey
  useEffect(()=>{let active=true;loadWinterRequests(session.accessToken).then(rows=>{if(active)setRequests(rows)}).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'変更表示を取得できません')});return()=>{active=false}},[session.accessToken,data])
