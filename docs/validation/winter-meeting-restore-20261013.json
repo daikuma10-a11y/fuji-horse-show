@@ -1,0 +1,106 @@
+{
+  "kind": "winter-meeting-draft",
+  "queue": {
+    "version": 1,
+    "eventId": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+    "attempted": false,
+    "items": [
+      {
+        "type": "add",
+        "input": {
+          "id": "83188177-8ab7-4d4e-aa9b-4200189c46cc",
+          "organization": {
+            "id": "0d175ce1-6a79-5d83-97e3-aee65cd36fdf",
+            "name": "【テスト】架空クラブ09",
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5"
+          },
+          "competition": {
+            "id": "aa34af60-8b5c-49ed-a6fd-05759b9927e4",
+            "fee": 6000,
+            "name": "ジムカーナ",
+            "op_fee": 5000,
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+            "official": false,
+            "member_fee": null,
+            "nonmember_fee": null,
+            "competition_no": "13",
+            "competition_date": "2026-11-14"
+          },
+          "rider": {
+            "id": "56a2c13e-9d89-57bd-bb72-a92bdb212d3a",
+            "name": "【テスト】選手17",
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+            "jef_member_no": null,
+            "roster_source": "shared_roster",
+            "is_participant": true,
+            "organization_id": "0d175ce1-6a79-5d83-97e3-aee65cd36fdf"
+          },
+          "horse": {
+            "id": "37051530-70d5-556b-98a9-8380fb53b0eb",
+            "name": "【テスト】馬17",
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+            "roster_source": "shared_roster",
+            "is_participant": true,
+            "organization_id": "0d175ce1-6a79-5d83-97e3-aee65cd36fdf",
+            "jef_registration_no": null
+          },
+          "visitorName": "共通マスター実操作検証 20261013",
+          "selection": {
+            "isOp": false,
+            "instructorConfirmed": false
+          },
+          "note": "検証A：変更・棄権の保存復元用。既存出番ではありません。",
+          "masterForm": true
+        }
+      },
+      {
+        "type": "add",
+        "input": {
+          "id": "288a7ecb-8912-4031-a932-8869d88e9160",
+          "organization": {
+            "id": "0d175ce1-6a79-5d83-97e3-aee65cd36fdf",
+            "name": "【テスト】架空クラブ09",
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5"
+          },
+          "competition": {
+            "id": "aa34af60-8b5c-49ed-a6fd-05759b9927e4",
+            "fee": 6000,
+            "name": "ジムカーナ",
+            "op_fee": 5000,
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+            "official": false,
+            "member_fee": null,
+            "nonmember_fee": null,
+            "competition_no": "13",
+            "competition_date": "2026-11-14"
+          },
+          "rider": {
+            "id": "e8167b2c-f48e-5c61-a33c-337cfc38e17b",
+            "name": "【テスト】選手18",
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+            "jef_member_no": null,
+            "roster_source": "shared_roster",
+            "is_participant": true,
+            "organization_id": "0d175ce1-6a79-5d83-97e3-aee65cd36fdf"
+          },
+          "horse": {
+            "id": "8b834027-add7-5709-a654-df3044ba9819",
+            "name": "【テスト】馬18",
+            "event_id": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+            "roster_source": "shared_roster",
+            "is_participant": true,
+            "organization_id": "0d175ce1-6a79-5d83-97e3-aee65cd36fdf",
+            "jef_registration_no": null
+          },
+          "visitorName": "共通マスター実操作検証 20261013",
+          "selection": {
+            "isOp": false,
+            "instructorConfirmed": false
+          },
+          "note": "検証B：棄権保存と末尾復元用。既存出番ではありません。",
+          "masterForm": true
+        }
+      }
+    ]
+  }
+}

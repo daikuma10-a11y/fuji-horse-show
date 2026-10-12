@@ -12,3 +12,5 @@ The organizer requires a shared application master based on the validated Autumn
 - Record incomplete master migrations honestly; configuration scaffolding does not mean that every older screen has been migrated.
 
 - If implementing the request would require departing from the organizer's agreed master design, or changing the agreed screen/operation, explain the reason and impact and ask before implementing that departure. Routine work within the approved master migration is already authorized.
+
+- Before handing off or ending a session with pending Winter meeting test drafts, save the full versioned queue as an official `winter-meeting-draft` JSON checkpoint, including original request IDs, participant IDs, fee categories, actor and notes. Screenshots or descriptions alone are insufficient. Validate the file through `validateWinterQueue` and `winterBatchPayload`, check server state before any restoration, and use the existing import UI. Never assume that a reopened agent/browser or another device retains localStorage or authentication. Do not overwrite another operator's pending queue or claim a draft is visible without observing that state.
