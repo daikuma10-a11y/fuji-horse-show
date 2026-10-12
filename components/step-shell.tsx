@@ -5,6 +5,8 @@ import { ArrowLeft } from "lucide-react"
 import { AppHeader } from "./app-header"
 
 interface StepShellProps {
+  homeHref?: string
+  notice?: ReactNode
   subtitle: string
   /** 現在のステップ見出し */
   title: string
@@ -19,6 +21,8 @@ interface StepShellProps {
 
 export function StepShell({
   subtitle,
+  homeHref,
+  notice,
   title,
   description,
   onBack,
@@ -28,7 +32,7 @@ export function StepShell({
 }: StepShellProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <AppHeader subtitle={subtitle} />
+      <AppHeader subtitle={subtitle} homeHref={homeHref} />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-6">
         {onBack && (
@@ -45,6 +49,7 @@ export function StepShell({
         <h1 className="text-3xl font-bold text-foreground sm:text-4xl">{title}</h1>
         {description && <p className="mt-2 text-xl text-muted-foreground">{description}</p>}
 
+        {notice && <div className="mt-4">{notice}</div>}
         <div className="mt-6 pb-4">{children}</div>
       </main>
 

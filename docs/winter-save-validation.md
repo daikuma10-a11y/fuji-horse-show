@@ -136,3 +136,11 @@ Winter専用のタブ管理画面に変更。Autumnと同じ順番（申請一�
 - Request group selection and request cards use the same master. Saved fee snapshots, before/after human/horse names, OP, reflected/cancelled states and cancellation financial exclusion remain visible. Persistence, authentication and retries remain in tournament adapters.
 - `tests/master-reception-layout.cjs`: identical home markup after route substitution; scoped action URLs; before/after, OP, saved fee, cancelled amount. Passed. Start-list original Autumn markup regression passed. TypeScript and Next build passed.
 - Not complete: full add/change/withdraw forms, finance/print screens and request action parity still need migration. Winter does not yet implement Autumn's arbitrary reflect position, group reflect, or add/change cancellation; existing withdraw restore remains. No authenticated browser, iPad or physical printer test is claimed. No database changes in this checkpoint.
+
+## 2026-10-12 引き継ぎ後：棄権フォームの共通マスター
+
+- GitHub `prep/winter-2026` の最新が引き継ぎ指定 `454b109` と一致すること、AGENTS.mdと既存検証記録を確認。既存精算・帳票ロジックも実装済みであり、未実装扱いで作り直さない。
+- Autumnの棄権入力画面を `components/master/withdraw-form.tsx` へ移動し、両大会が同じ日付→競技→出番表→確認の画面・選択解除操作を使用。日付/競技ボタンも共通マスターへ。StepShellは大会内リンクと大会固有の確認表示を受け取る。Autumnの既存データ・stageWithdrawは維持。
+- Winter adapterは担当者名・対象人馬・大会境界・所属IDを確認し、0円の棄権を既存未確定一覧へ渡す。通常受付/打ち合わせ会の保存領域分離は維持。DB保存は従来の一括RPCを使い、フォームから直接保存/反映しない。二重タップは同期ロックで防止。架空fixtureは削除せず、DB変更なし。
+- master-withdraw-form検査で対象出番の一致、同名別所属のID維持、OP、0円の一括保存payload、別大会/棄権済み/担当者欠落の拒否、選択解除、二重タップ防止を確認。既存受付/出番表のHTML回帰検査、Winter一括保存検査、TypeScriptチェック、Next.jsビルド成功。
+- 未完了：追加/変更フォーム、精算/印刷画面の共通化、反映位置/団体一括反映/追加変更取消。実管理者・iPad・実プリンターでの全体操作検証は未完了。フォームの共通化だけで全体完成とは扱わない。
