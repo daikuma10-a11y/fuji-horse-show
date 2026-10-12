@@ -1,5 +1,6 @@
 "use client"
 
+import { MasterOrganizationPicker } from "@/components/master/organization-picker"
 import { useStore } from "@/lib/store"
 import { canonicalOrgId } from "@/lib/organization-aliases"
 import { compareOrganizations } from "@/lib/organization-order"
@@ -12,14 +13,7 @@ export function OrganizationPicker({ counts, onSelect, description }: {
 }) {
   const { organizations } = useStore()
   const groups = organizations.filter(org => canonicalOrgId(org.id) === org.id && (counts.get(org.id) ?? 0) > 0).sort(compareOrganizations)
-  return <div className="flex flex-col gap-3">
-    {description && <p className="text-base font-semibold text-muted-foreground">{description}</p>}
-    {groups.length === 0 && <p className="rounded-xl border border-border p-5 text-lg">選べる団体がありません。</p>}
-    {groups.map(org => <button key={org.id} type="button" onClick={() => onSelect(org.id)} className="flex min-h-20 w-full items-center justify-between gap-3 rounded-2xl border-2 border-border bg-card px-5 py-4 text-left shadow-sm active:scale-[0.99]">
-      <span className="min-w-0 break-words text-xl font-bold">{org.name}</span>
-      <span className="shrink-0 text-base font-semibold text-muted-foreground">{counts.get(org.id)}件 <span aria-hidden="true">›</span></span>
-    </button>)}
-  </div>
+  return <MasterOrganizationPicker groups={groups} counts={counts} onSelect={onSelect} description={description}/>
 }
 
 export function EntryOrganizationPicker({ competitionId, onSelect }: {

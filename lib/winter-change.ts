@@ -42,7 +42,7 @@ export function reviewWinterChange(input: WinterChangeInput, options:{allowCross
 export async function submitWinterChange(input: WinterChangeInput, token: string) {
   const review = reviewWinterChange(input)
   const { original, fromSelection, target } = input
-  const result = await winterRpc('submit_winter_reception_change', {
+  const args = {
     p_id: target.id, p_entry_id: original.entry_id,
     p_before: { competitionId: original.competition_id, riderId: original.rider_id, horseId: original.horse_id, isOp: !!original.is_op },
     p_competition_id: target.competition.id, p_rider_id: target.rider.id, p_horse_id: target.horse.id,
@@ -50,7 +50,9 @@ export async function submitWinterChange(input: WinterChangeInput, token: string
     p_membership: target.selection.membership ?? null, p_is_op: !!target.selection.isOp,
     p_from_instructor: !!fromSelection.instructorConfirmed, p_instructor: !!target.selection.instructorConfirmed,
     p_expected_total: review.fee.total,
-  }, token)
+    ...(target.masterForm?{p_organization_id:target.organization.id,p_before_organization_id:original.organization_id??null}:{}),
+  }
+  const result=await winterRpc(target.masterForm?'submit_winter_master_change':'submit_winter_reception_change',target.masterForm?{p_args:args}:args,token)
   if (result !== target.id) throw new Error('保存結果を確認できません。同じ受付番号で再確認してください')
   return target.id
 }

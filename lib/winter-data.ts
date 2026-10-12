@@ -16,7 +16,7 @@ export type WinterCompetitionRow = EventRow & {
 }
 export type WinterEntryRow = EventRow & {
   entry_id: string; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
-  rider_id: string; horse_id: string; organization_name: string; is_op: boolean | null
+  rider_id: string; horse_id: string; organization_id?: string; organization_name: string; is_op: boolean | null
 }
 export type WinterTimetableRow = EventRow & { competition_id:string; inspection_time:string|null; start_time:string|null; phase:'provisional'|'final'; updated_at:string }
 
@@ -47,7 +47,7 @@ export async function loadWinterData(signal?: AbortSignal) {
     rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee,notes", "id.asc", signal),
-    rows<WinterEntryRow>("reception_entries", "event_id,entry_id,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_name,is_op", "entry_id.asc", signal),
+    rows<WinterEntryRow>("reception_entries", "event_id,entry_id,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_id,organization_name,is_op", "entry_id.asc", signal),
   ])
   organizations.sort(compareWinterOrganizations)
   for (const row of competitions) row.name=row.name.normalize("NFKC").replace(/\s+/g," ").trim()
@@ -62,7 +62,7 @@ export async function loadWinterData(signal?: AbortSignal) {
     throw new Error("Winter人馬の所属を確認できません")
   }
   if (competitions.some(row => !WINTER_DATES.some(date => date === row.competition_date))) throw new Error("Winter競技の日付を確認してください")
-  if (entries.some(row => !competitionIds.has(row.competition_id) || !riderIds.has(row.rider_id) || !horseIds.has(row.horse_id))) {
+  if (entries.some(row => (row.organization_id!==undefined&&!orgIds.has(row.organization_id)) || !competitionIds.has(row.competition_id) || !riderIds.has(row.rider_id) || !horseIds.has(row.horse_id))) {
     throw new Error("Winter出番表に所属大会を確認できない人馬があります")
   }
   const timetable=competitions.flatMap(row=>{

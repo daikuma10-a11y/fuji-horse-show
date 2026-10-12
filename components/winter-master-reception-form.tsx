@@ -1,0 +1,43 @@
+"use client"
+import Link from 'next/link'
+import {useEffect,useState} from 'react'
+import {useRouter} from 'next/navigation'
+import {MasterAddForm} from '@/components/master/add-form'
+import {MasterChangeForm} from '@/components/master/change-form'
+import {WinterReceptionData,WinterMasterDateSelect,WinterMasterCompetitionList,WinterMasterPlayerPicker,WinterMasterHorsePicker,WinterMasterStartList} from '@/components/winter-reception-selectors'
+import {WinterQueueLink} from '@/components/winter-queue-link'
+import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
+import {loadWinterData} from '@/lib/winter-data'
+import {stageWinterDraft,type WinterQueueScope} from '@/lib/winter-batch'
+import {winterCompetition,type WinterFeeSelection} from '@/lib/winter-event'
+import {winterMasterRoster,winterMasterCompetition,winterMasterAddFee,winterMasterChangeFee,winterMasterAddInput,winterMasterChangeInput,winterMasterPrice} from '@/lib/winter-master-reception'
+import {reviewWinterAdd} from '@/lib/winter-reception'
+import {reviewWinterChange} from '@/lib/winter-change'
+import type {MasterChangeState,MasterFormCompetition} from '@/lib/master/reception-form'
+import type {StartEntry} from '@/lib/types'
+type Data=Awaited<ReturnType<typeof loadWinterData>>
+const field='mt-2 min-h-16 w-full rounded-xl border-2 border-border bg-card p-3 text-xl'
+const selectors={DateSelect:WinterMasterDateSelect,CompetitionList:WinterMasterCompetitionList,PlayerPicker:WinterMasterPlayerPicker,HorsePicker:WinterMasterHorsePicker}
+export function WinterMasterReceptionForm({mode}:{mode:'add'|'change'}){
+ const[data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[reload,setReload]=useState(0),[scope,setScope]=useState<WinterQueueScope>('reception')
+ useEffect(()=>{setScope(new URLSearchParams(window.location.search).get('meeting')==='1'?'meeting':'reception')},[])
+ useEffect(()=>{const controller=new AbortController();setError('');loadWinterData(controller.signal).then(value=>{if(!controller.signal.aborted)setData(value)}).catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:'Winterデータを読み込めません')});return()=>controller.abort()},[reload])
+ if(!data)return <main className="mx-auto max-w-5xl p-5"><p role={error?'alert':'status'}>{error||'Winterデータを読み込んでいます…'}</p>{error&&<button type="button" className={field} onClick={()=>setReload(value=>value+1)}>再読み込み</button>}</main>
+ return <WinterReceptionData data={data}><LoadedWinterReception data={data} scope={scope} mode={mode}/></WinterReceptionData>
+}
+function LoadedWinterReception({data,scope,mode}:{data:Data;scope:WinterQueueScope;mode:'add'|'change'}){
+ const router=useRouter(),[visitorName,setVisitorName]=useState(''),[selection,setSelection]=useState<WinterFeeSelection>({}),[fromSelection,setFromSelection]=useState<WinterFeeSelection>({})
+ const roster=winterMasterRoster(data),people={getPlayer:(id:string)=>roster.players.find(row=>row.id===id),getHorse:(id:string)=>roster.horses.find(row=>row.id===id),getOrg:(id:string)=>roster.organizations.find(row=>row.id===id)}
+ const getCompetition=(id:string)=>{const row=data.competitions.find(row=>row.id===id);return row?winterMasterCompetition(row):undefined}
+ const base={...selectors,...people,canUseOp:(c:MasterFormCompetition)=>!c.official&&data.competitions.find(row=>row.id===c.id)?.op_fee!=null,homeHref:'/winter',onExit:()=>router.push(scope==='meeting'?'/winter/admin#winter-meeting':'/winter'),onStaged:()=>router.push(scope==='meeting'?'/winter/admin#winter-meeting':'/winter/confirm'),onCompetitionSelected:()=>setSelection({}),notice:<><WinterQueueLink scope={scope}/>{scope==='meeting'&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">打ち合わせ会の保留入力です。相談中はDB・出番表・精算には反映しません。<Link href="/winter/admin#winter-meeting" className="underline">打ち合わせ会へ戻る</Link></p>}</>}
+ const visitor=<label className="mt-5 block text-xl font-bold">受付担当者名<input value={visitorName} maxLength={100} onChange={e=>setVisitorName(e.target.value)} className={field}/></label>
+ const confirmFields=(orgId:string)=><div className="mb-4"><WinterExerciseNotice organizationId={orgId}/><p className="text-xl">受付担当者：{visitorName}</p></div>
+ if(mode==='add')return <MasterAddForm adapter={{...base,getFee:(c,op)=>{try{return winterMasterAddFee(data,c.id,{...selection,isOp:op})}catch{return null}},inputFields:s=><><WinterExerciseNotice organizationId={s.organizationId}/><WinterFeeFields data={data} label="追加先" competition={s.competition} value={{...selection,isOp:s.isOp}} onChange={setSelection}/>{visitor}</>,confirmFields:s=>confirmFields(s.organizationId),canReview:s=>!!visitorName.trim()&&s.note.trim().length<=4000,stageAdd:payload=>{const competition=getCompetition(payload.competitionId);if(!competition)throw new Error('Winterの競技を確認してください');const state={competition,playerId:payload.playerId,horseId:payload.horseId,organizationId:payload.organizationId??people.getPlayer(payload.playerId)?.orgId??'',isOp:!!payload.isOp,note:payload.note};const input=winterMasterAddInput(data,state,visitorName,selection,crypto.randomUUID());reviewWinterAdd(input);stageWinterDraft({type:'add',input},scope)}}}/>
+ const resetCategories=(entry:StartEntry)=>{setFromSelection({isOp:!!entry.isOp});setSelection({isOp:!!entry.isOp})}
+ return <MasterChangeForm adapter={{...base,StartList:WinterMasterStartList,getCompetition,onEntrySelected:resetCategories,onRestore:resetCategories,getFee:s=>{try{return winterMasterChangeFee(data,s,fromSelection,selection)}catch{return null}},hasExtraChanges:s=>s.fromCompetition?.id===s.toCompetition?.id&&fromSelection.membership!==selection.membership,canReview:()=>!!visitorName.trim(),inputFields:s=><><WinterExerciseNotice organizationId={s.organizationId}/>{s.fromCompetition&&<WinterFeeFields data={data} label="変更前" competition={s.fromCompetition} value={{...fromSelection,isOp:!!s.entry.isOp}} onChange={setFromSelection}/>}<p className="mt-3 text-base text-muted-foreground">変更前の会員区分・指導者資格は元のエントリー内容を確認して選んでください。</p>{s.toCompetition&&<WinterFeeFields data={data} label="変更後" competition={s.toCompetition} value={{...selection,isOp:s.toIsOp}} onChange={setSelection}/>} {visitor}</>,confirmFields:s=>confirmFields(s.organizationId),stageChange:payload=>{const original=data.entries.find(row=>row.entry_id===payload.entryId);if(!original)throw new Error('変更前の出番を確認してください');const entry:StartEntry={id:original.entry_id,competitionId:original.competition_id,playerId:original.rider_id,horseId:original.horse_id,order:original.start_order,isOp:!!original.is_op};const state:MasterChangeState={entry,fromCompetition:getCompetition(entry.competitionId),toCompetition:getCompetition(payload.toCompetitionId),toPlayerId:payload.toPlayerId,toHorseId:payload.toHorseId,organizationId:payload.organizationId??people.getPlayer(payload.toPlayerId)?.orgId??'',toIsOp:!!payload.toIsOp,changedFields:payload.changedFields,treatedAsWithdrawAdd:payload.treatedAsWithdrawAdd};const input=winterMasterChangeInput(data,state,visitorName,fromSelection,selection,crypto.randomUUID());reviewWinterChange(input);stageWinterDraft({type:'change',input},scope)}}}/>
+}
+function WinterFeeFields({data,label,competition,value,onChange}:{data:Data;label:string;competition:MasterFormCompetition;value:WinterFeeSelection;onChange:(value:WinterFeeSelection)=>void}){
+ const row=data.competitions.find(row=>row.id===competition.id);if(!row)return <p role="alert">Winterの競技を確認してください</p>
+ let message='';try{winterMasterPrice(data,row.id,value)}catch(error){message=error instanceof Error?error.message:'料金区分を確認してください'}
+ return <div className="mt-5 space-y-4">{(row.member_fee!==null||row.nonmember_fee!==null)&&<label className="block text-xl font-bold">{label}の料金区分<select className={field} value={value.membership??''} onChange={e=>onChange({...value,membership:e.target.value==='member'?'member':e.target.value==='nonmember'?'nonmember':undefined})}><option value="">区分を選択してください</option>{row.member_fee!==null&&<option value="member">会員（¥{row.member_fee.toLocaleString('ja-JP')}）</option>}{row.nonmember_fee!==null&&<option value="nonmember">非会員（¥{row.nonmember_fee.toLocaleString('ja-JP')}）</option>}</select></label>}{winterCompetition(row.competition_no).instructorRequired&&<label className="flex min-h-16 items-center gap-4 text-xl"><input type="checkbox" className="size-7" checked={!!value.instructorConfirmed} onChange={e=>onChange({...value,instructorConfirmed:e.target.checked})}/>{label}の地域乗馬指導者資格を確認しました</label>}{message&&<p role="status" className="rounded-xl bg-orange-100 p-4 text-xl">{message}</p>}</div>
+}

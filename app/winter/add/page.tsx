@@ -1,3 +1,2 @@
-import { WinterReceptionWorkspace } from "@/components/winter-reception-workspace"
-
-export default function Page() { return <WinterReceptionWorkspace mode="add" /> }
+import {WinterMasterReceptionForm} from '@/components/winter-master-reception-form'
+export default function Page(){return <WinterMasterReceptionForm mode="add"/>}
