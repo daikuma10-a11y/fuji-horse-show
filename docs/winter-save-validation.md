@@ -129,3 +129,10 @@ Winter専用のタブ管理画面に変更。Autumnと同じ順番（申請一�
 - Gitの現行オータム原本rendererと同じ20組fixtureを実際に静的レンダーし、共有masterのHTMLが完全一致することを確認。基準hashを保存し、Autumn adapterの出力も一致する回帰検査を追加。金融処理・API・認証・DBは移植せず従来の大会限定adapterを維持。
 - 今後の共通UI改良はmaster側へ反映し、各大会のコピーを禁止する方針をAGENTS.mdに保存。合意から外れる設計/操作変更は事前確認する。
 - アプリ全体のmaster移行が完了したわけではない。受付フォーム/申請操作/精算/帳票/名簿などの既存大会別画面にはまだ移行が必要。全体完了通知は出番表の移行だけで行わない。
+
+## Shared reception checkpoint (2026-10-12)
+
+- Autumn and Winter home screens now use `MasterReceptionHome`; only subtitle, scoped routes and tournament notices differ. Four actions retain Autumn order, typography and layout; settlement stays last. Winter header links to Winter, never Autumn.
+- Request group selection and request cards use the same master. Saved fee snapshots, before/after human/horse names, OP, reflected/cancelled states and cancellation financial exclusion remain visible. Persistence, authentication and retries remain in tournament adapters.
+- `tests/master-reception-layout.cjs`: identical home markup after route substitution; scoped action URLs; before/after, OP, saved fee, cancelled amount. Passed. Start-list original Autumn markup regression passed. TypeScript and Next build passed.
+- Not complete: full add/change/withdraw forms, finance/print screens and request action parity still need migration. Winter does not yet implement Autumn's arbitrary reflect position, group reflect, or add/change cancellation; existing withdraw restore remains. No authenticated browser, iPad or physical printer test is claimed. No database changes in this checkpoint.

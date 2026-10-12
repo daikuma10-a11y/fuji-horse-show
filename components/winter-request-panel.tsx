@@ -1,5 +1,6 @@
 "use client"
 
+import {MasterRequestGroups,MasterRequestCard} from './master/request-list'
 import { useEffect, useRef, useState } from 'react'
 import { verifyAdminSession, type AdminSession } from '@/lib/supabase-rest'
 import { loadWinterData } from '@/lib/winter-data'
@@ -52,22 +53,17 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
     <h2 className="text-2xl font-bold">本部：申請一覧・出番表への反映</h2>
     <p>反映前は「未反映」、反映後も一覧に残します。反映ボタンは出番表を変更します。</p>
     <button className={button} disabled={busy} onClick={() => { setReload(value => value + 1); onChanged() }}>最新の情報を確認</button>
-    <label className="block text-xl">団体で絞り込む<select className="mt-2 min-h-14 w-full rounded-xl border-2 p-3" value={orgId} onChange={event => { setOrgId(event.target.value); setEntryId(''); setReview(null) }}><option value="">すべての団体</option>{data.organizations.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-    {!loaded && !error && <p role="status">申請一覧を読み込んでいます…</p>}
-    {loaded && !requests.length && <p>まだWinterの申請はありません。</p>}
-    {loaded && requests.filter(row => !orgId || row.organization_id === orgId).map(row => <article key={row.id} className={`space-y-2 rounded-xl border-2 p-4 ${row.status === 'pending' ? 'border-orange-400 bg-orange-50' : 'border-blue-200 bg-blue-50'}`}>
-      <p className="text-xl font-bold">{orgName(row.organization_id)} ／ {row.request_type === 'add' ? '追加' : row.request_type === 'withdraw' ? '棄権' : '変更'} ／ {row.status === 'pending' ? '未反映' : row.status === 'reflected' ? '反映済み' : row.status==='cancelled'?'取消済み':row.status}</p>
-      <p>第{data.competitions.find(c => c.id === row.target_competition_id)?.competition_no}競技　{data.riders.find(r => r.id === row.rider_id)?.name} ／ {data.horses.find(h => h.id === row.horse_id)?.name}</p>
-      {row.request_type === 'change' && row.payload.before && <div className="rounded-lg border bg-white p-3">
-        <p>変更前：第{data.competitions.find(c => c.id === row.payload.before!.competitionId)?.competition_no}競技　{data.riders.find(r => r.id === row.payload.before!.riderId)?.name} ／ {data.horses.find(h => h.id === row.payload.before!.horseId)?.name}{row.payload.before.isOp ? '（OP）' : ''}</p>
-        <p className="font-bold">{row.payload.changedFields?.map(field => ({ competition: '競技変更', player: '選手変更', horse: '馬変更', op: '参加区分変更', membership: '会員区分変更' }[field] ?? field)).join('・')}</p>
-        {row.payload.treatedAsWithdrawAdd && <p>棄権＋追加として反映します。</p>}
-      </div>}
-      <p>受付担当者：{row.payload.visitorName ?? '―'} ／ ¥{row.fee_amount.toLocaleString('ja-JP')}</p>
-      <p className="text-sm">{new Date(row.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</p>
-      {row.status === 'pending' && ['add','change','withdraw'].includes(row.request_type) && <button className={button} disabled={busy} onClick={() => void run(token => reflectWinterRequest(row.id, token, row.request_type), '出番表へ反映しました')}>出番表へ反映</button>}
+    {!loaded&&!error&&<p role="status">申請一覧を読み込んでいます…</p>}
+    {loaded&&!requests.length&&<p className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-10 text-center text-xl text-muted-foreground">まだ受付された申請はありません。受付タブレットから追加・変更・棄権を申請すると、ここに表示されます。</p>}
+    {loaded&&requests.length>0&&!orgId&&<MasterRequestGroups groups={data.organizations.filter(o=>requests.some(q=>q.organization_id===o.id)).map(o=>({id:o.id,name:o.name,pending:requests.filter(q=>q.organization_id===o.id&&q.status==='pending').length}))} onSelect={id=>{setOrgId(id);setEntryId('');setReview(null)}}/>}
+    {loaded&&orgId&&<><button type="button" disabled={busy} onClick={()=>setOrgId('')} className="w-fit min-h-12 rounded-xl border-2 border-border bg-card px-5 py-3 text-xl font-bold">← 団体一覧へ</button><div className="rounded-2xl border-2 border-border bg-card p-5"><h2 className="text-2xl font-bold">{orgName(orgId)}</h2><p className="mt-2 text-lg font-semibold">申請 {requests.filter(q=>q.organization_id===orgId).length}件 ／ 未反映 {requests.filter(q=>q.organization_id===orgId&&q.status==='pending').length}件</p></div></>}
+    {loaded&&orgId&&requests.filter(row=>row.organization_id===orgId).map(row=>{
+      const comp=(id:string)=>{const c=data.competitions.find(c=>c.id===id);return c?`競技${c.competition_no}. ${c.name}${c.official?'（★公認）':''}`:'―'},rider=(id:string)=>data.riders.find(r=>r.id===id)?.name??'―',horse=(id:string)=>data.horses.find(h=>h.id===id)?.name??'―';
+      return <MasterRequestCard key={row.id} request={{type:row.request_type,status:row.status,organization:orgName(row.organization_id),createdAt:row.created_at,actor:row.payload.visitorName,actorLabel:'受付担当者',before:row.payload.before?{competition:comp(row.payload.before.competitionId),rider:rider(row.payload.before.riderId),horse:horse(row.payload.before.horseId),isOp:row.payload.before.isOp}:undefined,after:{competition:comp(row.target_competition_id),rider:rider(row.rider_id),horse:horse(row.horse_id),isOp:row.payload.add?.isOp??row.payload.change?.toIsOp??row.payload.before?.isOp},note:row.payload.add?.note,changedFields:row.payload.changedFields?.map(field=>({competition:'競技変更',player:'選手変更',horse:'馬変更',op:'参加区分変更',membership:'会員区分変更'}[field]??field)),treatedAsWithdrawAdd:row.payload.treatedAsWithdrawAdd,amount:row.fee_amount}} actions={<>
+      {row.status==='pending'&&<button className={button} disabled={busy} onClick={()=>void run(token=>reflectWinterRequest(row.id,token,row.request_type),'出番表へ反映しました')}>出番表へ反映</button>}
       {row.request_type==='withdraw'&&['pending','reflected'].includes(row.status)&&<button className={button} disabled={busy||!!restore} onClick={()=>setRestore({id:row.id,reason:'',attempted:false})}>棄権を取り消す{row.status==='reflected'?'（最後尾へ復元）':''}</button>}
-    </article>)}
+      </>}/>
+    })}
     </>}
     {restore&&<div className="space-y-3 rounded-xl border-2 border-orange-400 p-4"><h3 className="text-xl font-bold">棄権の取り消しを確認</h3><p>反映済みなら同じ競技の最後尾へ戻します。未反映なら棄権申請だけを取り消します。登録料・入金額は変わりません。</p><label className="block">取消理由<input className="mt-2 min-h-14 w-full rounded-xl border-2 p-3" maxLength={300} disabled={busy||restore.attempted} value={restore.reason} onChange={e=>setRestore({...restore,reason:e.target.value})}/></label><button className={button} disabled={busy||!restore.reason.trim()} onClick={()=>{const value={...restore,attempted:true};setRestore(value);void run(async token=>{await restoreWinterWithdraw(value.id,value.reason,token);setRestore(null)},'棄権を取り消しました。反映済みの人馬は最後尾へ復元しました')}}>{restore.attempted?'同じ内容で取消結果を再確認':'棄権の取り消しを確定'}</button>{!restore.attempted&&<button className={button} disabled={busy} onClick={()=>setRestore(null)}>戻る</button>}{restore.attempted&&<p>取消結果が確認できるまで同じ内容で再確認してください。</p>}</div>}
     {showWithdraw && <>

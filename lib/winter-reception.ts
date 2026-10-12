@@ -40,7 +40,7 @@ export type WinterRequestRow = {
   id: string; event_id: string; request_type: 'add' | 'change' | 'withdraw'; status: string
   organization_id: string; target_competition_id: string; rider_id: string; horse_id: string
   fee_amount: number; created_at: string; reflected_at: string | null
-  payload: { visitorName?: string; before?: { competitionId: string; riderId: string; horseId: string; isOp: boolean }; changedFields?: string[]; treatedAsWithdrawAdd?: boolean; fee?: { changeBase: number; competitionDiff: number; addBase: number; addEntry: number; total: number } }
+  payload: { add?: { isOp?: boolean; note?: string }; change?: { toIsOp?: boolean }; visitorName?: string; before?: { competitionId: string; riderId: string; horseId: string; isOp: boolean }; changedFields?: string[]; treatedAsWithdrawAdd?: boolean; fee?: { changeBase: number; competitionDiff: number; addBase: number; addEntry: number; total: number } }
 }
 
 export async function winterRpc(name: string, args: Record<string, unknown>, token: string, signal?: AbortSignal): Promise<unknown> {
