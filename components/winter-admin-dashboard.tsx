@@ -9,6 +9,7 @@ import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
 import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
+import {WinterExportPanel} from '@/components/winter-export-panel'
 import {WinterSettlementActions} from '@/components/winter-settlement-actions'
 import {WinterInitialEntryRegistration} from '@/components/winter-initial-entry-registration'
 import {WinterStartList} from '@/components/winter-start-list'
@@ -60,6 +61,7 @@ export function WinterAdminDashboard(){
  <WinterAdminNavigation tab={tab} onSelect={select}/>
  <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><Link href="/winter/prepare" className={button}>締切前の準備を確認</Link><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div>
  {dataError&&<p role="alert" className="mb-4 rounded-xl bg-red-100 p-4 text-xl">{dataError}</p>}
+ <WinterExportPanel session={session} onSession={updateSession}/>
  {/* Visited panels remain mounted so tab changes preserve unsaved inputs and monitor state. */}
  {winterAdminTabs.filter(t=>visited.includes(t.id)).map(t=><section key={t.id} role="tabpanel" id={`winter-panel-${t.id}`} aria-labelledby={`winter-tab-${t.id}`} hidden={tab!==t.id} className="space-y-5">
  {t.id==='roster'?<><button type="button" className={button} onClick={()=>{select('startlist');requestAnimationFrame(()=>{const panel=document.getElementById('winter-initial-registration') as HTMLDetailsElement|null;if(panel){panel.open=true;panel.scrollIntoView({block:'start'});panel.querySelector('summary')?.focus()}})}}>出番登録へ戻る</button><SharedRosterManager session={session} onParticipantsSaved={refresh}/>{data&&<WinterMasterRegistration session={session} organizations={data.organizations} onRegistered={refresh}/>}</>:
