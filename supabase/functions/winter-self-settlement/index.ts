@@ -25,6 +25,10 @@ Deno.serve(async(req:Request)=>{
    for(let offset=0;;offset+=500){const page=await rest(`organizations?event_id=eq.${EVENT}&select=id,event_id,name&order=id.asc&limit=500&offset=${offset}`);rows.push(...page);if(page.length<500)return json({organizations:rows})}
   }
   if(typeof body.org!=='string'||!/^[0-9a-f-]{36}$/i.test(body.org))return json({error:'団体を選択してください'},400)
+  if(body.action==='history'){
+   const records=await rest(`fhs_winter_settlement_confirmations?event_id=eq.${EVENT}&organization_key=eq.${body.org}&select=id,event_id,organization_key,account_version,payment_method,confirmer_name,account,created_at&order=created_at.desc,id.desc&limit=100`)
+   return json({records})
+  }
   if(body.action==='account'){
    const current=await rest('rpc/get_winter_settlement_account',{method:'POST',body:JSON.stringify({p_org:body.org})})
    const history=await rest(`fhs_winter_settlement_confirmations?event_id=eq.${EVENT}&organization_key=eq.${body.org}&select=id,event_id,organization_key,account_version,payment_method,confirmer_name,account,created_at&order=created_at.desc,id.desc&limit=1`)

@@ -9,7 +9,7 @@ const h=hooks();global.document={visibilityState:'visible'};let savedRecord=null
 const account={document:{organization:'テスト団体',organizationKey:'org-1',due:8000,normalTotal:0,extraTotal:8000,advancePaid:0,extraPaid:0,lines:[],method:'後日振込'},normalLines:[],warnings:[]}
 let resolveConfirm;global.fetch=async(url,options)=>{let result;if(options?.method==='POST'){posts++;result=await new Promise(resolve=>resolveConfirm=resolve)}else if(url.includes('history'))result={records:[{id:'saved-id',document:account,amount:8000,created_at:new Date().toISOString()}]};else if(url.includes('?org='))result={account,version:'v1',savedRecord};else result={organizations:[{id:'org-1',name:'テスト団体'}]};return{ok:true,json:async()=>result}}
 const {SelfSettlement}=load('components/self-settlement.tsx',{'react':h.api,'next/link':()=>null,'@/lib/fees':{formatYen:n=>n+'円'},'@/components/admin/settlement-print-layouts':{StatementPrint:()=>null}})
-const render=()=>h.render(SelfSettlement),flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()}
+const render=()=>h.render(()=>{const tree=SelfSettlement();return typeof tree.type==='function'?tree.type(tree.props):tree}),flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()}
 async function main(){let t=render();await flush();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.match(text(t),/8000円/)
  let confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,true)
  nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}})

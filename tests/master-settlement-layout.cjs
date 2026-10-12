@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{execFileSync}=require('node:child_process')
+const resolve=Module._resolveFilename,load=Module._load;Module._resolveFilename=function(id,...args){return resolve.call(this,id.startsWith('@/')?path.resolve(id.slice(2)):id,...args)}
+for(const ext of ['.ts','.tsx'])Module._extensions[ext]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,f)
+const file=path.resolve('components/self-settlement.tsx'),legacy=new Module(file,module);legacy.filename=file;legacy.paths=module.paths;legacy._compile(ts.transpileModule(execFileSync('git',['show','841c888:components/self-settlement.tsx'],{encoding:'utf8'}),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,file)
+const {SelfSettlement}=require('../components/self-settlement.tsx'),{MasterConfirmationPaper}=require('../components/master/self-settlement.tsx'),{masterCheckoutPrintHtml}=require('../lib/master/settlement-print.ts')
+const document={organization:'テスト団体',organizationKey:'org-1',issuedDate:'2026/10/12',normalTotal:30000,advancePaid:30000,advanceRecorded:true,extraTotal:8000,extraPaid:1000,due:7000,method:'後日振込',bankDetails:'検証銀行\n口座',lines:[{key:'q',period:'at_venue',action:'変更',competition:'競技1 → 競技2',rider:'選手A → 選手B',horse:'馬A',entryFee:0,serviceFee:2000,difference:6000,amount:8000,paid:1000,note:'要望'}]},account={document,normalLines:[{id:'n',competition:'競技1',rider:'選手A',horse:'馬A',amount:30000}],warnings:[]},record={id:'test-saved-id',organization_key:'org-1',confirmed_by:'担当者',payment_method:'bank_transfer',amount:7000,created_at:'2026-10-12T00:00:00Z',document:account}
+let values,cursor;const oldState=React.useState,oldRef=React.useRef;React.useState=initial=>{const index=cursor++;return[index<values.length?values[index]:initial,()=>{}]};React.useRef=initial=>({current:initial})
+function render(component,props,state){values=state;cursor=0;return renderToStaticMarkup(React.createElement(component,props))}
+try{
+ for(const variant of ['organizations','account','saved']){
+  const state=[[{id:'org-1',name:'テスト団体'}],'',variant==='organizations'?'':'org-1',variant==='organizations'?null:account,'v','担当者','bank_transfer',true,variant==='saved'?record:null,[],false,'',false]
+  assert.equal(render(SelfSettlement,{},state),render(legacy.exports.SelfSettlement,{},state),'Exact Autumn checkout markup: '+variant)
+ }
+ const paper=render(MasterConfirmationPaper,{record},[]);assert.equal(paper,render(legacy.exports.ConfirmationPaper,{record},[]),'Original Autumn print template')
+ const standalone=masterCheckoutPrintHtml(record);assert.ok(standalone.includes(paper));assert.ok(!paper.includes('事前エントリーの明細'));assert.ok(paper.includes('競技1 → 競技2'));assert.ok(!standalone.includes('https://'));assert.ok(!standalone.includes('Bearer'))
+ const unsafe=masterCheckoutPrintHtml({...record,confirmed_by:'<script>bad</script>',document:{...account,document:{...document,organization:'<script>club</script>'}}});assert.ok(!unsafe.includes('<script>'));assert.ok(unsafe.includes('&lt;script&gt;'))
+ console.log('PASS: identical Autumn organization/detail/saved screens and print markup; inline and standalone share one template; pre-entry totals only, before/after changes and escaped text')
+}finally{React.useState=oldState;React.useRef=oldRef}

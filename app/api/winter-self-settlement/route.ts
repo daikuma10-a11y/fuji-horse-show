@@ -21,7 +21,7 @@ export async function GET(req:NextRequest){
   const request=async(action:string,input:Record<string,unknown>={})=>{try{return await proxy(action,token,input)}catch(e){if(!(e instanceof DefinitiveCheckoutError)||e.status!==401)throw e;token=(await proxy('public-setup','')).token;fresh=true;return proxy(action,token,input)}}
   const org=req.nextUrl.searchParams.get('org')
   let value
-  if(org){if(!uuid.test(org))return json({error:'団体を選択してください'},400);value=await request('account',{org});value.account=validateWinterCheckoutAccount(value.account);if(value.account.organization.id!==org)throw new Error('団体が一致しません');if(value.saved)value.saved=validateWinterSettlementRecord(value.saved,org)}
+  if(org){if(!uuid.test(org))return json({error:'団体を選択してください'},400);if(req.nextUrl.searchParams.get('history')==='1'){value=await request('history',{org});if(!Array.isArray(value.records))throw new Error('精算履歴を確認できません');value.records=value.records.map((record:unknown)=>validateWinterSettlementRecord(record,org))}else{value=await request('account',{org});value.account=validateWinterCheckoutAccount(value.account);if(value.account.organization.id!==org)throw new Error('団体が一致しません');if(value.saved)value.saved=validateWinterSettlementRecord(value.saved,org)}}
   else{value=await request('organizations');if(!Array.isArray(value.organizations))throw new Error('団体を確認できません');for(const o of value.organizations)assertWinterEvent(o.event_id);value.organizations.sort(compareWinterOrganizations)}
   const response=json(value)
   if(fresh)response.cookies.set(cookie,token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/api/winter-self-settlement',maxAge:12*3600})
