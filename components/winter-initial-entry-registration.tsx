@@ -1,4 +1,5 @@
 "use client"
+import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
 import {winterCompetitionLabel} from '@/lib/winter-display-order'
 import {useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
@@ -36,7 +37,7 @@ export function WinterInitialEntryRegistration({data,session,onChanged,onChooseP
  }catch(e){if(e instanceof WinterInitialBatchFailure){setCompleted(e.completedIds);setUncertain(e.uncertain);if(e.completedIds.length)onChanged()}setError(e instanceof Error?e.message:'保存できません')}finally{lock.current=false;setBusy(false)}}
  const participantSetup=<div className="space-y-3 rounded-xl bg-blue-50 p-4"><p className="text-xl">「人馬名簿」で団体を選び、参加する選手と馬にチェックして「参加チェックを保存」を押してください。</p><button type="button" className={button} onClick={onChooseParticipants}>人馬名簿で参加人馬を選ぶ</button></div>
  if(!data.organizations.length)return <section className="space-y-4 rounded-xl border-2 border-blue-300 p-4"><h2 className="text-2xl font-bold">{settlementOnly?'現場追加・再走行の登録':'事前エントリーをまとめて登録'}</h2><p>Winterの参加名簿はまだ登録されていません。</p>{participantSetup}</section>
- return <section className="space-y-4 rounded-xl border-2 border-blue-300 p-4"><h2 className="text-2xl font-bold">{settlementOnly?'現場追加・再走行を精算だけに登録':'クラブ単位で事前エントリーをまとめて登録'}</h2>{settlementOnly&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">出番表は変更しません。競技料＋追加手数料3,000円を1件ずつ請求します。確認済み入金は本部の精算欄で別途記録してください。</p>}<p>馬の所属団体を選び、所属馬ごとに出場する競技と騎乗する選手を入力します。1頭で複数競技・複数選手の登録ができます。他団体の選手も所属を確認して選べます。精算は選択した選手の所属に計上します。</p>
+ return <section className="space-y-4 rounded-xl border-2 border-blue-300 p-4"><h2 className="text-2xl font-bold">{settlementOnly?'現場追加・再走行を精算だけに登録':'クラブ単位で事前エントリーをまとめて登録'}</h2><WinterExerciseNotice organizationId={orgId}/>{settlementOnly&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">出番表は変更しません。競技料＋追加手数料3,000円を1件ずつ請求します。確認済み入金は本部の精算欄で別途記録してください。</p>}<p>馬の所属団体を選び、所属馬ごとに出場する競技と騎乗する選手を入力します。1頭で複数競技・複数選手の登録ができます。他団体の選手も所属を確認して選べます。精算は選択した選手の所属に計上します。</p>
  {!review?<fieldset disabled={busy} className="space-y-4">
  <label className="block text-xl">馬の所属団体<select className={field} value={orgId} onChange={e=>{if(drafts.some(r=>r.riderId||r.horseId||r.compId)&&!window.confirm('入力中の一覧を消して団体を変更しますか？'))return;setOrgId(e.target.value);setDrafts([]);setError('');setMessage('')}}><option value="">団体を選択</option>{data.organizations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
  {org&&(!riders.length||!horses.length)&&participantSetup}

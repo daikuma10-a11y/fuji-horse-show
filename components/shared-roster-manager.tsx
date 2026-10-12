@@ -1,4 +1,5 @@
 "use client"
+import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
 import {useEffect,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import {archiveRosterEntity,clubEntities,loadSharedRoster,refreshRosterEntity,refreshRosterParticipants,saveRosterEntity,saveWinterParticipants,type SharedRoster,type RosterClub,type RosterEntity} from '@/lib/shared-roster'
@@ -36,7 +37,7 @@ export function SharedRosterManager({session,onParticipantsSaved}:{session:Admin
  const savedHere=new Set(data?.participants.filter(x=>x.club_id===club).map(x=>x.entity_id)??[])
  const members=[...currentMembers,...(data?.entities.filter(x=>savedHere.has(x.id)&&!currentIds.has(x.id))??[])]
  return <section className="space-y-5 rounded-xl border-2 border-blue-300 p-4">
-  <h2 className="text-3xl font-bold">人馬名簿</h2>{error&&<p role="alert" className="rounded-xl bg-red-100 p-3 text-xl">{error}</p>}{message&&<p role="status" className="rounded-xl bg-slate-100 p-3 text-xl">{message}</p>}<p className="text-lg">同じ選手・馬に複数の所属を登録できます。団体を選び「名簿全体から人馬を探す」で既存の人馬を検索し、「選択中の団体にも所属を追加」を押してください。</p>
+  <h2 className="text-3xl font-bold">人馬名簿</h2><WinterExerciseNotice organizationId={club}/>{error&&<p role="alert" className="rounded-xl bg-red-100 p-3 text-xl">{error}</p>}{message&&<p role="status" className="rounded-xl bg-slate-100 p-3 text-xl">{message}</p>}<p className="text-lg">同じ選手・馬に複数の所属を登録できます。団体を選び「名簿全体から人馬を探す」で既存の人馬を検索し、「選択中の団体にも所属を追加」を押してください。</p>
   <fieldset disabled={busy} className="space-y-4">
    {data&&<p className="text-lg">登録済み：選手 {data.entities.filter(x=>x.kind==='rider'&&!x.archived_at).length.toLocaleString()} 名 ／ 馬 {data.entities.filter(x=>x.kind==='horse'&&!x.archived_at).length.toLocaleString()} 頭</p>}
    {busy&&<p role="status" className="rounded-xl bg-blue-50 p-3 text-xl">保存内容を確認しています…（通信が遅い場合は時間切れで操作に戻ります）</p>}{loading&&<p role="status" className="rounded-xl bg-blue-50 p-3 text-xl">{clubs.length?`団体 ${clubs.length}件を読み込みました。選手・馬の名簿を読み込んでいます…`:'共通名簿の団体を読み込んでいます…'}</p>}

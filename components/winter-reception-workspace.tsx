@@ -1,4 +1,5 @@
 "use client"
+import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
 import {winterCompetitionLabel} from "@/lib/winter-display-order"
 
 import Link from "next/link"
@@ -47,7 +48,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
 
 
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-6 bg-slate-50 p-5 text-slate-900">
-    <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
+    <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1><WinterExerciseNotice organizationId={orgId}/>
     <Link href={queueScope==='meeting'?'/winter/admin#winter-meeting':'/winter'} className="inline-flex min-h-14 items-center rounded-xl border-2 px-5 text-xl font-bold">{queueScope==='meeting'?'打ち合わせ会へ戻る':'受付トップに戻る'}</Link>
     {queueScope==='meeting'&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">打ち合わせ会の保留入力です。相談中はDB・出番表・精算には反映しません。本部の打ち合わせ会で確認して確定してください。</p>}{mode !== 'admin' && <WinterQueueLink scope={queueScope} />}
     <div className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">{mode === "admin" ? "大会本部" : mode === "add" ? "追加受付" : "棄権受付"}</div>

@@ -1,4 +1,5 @@
 "use client"
+import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
 import {winterCompetitionLabel} from "@/lib/winter-display-order"
 
 import Link from 'next/link'
@@ -59,7 +60,7 @@ export default function WinterChangePage() {
     catch(reason){setError(reason instanceof Error?reason.message:'未確定一覧に追加できません')}
   }
   return <main className="mx-auto min-h-dvh max-w-3xl space-y-5 bg-slate-50 p-5 text-slate-900">
-    <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
+    <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1><WinterExerciseNotice organizationId={orgId}/>
     <Link className="inline-flex min-h-14 items-center rounded-xl border-2 p-4 text-xl font-bold" href={queueScope==='meeting'?'/winter/admin#winter-meeting':'/winter'}>{queueScope==='meeting'?'打ち合わせ会へ戻る':'受付トップに戻る'}</Link>
     <h2 className="rounded-xl bg-blue-100 p-4 text-3xl font-bold">変更受付</h2>
     <WinterQueueLink scope={queueScope} />{queueScope==='meeting'&&<p className="rounded-xl bg-orange-100 p-4 text-xl font-bold">打ち合わせ会の保留入力です。まだDB・出番表・精算には反映しません。</p>}
