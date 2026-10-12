@@ -77,8 +77,9 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
   async function cancel(){
     if(!restore||lock.current||pendingReflectRef.current)return
     if(!restore.reason.trim()||restore.reason.trim().length>300){setActionErrors(previous=>({...previous,[restore.id]:'取消理由は1〜300文字で入力してください'}));return}
+    const cancellingType=requests.find(row=>row.id===restore.id)?.request_type
     const frozen={...restore,attempted:true};setRestore(frozen);setApplyingId(frozen.id);setActionErrors(previous=>({...previous,[frozen.id]:''}))
-    await run(async token=>{await cancelWinterMasterRequest(frozen.id,frozen.reason,token);setRestore(null)},'申請を取り消しました。復元対象の人馬は最後尾へ戻しました',reason=>{setActionErrors(previous=>({...previous,[frozen.id]:reason instanceof Error?reason.message:'取消結果を確認できません'}));const status=(reason as {status?:number})?.status;if(status&&status>=400&&status<500)setRestore({...frozen,attempted:false})})
+    await run(async token=>{await cancelWinterMasterRequest(frozen.id,frozen.reason,token);setRestore(null)},cancellingType==='add'?'追加申請を取り消し、追加した出番と追加料金を対象から外しました':'申請を取り消しました。復元対象の人馬は最後尾へ戻しました',reason=>{setActionErrors(previous=>({...previous,[frozen.id]:reason instanceof Error?reason.message:'取消結果を確認できません'}));const status=(reason as {status?:number})?.status;if(status&&status>=400&&status<500)setRestore({...frozen,attempted:false})})
     setApplyingId(null)
   }
   const activeEntries = data.entries.filter(row => !['wd','withdrawn'].includes(row.status.toLowerCase()) && (!orgId || data.riders.find(rider => rider.id === row.rider_id)?.organization_id === orgId))
