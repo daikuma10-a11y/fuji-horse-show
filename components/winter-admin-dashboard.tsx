@@ -10,6 +10,7 @@ import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
 import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
 import {WinterExportPanel} from '@/components/winter-export-panel'
+import {subscribeWinterUpdates} from '@/lib/winter-live'
 import {WinterSettlementActions} from '@/components/winter-settlement-actions'
 import {WinterInitialEntryRegistration} from '@/components/winter-initial-entry-registration'
 import {WinterStartList} from '@/components/winter-start-list'
@@ -25,8 +26,10 @@ export function WinterAdminDashboard(){
  const[tab,setTab]=useState<WinterAdminTab>('requests'),[visited,setVisited]=useState<WinterAdminTab[]>(['requests'])
  const[data,setData]=useState<Data|null>(null),[dataError,setDataError]=useState(''),[revision,setRevision]=useState(0),[loading,setLoading]=useState(false)
  const signedIn=!!session
+ const[liveStatus,setLiveStatus]=useState('')
  const updateSession=useCallback((next:AdminSession)=>{sessionStorage.setItem(sessionKey,JSON.stringify(next));setSession(next)},[])
  const refresh=useCallback(()=>setRevision(v=>v+1),[])
+ useEffect(()=>{if(!signedIn)return;return subscribeWinterUpdates('data',refresh,setLiveStatus)},[signedIn,refresh])
  function select(next:WinterAdminTab){setTab(next);setVisited(v=>v.includes(next)?v:[...v,next])}
  useEffect(()=>{
   let active=true
@@ -59,6 +62,7 @@ export function WinterAdminDashboard(){
  </form>:<>
  <h1 className="sr-only">Winter 大会本部 管理画面</h1>
  <WinterAdminNavigation tab={tab} onSelect={select}/>
+ <p role="status" className="print-hide mb-3">{liveStatus}</p>
  <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><Link href="/winter/prepare" className={button}>締切前の準備を確認</Link><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div>
  {dataError&&<p role="alert" className="mb-4 rounded-xl bg-red-100 p-4 text-xl">{dataError}</p>}
  <WinterExportPanel session={session} onSession={updateSession}/>

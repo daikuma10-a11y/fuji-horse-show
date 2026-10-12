@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { verifyAdminSession, type AdminSession } from '@/lib/supabase-rest'
 import { loadWinterData } from '@/lib/winter-data'
-import { loadWinterRequests, reflectWinterRequest, submitWinterWithdraw, type WinterRequestRow } from '@/lib/winter-reception'
+import { loadWinterRequests, reflectWinterRequest, submitWinterWithdraw, restoreWinterWithdraw, type WinterRequestRow } from '@/lib/winter-reception'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 type Props = { mode?: "admin" | "withdraw"; initialOrgId?: string; session: AdminSession; onSession: (session: AdminSession) => void; data: Data; refresh: number; onChanged: () => void; showWithdraw?: boolean }
@@ -21,6 +21,7 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
   const [visitorName, setVisitorName] = useState('')
   const [review, setReview] = useState<{ id: string; entryId: string; visitorName: string } | null>(null)
   const lock = useRef(false)
+  const [restore,setRestore]=useState<{id:string;reason:string;attempted:boolean}|null>(null)
   useEffect(() => { setOrgId(initialOrgId ?? ""); setEntryId(""); setReview(null) }, [initialOrgId])
   useEffect(() => {
     let active = true
@@ -55,7 +56,7 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
     {!loaded && !error && <p role="status">申請一覧を読み込んでいます…</p>}
     {loaded && !requests.length && <p>まだWinterの申請はありません。</p>}
     {loaded && requests.filter(row => !orgId || row.organization_id === orgId).map(row => <article key={row.id} className={`space-y-2 rounded-xl border-2 p-4 ${row.status === 'pending' ? 'border-orange-400 bg-orange-50' : 'border-blue-200 bg-blue-50'}`}>
-      <p className="text-xl font-bold">{orgName(row.organization_id)} ／ {row.request_type === 'add' ? '追加' : row.request_type === 'withdraw' ? '棄権' : '変更'} ／ {row.status === 'pending' ? '未反映' : row.status === 'reflected' ? '反映済み' : row.status}</p>
+      <p className="text-xl font-bold">{orgName(row.organization_id)} ／ {row.request_type === 'add' ? '追加' : row.request_type === 'withdraw' ? '棄権' : '変更'} ／ {row.status === 'pending' ? '未反映' : row.status === 'reflected' ? '反映済み' : row.status==='cancelled'?'取消済み':row.status}</p>
       <p>第{data.competitions.find(c => c.id === row.target_competition_id)?.competition_no}競技　{data.riders.find(r => r.id === row.rider_id)?.name} ／ {data.horses.find(h => h.id === row.horse_id)?.name}</p>
       {row.request_type === 'change' && row.payload.before && <div className="rounded-lg border bg-white p-3">
         <p>変更前：第{data.competitions.find(c => c.id === row.payload.before!.competitionId)?.competition_no}競技　{data.riders.find(r => r.id === row.payload.before!.riderId)?.name} ／ {data.horses.find(h => h.id === row.payload.before!.horseId)?.name}{row.payload.before.isOp ? '（OP）' : ''}</p>
@@ -65,8 +66,10 @@ export function WinterRequestPanel({ mode = "admin", initialOrgId, session, onSe
       <p>受付担当者：{row.payload.visitorName ?? '―'} ／ ¥{row.fee_amount.toLocaleString('ja-JP')}</p>
       <p className="text-sm">{new Date(row.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</p>
       {row.status === 'pending' && ['add','change','withdraw'].includes(row.request_type) && <button className={button} disabled={busy} onClick={() => void run(token => reflectWinterRequest(row.id, token, row.request_type), '出番表へ反映しました')}>出番表へ反映</button>}
+      {row.request_type==='withdraw'&&['pending','reflected'].includes(row.status)&&<button className={button} disabled={busy||!!restore} onClick={()=>setRestore({id:row.id,reason:'',attempted:false})}>棄権を取り消す{row.status==='reflected'?'（最後尾へ復元）':''}</button>}
     </article>)}
     </>}
+    {restore&&<div className="space-y-3 rounded-xl border-2 border-orange-400 p-4"><h3 className="text-xl font-bold">棄権の取り消しを確認</h3><p>反映済みなら同じ競技の最後尾へ戻します。未反映なら棄権申請だけを取り消します。登録料・入金額は変わりません。</p><label className="block">取消理由<input className="mt-2 min-h-14 w-full rounded-xl border-2 p-3" maxLength={300} disabled={busy||restore.attempted} value={restore.reason} onChange={e=>setRestore({...restore,reason:e.target.value})}/></label><button className={button} disabled={busy||!restore.reason.trim()} onClick={()=>{const value={...restore,attempted:true};setRestore(value);void run(async token=>{await restoreWinterWithdraw(value.id,value.reason,token);setRestore(null)},'棄権を取り消しました。反映済みの人馬は最後尾へ復元しました')}}>{restore.attempted?'同じ内容で取消結果を再確認':'棄権の取り消しを確定'}</button>{!restore.attempted&&<button className={button} disabled={busy} onClick={()=>setRestore(null)}>戻る</button>}{restore.attempted&&<p>取消結果が確認できるまで同じ内容で再確認してください。</p>}</div>}
     {showWithdraw && <>
     <h2 className="text-2xl font-bold">棄権受付（0円）</h2>
     {review ? <div className="space-y-3 rounded-xl bg-orange-50 p-4"><p className="text-xl font-bold">この人馬の棄権を保存します</p><p>{entryLabel(review.entryId)}</p><p>受付担当者：{review.visitorName} ／ 料金：0円</p><button className={button} disabled={busy} onClick={() => void run(token => submitWinterWithdraw(review.id, review.entryId, review.visitorName, token), '棄権申請を保存しました。一覧で出番表へ反映してください')}>棄権申請を保存</button><button className={button} disabled={busy} onClick={() => setReview(null)}>入力に戻る</button></div> : <div className="space-y-3">

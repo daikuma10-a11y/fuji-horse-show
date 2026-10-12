@@ -75,3 +75,9 @@ export async function submitWinterWithdraw(id: string, entryId: string, visitorN
   if (result !== id) throw new Error('保存結果を確認できません。同じ受付番号で再確認してください')
   return id
 }
+
+export async function restoreWinterWithdraw(id:string,reason:string,token:string){
+ const result=await winterRpc('restore_winter_withdraw',{p_request_id:id,p_reason:reason.trim()},token) as {requestId?:string;entryId?:string;restoredOrder?:number|null;cancelledAt?:string}
+ if(result?.requestId!==id||typeof result.entryId!=='string'||typeof result.cancelledAt!=='string')throw new Error('取消結果を確認できません。同じ棄権と理由で再確認してください')
+ return result
+}

@@ -3,16 +3,24 @@ import {winterEntryIntervals,loadWinterRosterIdentities,type WinterRosterIdentit
 import {winterCompetitionLabel} from "@/lib/winter-display-order"
 import {useEffect,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
-import {publishWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderAfterRefresh,type WinterMonitorState} from '@/lib/winter-monitor'
+import {publishWinterMonitor,validateWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderAfterRefresh,type WinterMonitorState} from '@/lib/winter-monitor'
 import {WinterMonitorView} from './winter-monitor-view'
 import {WinterTimetableEditor} from './winter-timetable-editor'
-import {loadWinterRequests,type WinterRequestRow} from '@/lib/winter-reception'
+import {loadWinterRequests,winterRpc,type WinterRequestRow} from '@/lib/winter-reception'
 import type {loadWinterData} from '@/lib/winter-data'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
 const button='min-h-14 rounded-xl border-2 bg-blue-800 p-3 text-lg font-bold text-white disabled:opacity-50'
 export function WinterStartList({data,session,onSession,onChanged}:{data:Data;session:AdminSession;onSession:(v:AdminSession)=>void;onChanged:()=>void}){
  const[compId,setCompId]=useState(''),[ids,setIds]=useState<string[]>([]),[page,setPage]=useState(0),[error,setError]=useState(''),[saved,setSaved]=useState(''),[busy,setBusy]=useState(false),[requests,setRequests]=useState<WinterRequestRow[]>([])
  const[position,setPosition]=useState<{x:number;y:number}|null>(null),drag=useRef<{x:number;y:number;left:number;top:number}|null>(null),lock=useRef(false)
+ const[remoteStatus,setRemoteStatus]=useState(''),[resend,setResend]=useState(0),remotePending=useRef<WinterMonitorState|null>(null),remoteRunning=useRef(false),alive=useRef(true),latestSession=useRef(session)
+ latestSession.current=session
+ useEffect(()=>{alive.current=true;return()=>{alive.current=false;remotePending.current=null}},[])
+ async function sendRemote(){
+  if(remoteRunning.current)return
+  remoteRunning.current=true
+  try{while(alive.current&&remotePending.current){const value=remotePending.current;remotePending.current=null;setRemoteStatus('別端末のモニターへ送信中…');const verified=await verifyAdminSession(latestSession.current);if(!alive.current)return;sessionCallback.current(verified);validateWinterMonitor(value);await winterRpc('publish_winter_monitor',{p_state:value},verified.accessToken);if(alive.current)setRemoteStatus('別端末のモニターへ送信済み')}}catch(reason){if(alive.current)setRemoteStatus(`送信できません：${reason instanceof Error?reason.message:'通信を確認してください'}。「モニターに再送」で最新表示を送ってください。`)}finally{remoteRunning.current=false}
+ }
  const[identities,setIdentities]=useState<WinterRosterIdentity[]>([]),[identityStatus,setIdentityStatus]=useState('共通名簿の照合中…'),[minimumGap,setMinimumGap]=useState(3),sessionCallback=useRef(onSession)
  sessionCallback.current=onSession
  useEffect(()=>{const controller=new AbortController();setIdentities([]);setIdentityStatus('共通名簿の照合中…');loadWinterRosterIdentities(session,controller.signal).then(value=>{if(!controller.signal.aborted){setIdentities(value.identities);setIdentityStatus('');sessionCallback.current(value.session)}}).catch(()=>{if(!controller.signal.aborted)setIdentityStatus('共通名簿を照合できません。所属違いの同一人馬は未確認です。')});return()=>controller.abort()},[session.accessToken,data])
@@ -33,9 +41,10 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  // Publishing only on display changes avoids sending data on an idle timer.
  const displayKey=monitor?JSON.stringify({...monitor,updatedAt:''}):''
  useEffect(()=>{if(!monitor)return;try{publishWinterMonitor(monitor)}catch(reason){setError(reason instanceof Error?reason.message:'モニター送信に失敗しました')}},[displayKey])
+ useEffect(()=>{if(!monitor)return;const timer=setTimeout(()=>{remotePending.current=monitor;void sendRemote()},300);return()=>clearTimeout(timer)},[displayKey,resend])
  async function save(){if(lock.current||!competition||!ids.length||stale)return;lock.current=true;setBusy(true);setError('');try{const verified=await verifyAdminSession(session);onSession(verified);setSaved(await saveWinterOrder(competition.id,ids,original,verified.accessToken));setBaseline(JSON.stringify(ids));onChanged()}catch(reason){setError(reason instanceof Error?reason.message:'保存できません')}finally{lock.current=false;setBusy(false)}}
  function move(from:string,to:string){if(busy||stale)return;setIds(value=>moveWinterEntry(value,from,to));setSaved('')}
- return <section className="space-y-4 rounded-xl border-2 border-blue-300 bg-white p-5"><h2 className="text-2xl font-bold">出番表の編集・モニター操作</h2><p>並べ替えは保存前からモニターに表示します。同じPC・同じブラウザーでモニターを開いてください。</p><label className="block text-xl">表示する競技<select className="mt-2 min-h-16 w-full rounded-xl border-2 p-3" value={compId} disabled={busy} onChange={e=>choose(e.target.value)}><option value="">競技を選択</option>{data.competitions.map(c=><option key={c.id} value={c.id}>{winterCompetitionLabel(c)}</option>)}</select></label>
+ return <section className="space-y-4 rounded-xl border-2 border-blue-300 bg-white p-5"><h2 className="text-2xl font-bold">出番表の編集・モニター操作</h2><p>並べ替えは保存前からモニターに表示します。別端末でもWinterのモニター画面を開けます。複数の本部が操作した場合は最後に送信した表示になります。</p>{remoteStatus&&<p role="status">{remoteStatus}</p>}{competition&&<button className={button} onClick={()=>setResend(v=>v+1)}>モニターに再送</button>}<label className="block text-xl">表示する競技<select className="mt-2 min-h-16 w-full rounded-xl border-2 p-3" value={compId} disabled={busy} onChange={e=>choose(e.target.value)}><option value="">競技を選択</option>{data.competitions.map(c=><option key={c.id} value={c.id}>{winterCompetitionLabel(c)}</option>)}</select></label>
  {error&&<p role="alert" className="bg-red-100 p-4 text-xl">{error}</p>}{stale&&<p className="bg-orange-100 p-4 text-xl">出番が更新されました。下の「最新の出番に戻す」で確認してから保存してください。</p>}
  {competition&&<><WinterTimetableEditor key={competition.id} competitionId={competition.id} initial={timetable??null} session={session} onSession={onSession} onChanged={onChanged}/><div className="flex flex-wrap gap-3"><a className={button} href="/winter/monitor" target="_blank" rel="noopener">モニター画面を開く</a><button className={button} disabled={busy||!ids.length||stale||!dirty} onClick={()=>void save()}>{busy?'保存中…':'出番表を保存'}</button><button className={button} disabled={busy} onClick={()=>{if(dirty&&!window.confirm('未保存の並べ替えを破棄しますか？'))return;setIds(originalIds);setBaseline(originalKey);setSaved('');onChanged()}}>最新の出番に戻す</button><button className={button} onClick={()=>setPosition({x:Math.max(0,window.innerWidth-430),y:100})}>小窓を端に表示</button></div><p role="status" className="text-xl">{saved?`保存日時：${new Date(saved).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`:dirty?'並べ替え中・未保存':'保存済みの順番を表示中'}</p>{!ids.length&&<p className="text-xl">上の「事前エントリーを出番表に登録」で人馬を登録すると編集できます。登録後は「最新の出番に戻す」で表示を更新してください。</p>}
  <div className="space-y-2 rounded-xl border p-3"><label className="block text-xl">間に何頭未満なら色で確認するか<input className="ml-3 min-h-14 w-24 rounded-xl border-2 p-2" type="number" min={0} max={100} value={minimumGap} onChange={e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=0&&n<=100)setMinimumGap(n)}}/></label><p>間の頭数は、この競技で同じ人馬の出番の間に入る他の出番の数です。連続は0頭。確認基準は本部で調整できます。並べ替えると保存前から再計算します。</p>{identityStatus&&<p role="status">{identityStatus}</p>}{intervalError&&<p role="alert">{intervalError}</p>}</div>

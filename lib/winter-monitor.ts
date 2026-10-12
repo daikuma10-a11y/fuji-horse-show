@@ -1,5 +1,5 @@
 import { WINTER_EVENT_ID, assertWinterEvent } from './winter-event'
-import type { WinterEntryRow } from './winter-data'
+import type { WinterEntryRow,loadWinterData } from './winter-data'
 import { winterRpc } from './winter-reception'
 export type WinterMonitorRow={id:string;number:number;rider:string;horse:string;organization:string;isOp:boolean;mark:string}
 export type WinterMonitorState={version:1;eventId:string;competitionId:string;competitionNo:string;competitionName:string;date:string;inspectionTime?:string|null;startTime?:string|null;timePhase?:'provisional'|'final';rows:WinterMonitorRow[];page:number;draft:boolean;updatedAt:string}
@@ -16,3 +16,16 @@ export async function saveWinterOrder(comp:string,ids:string[],entries:WinterEnt
 
 /** Refresh untouched lists; preserve a local draft when new requests arrive. */
 export function winterOrderAfterRefresh(ids:string[],baseline:string,latest:string[]){return JSON.stringify(ids)===baseline?[...latest]:null}
+
+/** A saved display follows DB changes even when the admin editor is closed. */
+export function reconcileWinterMonitor(state:WinterMonitorState,data:Awaited<ReturnType<typeof loadWinterData>>){
+ validateWinterMonitor(state);assertWinterEvent(data.eventId)
+ if(state.draft)return state
+ const comp=data.competitions.find(c=>c.id===state.competitionId);if(!comp)throw new Error('表示中のWinter競技を確認できません')
+ const rows=data.entries.filter(e=>e.competition_id===comp.id&&!['wd','withdrawn'].includes(e.status.toLowerCase())).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id)).map((e,i)=>{
+  const rider=data.riders.find(r=>r.id===e.rider_id),horse=data.horses.find(h=>h.id===e.horse_id);if(!rider||!horse)throw new Error('モニターの人馬を確認できません')
+  return{id:e.entry_id,number:i+1,rider:rider.name,horse:horse.name,organization:e.organization_name,isOp:!!e.is_op,mark:state.rows.find(r=>r.id===e.entry_id)?.mark??'更新'}
+ })
+ const t=data.timetable.find(t=>t.competition_id===comp.id)
+ return{...state,competitionNo:comp.competition_no,competitionName:comp.name,date:comp.competition_date,inspectionTime:t?.inspection_time,startTime:t?.start_time,timePhase:t?.phase,rows,page:Math.min(state.page,Math.max(0,Math.ceil(rows.length/30)-1))}
+}

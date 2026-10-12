@@ -1,0 +1,33 @@
+begin;
+do $$
+declare ev uuid:='b571f05e-ed23-4e07-929e-be2b73e601a5';o uuid:=gen_random_uuid();r uuid:=gen_random_uuid();h uuid:=gen_random_uuid();c uuid;one uuid:=gen_random_uuid();two uuid:=gen_random_uuid();w uuid:=gen_random_uuid();pending uuid:=gen_random_uuid();reply jsonb;denied boolean;before_rev bigint;after_rev bigint;fees bigint;state jsonb;
+begin
+ if has_function_privilege('anon','public.restore_winter_withdraw(uuid,text)','execute') or has_function_privilege('anon','public.publish_winter_monitor(jsonb)','execute') then raise exception 'anonymous write leak';end if;
+ denied:=false;begin perform public.restore_winter_withdraw(w,'検証');exception when others then denied:=true;end;if not denied then raise exception 'restore auth bypass';end if;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',(select id from auth.users where raw_app_meta_data->>'role'='admin' order by id limit 1),'app_metadata',jsonb_build_object('role','admin'))::text,true);
+ select revision into before_rev from public.fhs_winter_updates where event_id=ev;
+ insert into public.organizations(id,event_id,name) values(o,ev,'復元検証ROLLBACK');
+ insert into public.riders(id,event_id,organization_id,name,jef_member_no) values(r,ev,o,'検証選手','TEST');
+ insert into public.horses(id,event_id,organization_id,name,jef_registration_no) values(h,ev,o,'検証馬','TEST');
+ select id into c from public.competitions where event_id=ev and competition_no='1';
+ perform public.submit_winter_reception_add(one,o,c,r,h,'検証');perform public.reflect_winter_reception_request(one);
+ perform public.submit_winter_reception_add(two,o,c,r,h,'検証');perform public.reflect_winter_reception_request(two);
+ select sum(fee_amount) into fees from public.reception_requests where event_id=ev and organization_id=o;
+ perform public.submit_winter_reception_withdraw(w,one,'検証');perform public.reflect_winter_reception_request(w);
+ reply:=public.restore_winter_withdraw(w,'訂正');
+ if reply->>'entryId'<>one::text or (reply->>'restoredOrder')::int<>(select max(start_order) from public.entries where event_id=ev and competition_id=c and lower(status) not in('wd','withdrawn')) or (select status from public.entries where id=one)<>'active' or (select status from public.reception_requests where id=w)<>'cancelled' then raise exception 'restore not last/active/cancelled';end if;
+ if public.restore_winter_withdraw(w,'訂正')<>reply then raise exception 'restore retry changed';end if;
+ if (select sum(fee_amount) from public.reception_requests where event_id=ev and organization_id=o)<>fees then raise exception 'restore changed fees';end if;
+ perform public.submit_winter_reception_withdraw(pending,two,'検証');reply:=public.restore_winter_withdraw(pending,'未反映取消');
+ if reply->'restoredOrder'<>'null'::jsonb or (select status from public.entries where id=two)<>'active' then raise exception 'pending cancellation changed entry';end if;
+ denied:=false;begin perform public.restore_winter_withdraw(one,'追加取消不可');exception when others then denied:=true;end;if not denied then raise exception 'add request restored';end if;
+ denied:=false;begin perform public.restore_winter_withdraw(w,'理由変更');exception when others then denied:=true;end;if not denied then raise exception 'retry reason changed';end if;
+ select revision into after_rev from public.fhs_winter_updates where event_id=ev;
+ if after_rev<>before_rev+1 then raise exception 'data signal should coalesce once per transaction';end if;
+ state:=jsonb_build_object('version',1,'eventId',ev,'competitionId',c,'competitionNo','1','competitionName','検証','date','2026-11-13','rows','[]'::jsonb,'page',0,'draft',false,'updatedAt',now());
+ perform public.publish_winter_monitor(state);
+ if (select revision from public.fhs_winter_updates where event_id=ev)<>after_rev then raise exception 'monitor movement reloads all data';end if;
+ denied:=false;begin perform public.publish_winter_monitor(state-'eventId');exception when others then denied:=true;end;if not denied then raise exception 'missing monitor event allowed';end if;
+ denied:=false;begin perform public.publish_winter_monitor(jsonb_set(state,'{eventId}','"autumn"'));exception when others then denied:=true;end;if not denied then raise exception 'other monitor event allowed';end if;
+end;$$;
+rollback;
