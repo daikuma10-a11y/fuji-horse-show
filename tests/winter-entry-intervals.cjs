@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path')
+Module._extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,f)
+const {WINTER_EVENT_ID:ev}=require(path.resolve('lib/winter-event.ts')),api=require(path.resolve('lib/winter-entry-intervals.ts'))
+const row=(id,rider,horse)=>({entry_id:id,event_id:ev,rider_id:rider,horse_id:horse,status:'active'})
+const rows=[row('a','r','h'),row('b','other','h'),row('c','third','otherhorse'),row('d','r2','thirdhorse')],map=[{entity_id:'same-person',rider_id:'r',horse_id:null},{entity_id:'same-person',rider_id:'r2',horse_id:null}]
+const a=api.winterEntryIntervals(ev,['a','b','c','d'],rows,map);assert.equal(a.get('a').horse.after,0);assert.equal(a.get('b').horse.before,0);assert.equal(a.get('a').rider.after,2);assert.equal(a.get('d').rider.before,2);assert.equal(a.get('c').rider.before,null)
+const moved=api.winterEntryIntervals(ev,['d','a','b','c'],rows,map);assert.equal(moved.get('a').rider.before,0);assert.equal(moved.get('a').horse.after,0)
+const unmapped=api.winterEntryIntervals(ev,['a','d'],rows);assert.equal(unmapped.get('a').rider.after,null,'Separate IDs/names must not be guessed identical')
+assert.throws(()=>api.winterEntryIntervals(ev,['a','a'],rows),/重複/);assert.throws(()=>api.winterEntryIntervals('autumn',['a'],rows),/Winter/);assert.throws(()=>api.winterEntryIntervals(ev,['missing'],rows),/人馬/);assert.throws(()=>api.winterEntryIntervals(ev,['a'],[{...rows[0],status:'wd'}]),/棄権/)
+const long=Array.from({length:32},(_,i)=>row(String(i),i===0||i===31?'repeat':String(i),String(i)));const pages=api.winterEntryIntervals(ev,long.map(x=>x.entry_id),long);assert.equal(pages.get('0').rider.after,30,'Page boundaries do not reset interval counts')
+console.log('PASS: nearest before/after gaps, consecutive 0, cross-club shared identity, no name guesses, draft reorder, page boundary, event/duplicate/withdraw guards')
