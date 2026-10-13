@@ -1,0 +1,46 @@
+{
+  "record_type": "current_session_evidence",
+  "verified_at": "2026-10-13T09:22:31.596946+09:00",
+  "source_commit": "e4a3ca1f27f87eb250368e6f6997861e9ff92a5d",
+  "code_baseline": "1c3a0b8c0ea288f2b380ae1dfcd1d60d1b88329a",
+  "code_changed_since_baseline": false,
+  "checks": [
+    {
+      "command": "node tests/master-input-forms.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: exact original Autumn add (4 steps) and change (5 steps) markup; shared pickers keep same-name affiliation IDs and official eligibility"
+    },
+    {
+      "command": "node tests/master-request-actions.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: exact Autumn request group/position/reflect/cancel markup retained in shared action components"
+    },
+    {
+      "command": "node tests/master-settlement-history.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: exact Autumn history/reprint and statement/receipt markup; Winter immutable snapshot, read-only print, shared controls and rapid double-print guard"
+    },
+    {
+      "command": "node tests/winter-master-request-ui.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: request UI double-tap guard, frozen reflect position/ID and cancellation reason, realtime status changes, identical retries and definitive rejection unlocking"
+    },
+    {
+      "command": "node tests/winter-settlement.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: saved initial fees, reflected-only requests, no withdrawal refunds, pending/cancelled exclusions, advance totals, unknown-entry warning, event isolation, absolute save/read-back and optimistic conflict rejection"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "result": "passed",
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "new_work_handoff_test": "not_run"
+}
