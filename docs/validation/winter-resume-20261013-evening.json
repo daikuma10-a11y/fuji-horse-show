@@ -1,0 +1,60 @@
+{
+  "record_type": "winter_resume_checkpoint",
+  "verified_at": "2026-10-13T12:39:51.729Z",
+  "source_commit": "5b890b46bb6b55f2b61b6dc8811f2bbb7c059f79",
+  "scope": "既存共通masterの回帰確認。新Work完全独立試験とは扱わない。",
+  "checks": [
+    {
+      "command": "node tests/master-input-forms.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: exact original Autumn add (4 steps) and change (5 steps) markup; shared pickers keep same-name affiliation IDs and official eligibility\n"
+    },
+    {
+      "command": "node tests/master-request-actions.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: exact Autumn request group/position/reflect/cancel markup retained in shared action components\n"
+    },
+    {
+      "command": "node tests/master-settlement-history.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: exact Autumn history/reprint and statement/receipt markup; Winter immutable snapshot, read-only print, shared controls and rapid double-print guard\n"
+    },
+    {
+      "command": "node tests/winter-master-request-ui.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: request UI double-tap guard, frozen reflect position/ID and cancellation reason, realtime status changes, identical retries and definitive rejection unlocking\n"
+    },
+    {
+      "command": "node tests/winter-settlement.cjs",
+      "result": "passed",
+      "exit_code": 0,
+      "output": "PASS: saved initial fees, reflected-only requests, no withdrawal refunds, pending/cancelled exclusions, advance totals, unknown-entry warning, event isolation, absolute save/read-back and optimistic conflict rejection\n"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "result": "passed",
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "application_changes": false,
+  "database_writes": false,
+  "remaining": [
+    {
+      "id": "FHS-S03",
+      "status": "実装済み・未検証",
+      "next": "iPad第8世代で長押し移動、保存前モニター連動、受付入力を実機確認"
+    },
+    {
+      "id": "FHS-S04",
+      "status": "実装済み・未検証",
+      "next": "Canon TS8630で出番表・保存済み精算書を印刷し見切れ・片面・再印刷を実機確認"
+    }
+  ],
+  "preserve": "テスト名簿と保存済み申請・出番・履歴を維持。保存済み草稿を再送しない。",
+  "preview": "https://fhsfix-git-prep-winter-2026-daikuma10-7300.vercel.app/winter"
+}
