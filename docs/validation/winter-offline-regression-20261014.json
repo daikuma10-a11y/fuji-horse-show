@@ -1,0 +1,142 @@
+{
+  "verified_at": "2026-10-14T08:41:42.951094+09:00",
+  "source_commit": "0d69dcf3e1c61f59e14ba4c5acb4bb6b31213528",
+  "checks": [
+    {
+      "test": "monitor-link",
+      "exit_code": 0,
+      "output": "PASS: two-way monitor scroll, font control, status validation, loop prevention and cleanup"
+    },
+    {
+      "test": "startlist-preview",
+      "exit_code": 0,
+      "output": "PASS: draft order, OP/withdrawn preservation, stale/invalid order rejection; two-window live preview, cancellation, save, conflict and disconnect fallback\n",
+      "initial_failure": "node:internal/modules/cjs/loader:1520\n  throw err;\n  ^\n\nError: Cannot find module '@/components/master/start-list-controls'\nRequire stack:\n- /workspace/scratch/03078db1c355/fuji-horse-show/tests/startlist-preview.cjs\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)\n    at Module._load (node:internal/modules/cjs/loader:1294:5)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.require (node:internal/modules/cjs/loader:1617:12)\n    at require (node:internal/modules/helpers:153:16)\n    at mod.require (/workspace/scratch/03078db1c355/fuji-horse-show/tests/startlist-preview.cjs:3:103)\n    at require (node:internal/modules/helpers:153:16) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [\n    '/workspace/scratch/03078db1c355/fuji-horse-show/tests/startlist-preview.cjs'\n  ]\n}\n\nNode.js v24.19.0"
+    },
+    {
+      "test": "winter-entry-intervals",
+      "exit_code": 0,
+      "output": "PASS: nearest before/after gaps, consecutive 0, cross-club shared identity, no name guesses, draft reorder, page boundary, event/duplicate/withdraw guards"
+    },
+    {
+      "test": "entry-change-marks",
+      "exit_code": 0,
+      "output": "PASS: accumulated history, stable IDs, excluded requests, reorder, admin-only colors and withdrawn precedence\n",
+      "initial_failure": "node:internal/modules/cjs/loader:1520\n  throw err;\n  ^\n\nError: Cannot find module '@/components/master/start-list-rows'\nRequire stack:\n- /workspace/scratch/03078db1c355/fuji-horse-show/tests/entry-change-marks.cjs\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)\n    at Module._load (node:internal/modules/cjs/loader:1294:5)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.require (node:internal/modules/cjs/loader:1617:12)\n    at require (node:internal/modules/helpers:153:16)\n    at mod.require (/workspace/scratch/03078db1c355/fuji-horse-show/tests/entry-change-marks.cjs:8:55)\n    at require (node:internal/modules/helpers:153:16) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [\n    '/workspace/scratch/03078db1c355/fuji-horse-show/tests/entry-change-marks.cjs'\n  ]\n}\n\nNode.js v24.19.0"
+    },
+    {
+      "test": "winter-start-list-layout",
+      "exit_code": 0,
+      "output": "PASS: exact original Autumn markup and both adapters, 20 compact rows, draft order, mouse/touch handles, columns, accumulated marks, OP, withdrawal exclusion and Winter isolation"
+    },
+    {
+      "test": "winter-batch",
+      "exit_code": 0,
+      "output": "PASS: mixed draft validation, membership price, persistence failures, corruption, event isolation, duplicate targets, stable network retries, definitive rejection, receipt verification and order movement"
+    },
+    {
+      "test": "winter-meeting",
+      "exit_code": 0,
+      "output": "PASS: reception/meeting storage isolation, multi-club review, per-item prices, scoped atomic RPC, stable retry identity, timeout and definitive rejection, receipt validation, other-event rejection"
+    },
+    {
+      "test": "winter-initial-batch",
+      "exit_code": 0,
+      "output": "PASS: club batch with ordinary/OP and instructor member/nonmember; preflight duplicate guard; partial progress and stable-ID uncertain retry without resending completed rows"
+    },
+    {
+      "test": "winter-master-input",
+      "exit_code": 0,
+      "output": "PASS: master form fee/category review, explicit cross-club affiliation, note payload, membership-only change, event and original snapshot rejection, ID-based organizations and legacy queue compatibility"
+    },
+    {
+      "test": "master-withdraw-form",
+      "exit_code": 0,
+      "output": "PASS: shared withdrawal steps, scoped navigation, tap deselection, duplicate tap guard, zero-fee batch payload, OP, event isolation and affiliation IDs"
+    },
+    {
+      "test": "winter-master-request-actions",
+      "exit_code": 0,
+      "output": "PASS: scoped reflect/cancel RPCs, max positions after replacement, ordered group persistence, partial progress and stop, timeout, foreign/duplicate groups rejected before writes"
+    },
+    {
+      "test": "winter-master-settlement-ui",
+      "exit_code": 0,
+      "output": "PASS: shared Winter checkout with horse fee and adjustments; no implicit per-line paid amount; uncertain inputs frozen, identical retries, double-click guard, read-only reprints and next-visitor reset"
+    },
+    {
+      "test": "winter-settlement-actions",
+      "exit_code": 0,
+      "output": "PASS: change fee and cross-club billing, multi-field surcharge, withdrawal 0/no refund, atomic payload/readback and uncertain retries, generic cancellation, audit detail integration"
+    },
+    {
+      "test": "winter-saved-settlements",
+      "exit_code": 0,
+      "output": "PASS: admin-only saved snapshot read, Winter/org scope, token exclusion, no write, mismatched snapshot rejection"
+    },
+    {
+      "test": "winter-checkout-route",
+      "exit_code": 0,
+      "output": "PASS: Winter proxy isolation, HttpOnly scoped cookie, same-origin write guard, server totals only, no tokens in response, uncertain vs stale distinction"
+    },
+    {
+      "test": "winter-checkout",
+      "exit_code": 0,
+      "output": "PASS: snapshot totals/event/org guards, saved print escaping, cash not implicitly paid, zero balance, read-only reprint without POST"
+    },
+    {
+      "test": "winter-settlement-print",
+      "exit_code": 0,
+      "output": "PASS: 41 detail lines preserved, unsafe names escaped, Winter isolation, draft/limitations explicit, no external print assets or credentials, fresh read-only print without advance-save/reset"
+    },
+    {
+      "test": "winter-horse-registration",
+      "exit_code": 0,
+      "output": "PASS: official 14000 fee, per-horse ID not per start/name, owning-club billing, only saved participants, count changes, empty club, duplicate/conflict and Autumn guards"
+    },
+    {
+      "test": "winter-extra-payment",
+      "exit_code": 0,
+      "output": "PASS: lost response/readback recovery reuses ID, one receipt only, trimmed notes, bounded network waits, input validation"
+    },
+    {
+      "test": "winter-payment-instruction",
+      "exit_code": 0,
+      "output": "PASS: payment plan POST/CAS update/read-back, duplicate/conflict/changed read/nonadmin rejection, cash clears bank, Winter isolation; no payment receipt or balance mutation\n",
+      "initial_failure": "node:internal/modules/cjs/loader:1520\n  throw err;\n  ^\n\nError: Cannot find module './winter-horse-registration'\nRequire stack:\n- /workspace/scratch/03078db1c355/fuji-horse-show/lib/winter-settlement.ts\n- /workspace/scratch/03078db1c355/fuji-horse-show/tests/winter-payment-instruction.cjs\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)\n    at m.require (/workspace/scratch/03078db1c355/fuji-horse-show/tests/winter-payment-instruction.cjs:2:171)\n    at require (node:internal/modules/helpers:153:16)\n    at Object.<anonymous> (/workspace/scratch/03078db1c355/fuji-horse-show/lib/winter-settlement.ts:7:37)\n    at Module._compile (node:internal/modules/cjs/loader:1872:14)\n    at load (/workspace/scratch/03078db1c355/fuji-horse-show/tests/winter-payment-instruction.cjs:2:196)\n    at Object.<anonymous> (/workspace/scratch/03078db1c355/fuji-horse-show/tests/winter-payment-instruction.cjs:4:11)\n    at Module._compile (node:internal/modules/cjs/loader:1872:14)\n    at Object..js (node:internal/modules/cjs/loader:2003:10)\n    at Module.load (node:internal/modules/cjs/loader:1594:32) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [\n    '/workspace/scratch/03078db1c355/fuji-horse-show/lib/winter-settlement.ts',\n    '/workspace/scratch/03078db1c355/fuji-horse-show/tests/winter-payment-instruction.cjs'\n  ]\n}\n\nNode.js v24.19.0"
+    },
+    {
+      "test": "shared-roster",
+      "exit_code": 0,
+      "output": "PASS: historical affiliations excluded, current club filtering, unassigned entities excluded"
+    },
+    {
+      "test": "shared-roster-loading",
+      "exit_code": 0,
+      "output": "PASS: clubs selectable before entity pagination finishes; minimal columns and admin authorization retained"
+    },
+    {
+      "test": "shared-roster-refresh",
+      "exit_code": 0,
+      "output": "PASS: edited identity only reloaded; other entities and participant snapshot retained; affiliations merged; event/mismatch guards and uncertain timeout recovery"
+    },
+    {
+      "test": "winter-participant-filter",
+      "exit_code": 0,
+      "output": "PASS: selected shared participants visible; deselected hidden; manual and initial rosters retained"
+    }
+  ],
+  "typecheck": "passed",
+  "build": {
+    "initial": "failed: truncated Turbopack cache block",
+    "recovery": "moved generated .next cache aside, no app/config edits",
+    "clean_build": "passed"
+  },
+  "scope": "local offline/mock regression, not real device or new authenticated save validation",
+  "application_changes": false,
+  "database_writes": false,
+  "remaining": [
+    "iPad第8世代の実操作",
+    "Canon TS8630の物理出力"
+  ]
+}
