@@ -1,3 +1,4 @@
+require('./register-ts.cjs')
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module')
 function load(file,mocks={},extra='') {
  const mod=new Module(file,module);mod.paths=module.paths;mod.require=name=>name in mocks?mocks[name]:require(name)
@@ -37,8 +38,9 @@ const store={competitions:[competition],competitionsByDate:()=>[competition],ent
 const vh=hooks(),mh=hooks(),StartList=()=>null
 const {StartListViewer}=load('components/admin/startlist-viewer.tsx',{'react':vh.api,'@/lib/store':{useStore:()=>store},'@/lib/mock-data':{COMPETITION_DATES:[{value:'day',label:'日'}]},'@/lib/entry-change-marks':{entryChangeLabel:()=>''},'@/lib/startlist-preview':helper,'@/components/start-list':{StartList},'@/components/official-badge':{OfficialBadge:()=>null},'./monitor-status':{MonitorStatus:()=>null},'@/lib/supabase-rest':{ADMIN_SESSION_KEY:'session',refreshAdminSession:async session=>session,reorderEntries:async()=>{}}})
 const monitor=load('components/startlist-monitor.tsx',{'react':mh.api,'@/lib/store':{useStore:()=>store},'@/lib/mock-data':{COMPETITION_DATES:[{value:'day',label:'日'}]},'@/lib/startlist-preview':helper,'@/components/monitor-link':{useMonitorLink:()=>()=>{}},'@/lib/meeting-monitor':{monitorRows:rows=>rows.map(e=>({id:e.id,order:e.order,player:e.id,horse:e.id,organization:'所属',op:e.isOp,withdrawn:e.withdrawn}))}},'\nexports.TestMonitor=OfficialStartListMonitor;')
-function nodes(tree){if(!tree||typeof tree!=='object')return[];return[tree,...[tree.props?.children].flat(Infinity).flatMap(nodes)]}
-function text(tree){if(typeof tree==='string'||typeof tree==='number')return String(tree);if(!tree)return'';return[tree.props?.children].flat(Infinity).map(text).join('')}
+function expand(tree){return typeof tree?.type==='function'&&tree.type.name.startsWith('Master')?tree.type(tree.props):tree}
+function nodes(tree){tree=expand(tree);if(!tree||typeof tree!=='object')return[];return[tree,...[tree.props?.children].flat(Infinity).flatMap(nodes)]}
+function text(tree){tree=expand(tree);if(typeof tree==='string'||typeof tree==='number')return String(tree);if(!tree)return'';return[tree.props?.children].flat(Infinity).map(text).join('')}
 const view=()=>vh.render(()=>StartListViewer({})),screen=()=>mh.render(()=>monitor.TestMonitor())
 function button(tree,label){return nodes(tree).find(n=>n.type==='button'&&text(n)===label)}
 async function main(){
