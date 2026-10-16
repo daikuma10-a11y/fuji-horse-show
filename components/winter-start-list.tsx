@@ -13,6 +13,7 @@ import {WINTER_DATES} from '@/lib/winter-event'
 import {exportWinterCsv} from '@/lib/winter-export'
 import {WinterMonitorView} from './winter-monitor-view'
 import {WinterTimetableEditor} from './winter-timetable-editor'
+import {MasterCompetitionTime} from './master/timetable'
 import {loadWinterRequests,winterRpc,type WinterRequestRow} from '@/lib/winter-reception'
 import type {loadWinterData} from '@/lib/winter-data'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
@@ -71,6 +72,7 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  {competition?<div>
  <h3 className={wideView?'mb-1 flex flex-wrap items-center gap-2 text-sm font-bold text-foreground':'mb-2 flex flex-wrap items-center gap-2 text-lg font-bold text-foreground'}>{winterCompetitionLabel(competition)}{competition.official&&<OfficialBadge/>}</h3>
  <MasterOrderStatus wide={wideView} dirty={dirty} stale={stale} saving={busy} error={error} savedLabel={saved?new Date(saved).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):undefined} onDiscard={cancel} onSave={()=>void save()}/>
+ <MasterCompetitionTime inspection={timetable?.inspection_time} start={timetable?.start_time} phase={timetable?.phase}/>
  <MasterStartLegend/>
 
  <MasterStartRows model={model} competitionId={compId} readOnly showAdminChanges adminReorder={!busy&&!stale} reorderSaving={busy||stale} compact dense orderedIds={ids} onReorder={move} riderKeys={riderKeys} horseKeys={horseKeys}/>
@@ -80,6 +82,6 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  </details>
  </div>:<p className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-5 text-center text-base text-muted-foreground">競技を選んでください。</p>}
  </div>
- <div className="print-only hidden"><h1 className="mb-2 text-xl font-bold">Fuji Horse Show Winter 出番表</h1><p className="mb-4 font-bold">{dateLabel(date)} ／ 正式DBの出番順</p>{(printScope==='competition'&&competition?[competition]:comps).map(c=><section key={c.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">{winterCompetitionLabel(c)}{c.official?'（公認）':''}</h2><table className="w-full border-collapse text-sm"><thead><tr>{['出番','選手','馬','所属','備考'].map(h=><th key={h} className="border p-1 text-left">{h}</th>)}</tr></thead><tbody>{data.entries.filter(e=>e.competition_id===c.id).sort((a,b)=>a.start_order-b.start_order).map(e=><tr key={e.entry_id}><td className="border p-1">{e.start_order}</td><td className="border p-1">{data.riders.find(r=>r.id===e.rider_id)?.name}</td><td className="border p-1">{data.horses.find(h=>h.id===e.horse_id)?.name}</td><td className="border p-1">{e.organization_name}</td><td className="border p-1">{e.is_op?'OP ':''}{['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権':''}</td></tr>)}</tbody></table></section>)}</div>
+ <div className="print-only hidden"><h1 className="mb-2 text-xl font-bold">Fuji Horse Show Winter 出番表</h1><p className="mb-4 font-bold">{dateLabel(date)} ／ 正式DBの出番順</p>{(printScope==='competition'&&competition?[competition]:comps).map(c=><section key={c.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">{winterCompetitionLabel(c)}{c.official?'（公認）':''}</h2><MasterCompetitionTime inspection={data.timetable.find(t=>t.competition_id===c.id)?.inspection_time} start={data.timetable.find(t=>t.competition_id===c.id)?.start_time} phase={data.timetable.find(t=>t.competition_id===c.id)?.phase}/><table className="w-full border-collapse text-sm"><thead><tr>{['出番','選手','馬','所属','備考'].map(h=><th key={h} className="border p-1 text-left">{h}</th>)}</tr></thead><tbody>{data.entries.filter(e=>e.competition_id===c.id).sort((a,b)=>a.start_order-b.start_order).map(e=><tr key={e.entry_id}><td className="border p-1">{e.start_order}</td><td className="border p-1">{data.riders.find(r=>r.id===e.rider_id)?.name}</td><td className="border p-1">{data.horses.find(h=>h.id===e.horse_id)?.name}</td><td className="border p-1">{e.organization_name}</td><td className="border p-1">{e.is_op?'OP ':''}{['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権':''}</td></tr>)}</tbody></table></section>)}</div>
  </div>
 }
