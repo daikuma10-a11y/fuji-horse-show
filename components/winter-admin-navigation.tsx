@@ -1,11 +1,12 @@
 "use client"
 import {MasterAdminNavigation} from './master/admin-navigation'
 import {ClipboardList,Calculator,ListOrdered,Users} from 'lucide-react'
-export type WinterAdminTab='requests'|'settlement'|'startlist'|'on-site'|'meeting'|'roster'
+export type WinterAdminTab='requests'|'settlement'|'startlist'|'timetable'|'on-site'|'meeting'|'roster'
 export const winterAdminTabs=[
  {id:'requests',label:'申請一覧',icon:ClipboardList},
  {id:'settlement',label:'精算',icon:Calculator},
  {id:'startlist',label:'出番表',icon:ListOrdered},
+ {id:'timetable',label:'タイムテーブル',icon:ListOrdered},
  {id:'on-site',label:'事後登録',icon:ClipboardList},
  {id:'meeting',label:'打ち合わせ会',icon:ListOrdered},
  {id:'roster',label:'人馬名簿',icon:Users},
