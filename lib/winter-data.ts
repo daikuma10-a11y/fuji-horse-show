@@ -1,3 +1,4 @@
+import {isMasterTimetableTime} from './master/timetable'
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from "./winter-event"
 
 import { compareWinterCompetitions, compareWinterOrganizations } from "./winter-display-order"
@@ -70,7 +71,7 @@ export async function loadWinterData(signal?: AbortSignal) {
     try{metadata=JSON.parse(row.notes??'null')}catch{return []}
     if(!metadata||typeof metadata!=='object'||!('winterTimetable' in metadata))return []
     const t=metadata.winterTimetable as WinterTimetableRow
-    if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||!['provisional','final'].includes(t.phase)||[t.inspection_time,t.start_time].some(value=>value!==null&&(typeof value!=='string'||!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))))throw new Error('Winterの時間設定を確認できません')
+    if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||!['provisional','final'].includes(t.phase)||!isMasterTimetableTime(t.inspection_time,'inspection')||!isMasterTimetableTime(t.start_time,'start'))throw new Error('Winterの時間設定を確認できません')
     return [t]
   })
   return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable }

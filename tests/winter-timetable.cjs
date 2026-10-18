@@ -15,7 +15,7 @@ const file=path.resolve('components/winter-timetable-editor.tsx'),m=new Module(f
 m.require=n=>n==='react'?hooks:n==='@/lib/supabase-rest'?{verifyAdminSession:async s=>s}:n==='@/lib/winter-data'?{loadWinterData:async()=>({...data,timetable:[{...data.timetable[0],start_time:'09:00',updated_at:'new'}]})}:n==='@/lib/winter-reception'?{winterRpc:async(name,args,token)=>{calls.push({name,args,token});if(mode==='conflict')throw Error('時間が別の操作で更新されています');return{...data.timetable[0],inspection_time:args.p_inspection,start_time:args.p_start,phase:args.p_phase}}}:require(n)
 m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText,file)
 const render=()=>{index=0;return m.exports.WinterTimetableEditor({competitionId:'c',initial:data.timetable[0],session:{accessToken:'test'},onSession(){},onChanged(){changed++}})}
-function nodes(t){return !t||typeof t!=='object'?[]:[t,...[t.props?.children].flat(Infinity).flatMap(nodes)]}
+function nodes(t){return !t||typeof t!=='object'?[]:typeof t.type==='function'?nodes(t.type(t.props)):[t,...[t.props?.children].flat(Infinity).flatMap(nodes)]}
 function button(t,label){return nodes(t).find(n=>n.type==='button'&&n.props.children===label)}
 async function main(){
  let t=render(),inputs=nodes(t).filter(n=>n.type==='input');inputs[1].props.onChange({target:{value:'08:45'}});t=render();button(t,'時間を保存').props.onClick();await new Promise(setImmediate)
@@ -23,6 +23,8 @@ async function main(){
  mode='conflict';t=render();button(t,'時間を保存').props.onClick();await new Promise(setImmediate);assert.equal(changed,1);assert(nodes(render()).some(n=>n.props?.role==='alert'))
  global.window={confirm:()=>true};t=render();button(t,'最新の時間を読み込む').props.onClick();await new Promise(setImmediate);assert.equal(nodes(render()).filter(n=>n.type==='input')[1].props.value,'09:00')
  mode='ok';t=render();nodes(t).filter(n=>n.type==='input').forEach(n=>n.props.onChange({target:{value:''}}));t=render();button(t,'時間を保存').props.onClick();await new Promise(setImmediate);assert.equal(calls.at(-1).args.p_start,null);assert.equal(calls.at(-1).args.p_inspection,null)
+ for(const inspection of ['オープン','組み換え時間']){t=render();let fields=nodes(t).filter(n=>n.type==='select');fields[0].props.onChange({target:{value:inspection}});fields[1].props.onChange({target:{value:'前競技に引き続き'}});t=render();button(t,'時間を保存').props.onClick();await new Promise(setImmediate);assert.equal(calls.at(-1).args.p_inspection,inspection);assert.equal(calls.at(-1).args.p_start,'前競技に引き続き');assert.equal(nodes(render()).filter(n=>n.type==='input').length,0)}
+ t=render();nodes(t).filter(n=>n.type==='select').slice(0,2).forEach(n=>n.props.onChange({target:{value:'time'}}));t=render();assert.equal(nodes(t).filter(n=>n.type==='input').length,2);button(t,'時間を保存').props.onClick();await new Promise(setImmediate);assert.equal(calls.at(-1).args.p_start,null);assert.equal(calls.at(-1).args.p_inspection,null)
  const start=fs.readFileSync('components/winter-start-list.tsx','utf8');assert(start.includes('<MasterCompetitionTime inspection={timetable?.inspection_time}'));assert(start.includes('inspection={data.timetable.find(t=>t.competition_id===c.id)'))
  console.log('PASS: daily shared timetable, active counts, saved time/unknown labels, actual editor authenticated save/CAS conflict/reload/clear; screen and print integration')
 }

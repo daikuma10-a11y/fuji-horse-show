@@ -5,7 +5,7 @@ returns jsonb language plpgsql security definer set search_path='' as $$
 declare ev constant uuid:='b571f05e-ed23-4e07-929e-be2b73e601a5'; current_row jsonb; saved jsonb; note text; envelope jsonb;
 begin
  if auth.uid() is null or coalesce(auth.jwt()->'app_metadata'->>'role','')<>'admin' then raise exception '時間の変更には本部ログインが必要です';end if;
- if p_phase is null or p_phase not in('provisional','final') or (p_inspection is not null and p_inspection !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') or (p_start is not null and p_start !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') then raise exception '時間は時:分で入力してください';end if;
+ if p_phase is null or p_phase not in('provisional','final') or (p_inspection is not null and p_inspection not in('オープン','組み換え時間') and p_inspection !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') or (p_start is not null and p_start<>'前競技に引き続き' and p_start !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') then raise exception '時刻または指定された時間表記を選択してください';end if;
  select notes into note from public.competitions where id=p_competition_id and event_id=ev for update;
  if not found then raise exception 'Winterの競技を選択してください';end if;
  begin envelope:=note::jsonb; exception when invalid_text_representation then envelope:=null; end;

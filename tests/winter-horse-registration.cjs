@@ -1,3 +1,4 @@
+require('./register-ts.cjs')
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path')
 function load(file,mocks={}){const full=path.resolve(file),m=new Module(full,module);m.filename=full;m.paths=module.paths;m.require=n=>n in mocks?mocks[n]:require(Module._resolveFilename(n,m));m._compile(ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText,full);return m.exports}
 const event=load('lib/winter-event.ts'),data=load('lib/winter-data.ts',{'./winter-event':event,'./winter-display-order':{}}),api=load('lib/winter-horse-registration.ts',{'./winter-event':event,'./winter-data':data})

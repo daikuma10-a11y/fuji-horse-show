@@ -1,3 +1,4 @@
+require('./register-ts.cjs')
 const assert = require('node:assert/strict'), fs = require('node:fs'), ts = require('typescript'), Module = require('node:module'), path = require('node:path')
 function load(relative, mocks = {}) {
   const file = path.resolve(relative), m = new Module(file, module)
