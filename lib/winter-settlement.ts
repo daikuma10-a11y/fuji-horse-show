@@ -8,7 +8,7 @@ import {verifyAdminSession,type AdminSession} from './supabase-rest'
 const endpoint='https://mhgyhyxagkkwdiepifdp.supabase.co/rest/v1'
 const key='sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
-export type WinterInitialCharge={id:string;event_id:string;entry_fee:number;inputs:{organizationId:string;billingOrganizationId?:string;competitionId:string;riderId:string;horseId:string}}
+export type WinterInitialCharge={id:string;event_id:string;entry_fee:number;inputs:{organizationId:string;billingOrganizationId?:string;competitionId:string;riderId:string;horseId:string;membership?:string|null;isOp?:boolean;instructorConfirmed?:boolean;entryFee?:number}}
 export type WinterAdvance={event_id:string;organization_key:string;paid_amount:number;note:string;updated_at:string;updated_by:string}
 export type WinterPaymentInstruction={event_id:string;organization_key:string;payment_method:'bank_transfer'|'cash_at_venue';bank_details:string;updated_at:string;updated_by:string}
 export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[];payments?:WinterExtraPayment[];adjustments?:WinterChargeAdjustment[];onsite?:WinterSettlementOnlyRow[]}
@@ -25,6 +25,10 @@ async function read<T extends {event_id:string}>(table:string,select:string,toke
   for(const row of page)assertWinterEvent(row?.event_id)
   all.push(...page as T[]);if(page.length<500)return all
  }
+}
+export async function loadWinterInitialCharges(token:string):Promise<WinterInitialCharge[]>{
+ if(!token)throw new Error('本部ログインが必要です')
+ return read<WinterInitialCharge>('fhs_winter_initial_entries','id,event_id,inputs,entry_fee',token)
 }
 export async function loadWinterSettlement(token:string):Promise<WinterSettlementData>{
  if(!token)throw new Error('本部ログインが必要です')
