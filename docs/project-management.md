@@ -88,3 +88,6 @@ Autumn固有の領収書発行制度・正式ExcelのWinter新設は今回の共
 - 新Workの識別／会話リンク、入力した版、実際の操作、期待／実結果、証拠を記録。
 未実施時は結果／会話リンクを空欄のままにし、同じ会話での今回6検査を試験成功として代用しない。
 
+
+## 2026-10-20 最新再開先
+長期共通管理①②③は利用者が完了を宣言済み。旧管理試験TODOを再実施せず、Winter取込接続の復旧・保全に限定。仕様 `docs/winter-import-registration.md`、今回版の証拠 `docs/validation/winter-import-recovery-20261020.md`、継続保存失敗の障害記録 `docs/winter-save-validation.md` を参照。未push成果は再取得・復元確認済みの退避物を残す。d3d5380原本との一致は未証明。
