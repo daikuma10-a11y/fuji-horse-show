@@ -11,5 +11,12 @@
 ## 保全checkpoint 1
 `fa051a2808dfc8557a11bb6394405f6b41e9b61b` を含む差分bundleを保存・再取得。アーカイブSHA-256 `766497bf1a540b891077b1749a3e49265fb19342f4b51513339eff0564e33ce0`。基準8b62cedしか存在しない別Git領域で対象commitが取得前には存在しないこと、bundle取得後のcommitと変更3ファイルのSHA一致を確認した。秘密・実参加資料・DB export・認証状態・依存物を含めない。最終版は後続の保全で記録する。
 
-## 残る確認
-公開前に全送信コミット・新規blobを点検する。通常push後にGitHubと既存Winter PreviewのSHA一致・実画面確認を行う。管理者実画面の保存E2E、実iPad通信断、実プリンターは合格を確認するまで未検証。
+## 保全checkpoint 2・公開点検
+実装版 `b0cb0fd2d2191012dfb698f8b3288eccd9901b0f`（前段 `fa051a2` を含む）を差分bundle・10変更ファイルのhash manifest・復元手順・公開点検結果とともに新規保存した。アーカイブSHA-256 `4570268f2b93a49fa05be1518a6016b01a65dd33bc680edfcc7e476747094527`。実IDから再取得し、基準8b62cedだけの別Git領域で対象commitと全10ファイルの一致を確認。未コミットソースなし。生成物のみ除外。
+送信予定2コミットの全10ファイル版を点検。合成文字列・生成UUIDだけを試験に使用し、実参加資料・DB export・画像・ログ・秘密情報は含まない。既存の公開ブラウザーキーは基準版から不変。復元用bundleはリポジトリ外に保存。
+
+## 外部保存の障害と残る確認
+通常の `git push origin HEAD:prep/winter-2026` は終了コード128、`could not read Username for 'https://github.com': No such device or address` で失敗。今回の障害はGit送信用認証の取得不能で、自動承認審査による拒否ではない。利用者の指示に従い別認証・別送信経路への切替は行わない。
+失敗後のリモート照会で `prep/winter-2026` は `8b62ced0b686b7d392a0e11d2b4ce21b9d93c72d` のまま。既存Vercelプロジェクト `fhs_fix` の同ブランチPreviewも同SHA、READY。既存URLは `https://fhsfix-git-prep-winter-2026-daikuma10-7300.vercel.app/winter/prepare`。main・Autumn・権限・公開範囲の変更なし。
+復旧版は画面へ未反映のため、ブラウザーでの読込→対応選択→照合→確認→管理者確定→保存結果再表示、ブラウザー上の二重登録防止・途中再開は未実施。実iPad通信断も未検証。DB RPC検査・ローカル検査を実画面の合格として扱わない。
+再開時は最終退避物を実IDから取得・復元し、リモート最新を確認する。送信用認証が利用可能になった後に通常push、Previewの同SHA確認、既存管理者認証とDB・大会照合、既存ダミーの状態確認、必要な実画面試験だけを行う。本記録を含む最終退避物のID・hash・復元結果は利用者への終了報告で示す。

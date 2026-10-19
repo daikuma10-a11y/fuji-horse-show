@@ -91,3 +91,4 @@ Autumn固有の領収書発行制度・正式ExcelのWinter新設は今回の共
 
 ## 2026-10-20 最新再開先
 長期共通管理①②③は利用者が完了を宣言済み。旧管理試験TODOを再実施せず、Winter取込接続の復旧・保全に限定。仕様 `docs/winter-import-registration.md`、今回版の証拠 `docs/validation/winter-import-recovery-20261020.md`、継続保存失敗の障害記録 `docs/winter-save-validation.md` を参照。未push成果は再取得・復元確認済みの退避物を残す。d3d5380原本との一致は未証明。
+復旧実装版b0cb0fdは対象検査・型検査・ビルド・rollback付きDB検査を通過し、退避物からの復元を確認済み。通常pushはGitHub送信用認証が取得できず停止。GitHub／Previewは8b62cedのまま。別送信経路へ切り替えず、最終退避物から再開する。実画面E2Eは未検証。管理試験や既に有効な検査を理由なく繰り返さない。
