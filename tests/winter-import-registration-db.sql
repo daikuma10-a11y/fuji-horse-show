@@ -1,0 +1,51 @@
+-- Reconstructed from the recorded targeted test, using only synthetic fixtures.
+-- Existing records are not edited/deleted; all new fixture rows are rolled back.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000001","app_metadata":{"role":"admin"}}',true);
+do $$
+declare ev constant uuid:='b571f05e-ed23-4e07-929e-be2b73e601a5';
+ club_name text:='復旧取込ダミー20261020-'||gen_random_uuid(); club uuid;
+ r uuid;h uuid;r2 uuid;h2 uuid;ri uuid;hi uuid;ri2 uuid;hi2 uuid;org uuid;other_org uuid;c uuid;other_c uuid;
+ i1 uuid:=gen_random_uuid();i2 uuid:=gen_random_uuid();n_entries bigint;n_ledger bigint;payment_hash text;autumn_hash text;pos int;failed boolean;
+begin
+ select count(*) into n_entries from public.entries where event_id=ev;
+ select count(*) into n_ledger from public.fhs_winter_initial_entries where event_id=ev;
+ select md5(coalesce(string_agg(row_to_json(p)::text,'' order by p.organization_key),'')) into payment_hash from public.settlement_prepayments p;
+ select md5(coalesce(string_agg(row_to_json(e)::text,'' order by e.id),'')) into autumn_hash from public.entries e where event_id<>ev;
+ r:=public.save_fhs_roster_entity('rider','復旧ダミー選手一','ふっきゅうだみーせんしゅいち','',club_name);
+ h:=public.save_fhs_roster_entity('horse','復旧ダミー馬一','ふっきゅうだみーうまいち','',club_name);
+ r2:=public.save_fhs_roster_entity('rider','復旧ダミー選手二','ふっきゅうだみーせんしゅに','',club_name);
+ h2:=public.save_fhs_roster_entity('horse','復旧ダミー馬二','ふっきゅうだみーうまに','',club_name);
+ select id into club from public.fhs_roster_clubs where name=club_name;
+ perform public.save_fhs_winter_participants(club,array[r,h,r2,h2],'{}');
+ select rider_id into ri from public.fhs_winter_reception_roster where entity_id=r and club_id=club;
+ select horse_id into hi from public.fhs_winter_reception_roster where entity_id=h and club_id=club;
+ select rider_id into ri2 from public.fhs_winter_reception_roster where entity_id=r2 and club_id=club;
+ select horse_id into hi2 from public.fhs_winter_reception_roster where entity_id=h2 and club_id=club;
+ select organization_id into org from public.riders where id=ri;
+ select id into c from public.competitions where event_id=ev and competition_no='5';
+ select coalesce(max(start_order),0) into pos from public.entries where event_id=ev and competition_id=c and lower(status) not in ('wd','withdrawn');
+ perform public.register_winter_initial_entry(i1,org,c,ri,hi,'member',false,true,5000);
+ perform public.register_winter_initial_entry(i1,org,c,ri,hi,'member',false,true,5000);
+ perform public.register_winter_initial_entry(i2,org,c,ri2,hi2,'nonmember',false,false,10000);
+ perform public.register_winter_initial_entry(i2,org,c,ri2,hi2,'nonmember',false,false,10000);
+ if (select count(*) from public.entries where event_id=ev)<>n_entries+2 or (select count(*) from public.fhs_winter_initial_entries where event_id=ev)<>n_ledger+2 then raise exception 'Duplicate entry/charge';end if;
+ if (select sum(entry_fee) from public.fhs_winter_initial_entries where id in (i1,i2))<>15000 then raise exception 'Fee mismatch';end if;
+ if not exists(select 1 from public.reception_entries where entry_id=i1 and start_order=pos+1) or not exists(select 1 from public.reception_entries where entry_id=i2 and start_order=pos+2) then raise exception 'Readback/order mismatch';end if;
+ failed:=false;begin perform public.register_winter_initial_entry(gen_random_uuid(),org,c,ri,hi,'member',false,true,5000);exception when others then if sqlerrm not like '%登録済み%' then raise;end if;failed:=true;end;if not failed then raise exception 'Duplicate accepted';end if;
+ failed:=false;begin perform public.register_winter_initial_entry(i1,org,c,ri,hi,'nonmember',false,true,10000);exception when others then if sqlerrm not like '%内容が一致%' then raise;end if;failed:=true;end;if not failed then raise exception 'Correction overwrote original';end if;
+ select id into other_org from public.organizations where event_id=ev and id<>org limit 1;
+ failed:=false;begin perform public.register_winter_initial_entry(gen_random_uuid(),other_org,c,ri,hi,'member',false,true,5000);exception when others then if sqlerrm not like '%馬の大会・所属%' then raise;end if;failed:=true;end;if not failed then raise exception 'Affiliation accepted';end if;
+ failed:=false;begin perform public.register_winter_initial_entry(gen_random_uuid(),org,c,ri,hi,null,false,true,5000);exception when others then if sqlerrm not like '%会員%' then raise;end if;failed:=true;end;if not failed then raise exception 'Missing category accepted';end if;
+ failed:=false;begin perform public.register_winter_initial_entry(gen_random_uuid(),org,c,ri,hi,'member',false,true,1);exception when others then if sqlerrm not like '%料金が更新%' then raise;end if;failed:=true;end;if not failed then raise exception 'Wrong fee accepted';end if;
+ select id into other_c from public.competitions where event_id<>ev limit 1;
+ failed:=false;begin perform public.register_winter_initial_entry(gen_random_uuid(),org,other_c,ri,hi,'member',false,true,5000);exception when others then if sqlerrm not like '%Winterの競技%' then raise;end if;failed:=true;end;if not failed then raise exception 'Other event accepted';end if;
+ if payment_hash<>(select md5(coalesce(string_agg(row_to_json(p)::text,'' order by p.organization_key),'')) from public.settlement_prepayments p) then raise exception 'Payment changed';end if;
+ if autumn_hash<>(select md5(coalesce(string_agg(row_to_json(e)::text,'' order by e.id),'')) from public.entries e where event_id<>ev) then raise exception 'Other event changed';end if;
+ perform set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000001","app_metadata":{"role":"user"}}',true);
+ if exists(select 1 from public.fhs_winter_initial_entries) then raise exception 'Nonadmin ledger read';end if;
+ failed:=false;begin perform public.register_winter_initial_entry(i1,org,c,ri,hi,'member',false,true,5000);exception when others then if sqlerrm not like '%本部ログイン%' then raise;end if;failed:=true;end;if not failed then raise exception 'Nonadmin retry';end if;
+end;$$;
+rollback;
+select 'PASS: recovery dummy 2 rows; existing roster/participant/entry RPCs; readback, retry, duplicate, correction, affiliation/category/fee/event/admin guards; payment and other event hashes unchanged; all fixtures rolled back' as result;

@@ -5,6 +5,8 @@ import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { WINTER_EVENT_ID, WINTER_EVENT_NAME } from '@/lib/winter-event'
 import { IMPORT_HEADERS, IMPORT_SAMPLE, readImportDraft, reviewWinterImport, type ImportSource } from '@/lib/winter-import-review'
 
+import { WinterImportRegistration } from '@/components/winter-import-registration'
+
 const empty:ImportSource={roster:'',entries:'',accounts:''}
 const titles:Record<keyof ImportSource,string>={roster:'人馬名簿',entries:'正式出番表',accounts:'事前申込・入金状況'}
 const button='min-h-14 rounded-xl border-2 border-blue-800 px-5 py-3 text-xl font-bold disabled:opacity-40'
@@ -14,13 +16,14 @@ function download(text:string,name:string,type:string) {
 }
 
 export default function Page() {
-  const [source,setSource]=useState<ImportSource>(empty),[confirmed,setConfirmed]=useState(false),[message,setMessage]=useState(''),[sample,setSample]=useState(false),[busy,setBusy]=useState(false)
+  const [source,setSource]=useState<ImportSource>(empty),[confirmed,setConfirmed]=useState(false),[message,setMessage]=useState(''),[sample,setSample]=useState(false),[reading,setBusy]=useState(false),[registrationBusy,setRegistrationBusy]=useState(false)
+  const busy=reading||registrationBusy
   const lock=useRef(false),revision=useRef(0)
   const report=useMemo(()=>reviewWinterImport(source),[source])
   function replace(next:ImportSource,isSample=false){revision.current++;setSource(next);setSample(isSample);setConfirmed(isSample);setMessage('')}
   function edit(kind:keyof ImportSource,text:string){revision.current++;setSource(value=>({...value,[kind]:text}));setConfirmed(false);setSample(false);setMessage('')}
   async function file(event:ChangeEvent<HTMLInputElement>,kind:keyof ImportSource|'draft') {
-    const selected=event.target.files?.[0];event.target.value='';if(!selected||lock.current)return
+    const selected=event.target.files?.[0];event.target.value='';if(!selected||lock.current||registrationBusy)return
     lock.current=true;setBusy(true);setMessage('');const generation=revision.current
     try {
       if(selected.size>8_000_000)throw new Error('8MB以内の資料を選んでください')
@@ -42,9 +45,9 @@ export default function Page() {
   return <main className="mx-auto min-h-dvh max-w-6xl space-y-6 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
     <h2 className="text-3xl font-bold">名簿・出番表・精算の読み込み準備</h2>
-    <Link className={button+' inline-block'} href="/winter/admin">大会本部に戻る</Link>
-    <div className="rounded-xl bg-blue-100 p-5 text-xl">締切前の確認用です。Excelの表を見出しごと貼り付けるか、雛形に合わせたCSV UTF-8を選んでください。入力資料はこの画面内で処理します。正式な登録・反映はまだ行いません。保存した準備ファイルから再開できます。</div>
-    <p className="text-lg">元の申込書Excelをそのまま一括登録する機能は、実際の記入済み資料を確認してから接続します。識別番号は先頭の0を残すため、Excelでは文字列で扱ってください。団体・選手・馬はそれぞれ重複しない番号で結び付けます。</p>
+    <Link className={button+' inline-block'} href="/winter/admin#winter-admin-tools">事前登録に戻る</Link>
+    <div className="rounded-xl bg-blue-100 p-5 text-xl">締切前の確認用です。Excelの表を見出しごと貼り付けるか、雛形に合わせたCSV UTF-8を選んでください。入力資料はこの画面内で処理します。読込だけでは登録しません。画面下の照合と確認一覧で管理者が確定すると、既存の事前登録処理へ接続します。</div>
+    <p className="text-lg">今回の対応は3種類のCSV／TSV雛形です。元の申込書.xlsx・PDFの直接読込は未対応です。識別番号は先頭の0を残すため、Excelでは文字列で扱ってください。団体・選手・馬はそれぞれ重複しない番号で結び付けます。</p>
     <div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={()=>{if(!Object.values(source).some(Boolean)||window.confirm('現在の準備内容を確認用サンプルに置き換えますか？'))replace({...IMPORT_SAMPLE},true)}}>2人馬の確認用サンプルを入れる</button><label className={button}>保存した準備ファイルを開く<input className="mt-2 block max-w-full text-base" disabled={busy} type="file" accept=".json" onChange={e=>void file(e,'draft')} /></label></div>
     {sample&&<p role="status" className="rounded-xl bg-amber-100 p-4 text-xl font-bold">確認用サンプルです。実際の参加者や請求ではありません。</p>}
     {(Object.keys(titles) as (keyof ImportSource)[]).map(kind=><section key={kind} className="space-y-3 rounded-xl border-2 bg-white p-5">
@@ -56,7 +59,7 @@ export default function Page() {
       <div className="flex flex-wrap items-center gap-3"><button className={button} onClick={()=>download('\uFEFF'+IMPORT_HEADERS[kind].join(',')+'\r\n',`Winter-${kind}-雛形.csv`,'text/csv;charset=utf-8')}>CSV雛形を保存</button><label className="text-lg">CSV・タブ区切りファイル<input className="mt-2 block max-w-full" disabled={busy} type="file" accept=".csv,.tsv,.txt" onChange={e=>void file(e,kind)} /></label></div>
       <label className="block text-lg">{titles[kind]}の表を貼り付け<textarea className="mt-2 min-h-48 w-full rounded-xl border-2 p-3 text-base" value={source[kind]} maxLength={2_000_000} spellCheck={false} disabled={busy} onChange={e=>edit(kind,e.target.value)} /></label>
     </section>)}
-    <label className="flex min-h-16 items-center gap-4 rounded-xl border-2 bg-white p-4 text-xl"><input className="size-7" type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} />この資料は2026 Winterのものです（サンプルの場合は確認用です）</label>
+    <label className="flex min-h-16 items-center gap-4 rounded-xl border-2 bg-white p-4 text-xl"><input className="size-7" type="checkbox" disabled={busy} checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} />この資料は2026 Winterのものです（サンプルの場合は確認用です）</label>
     <section aria-live="polite" className="space-y-4 rounded-xl border-2 bg-white p-5">
       <h3 className="text-2xl font-bold">確認結果</h3>
       <p className="text-xl">団体 {report.people.filter(p=>p.kind==='団体').length} ／ 選手 {report.people.filter(p=>p.kind==='選手').length} ／ 馬 {report.people.filter(p=>p.kind==='馬').length} ／ 出番 {report.entries.length}</p>
@@ -70,6 +73,7 @@ export default function Page() {
       <button className={button+' bg-blue-800 text-white'} disabled={!confirmed||busy||!Object.values(source).some(Boolean)} onClick={save}>準備内容をファイルに保存</button>
       <p>修正途中でも保存できます。再度開くと確認をやり直します。この画面を閉じる前に保存してください。</p>
     </section>
+    <fieldset disabled={reading}><WinterImportRegistration source={source} confirmed={confirmed} onRestore={value=>replace(value)} onBusy={setRegistrationBusy}/></fieldset>
     {message&&<p role="status" className="rounded-xl bg-blue-100 p-4 text-xl">{message}</p>}
   </main>
 }
