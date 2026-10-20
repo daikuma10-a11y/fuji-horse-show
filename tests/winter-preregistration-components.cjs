@@ -65,17 +65,29 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
  assert.equal(workspace.props.selected,'entries')
  find(workspace.props.entries,stub('WinterInitialEntryRegistration')).props.onChooseParticipants();tree=render()
  assert.equal(find(tree,MasterPreRegistration).props.selected,'roster')
- assert.ok(text(MasterPreRegistration(find(tree,MasterPreRegistration).props)).includes('Excel申込書（.xlsx）の直接取込は未対応'))
+ assert.ok(find(workspace.props.application,stub('WinterApplicationImport')))
+ workspace.props.onSelect('application');tree=render();workspace=find(tree,MasterPreRegistration)
+ assert.equal(workspace.props.selected,'application')
+ assert.equal(nodes(MasterPreRegistration(workspace.props)).find(n=>n.props?.id==='pre-registration-application').props.hidden,false)
+ assert.ok(text(MasterPreRegistration(workspace.props)).includes('申込書の読み込み'))
  assert.equal(nodes(tree).filter(n=>n.props?.href==='/winter/prepare').length,1,'Only one import link exists')
  assert.equal(nodes(workspace.props.children).filter(n=>n.props?.href==='/winter/prepare').length,1)
  restart('#winter-initial-registration');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'entries')
  restart('#winter-admin-tools');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'roster')
+ restart('#winter-application-import');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'application')
  const props={selected:'roster',onSelect(){},roster:React.createElement('input',{defaultValue:'dummy-roster-draft'}),entries:React.createElement('input',{defaultValue:'dummy-entry-draft'})}
  for(const selected of ['roster','entries']){
   const markup=renderToStaticMarkup(React.createElement(MasterPreRegistration,{...props,selected}))
   assert.ok(markup.includes('dummy-roster-draft')&&markup.includes('dummy-entry-draft'),'Both forms remain in the tree')
   assert.equal((markup.match(/aria-pressed="true"/g)||[]).length,1)
   assert.equal((markup.match(/hidden=""/g)||[]).length,1)
+  assert.ok(!markup.includes('pre-registration-application'),'Existing event adapters without Excel retain two sections')
+ }
+ for(const selected of ['roster','entries','application']){
+  const markup=renderToStaticMarkup(React.createElement(MasterPreRegistration,{...props,selected,application:React.createElement('input',{defaultValue:'dummy-application-draft'})}))
+  assert.equal((markup.match(/aria-pressed="true"/g)||[]).length,1)
+  assert.equal((markup.match(/hidden=""/g)||[]).length,2)
+  assert.ok(markup.includes('dummy-application-draft')&&markup.includes('dummy-roster-draft')&&markup.includes('dummy-entry-draft'))
  }
  assert.equal(writes,0)
  h.close();Module._load=originalLoad

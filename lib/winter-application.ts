@@ -4,10 +4,8 @@ import {WINTER_EVENT_ID} from './winter-event'
 import {WINTER_HORSE_REGISTRATION_FEE} from './winter-horse-registration'
 import type {SharedRoster} from './shared-roster'
 
-export type Origin={sheet:string;cell:string;value:string;formula?:string}
-export type ApplicationPerson={key:string;kind:'rider'|'horse';name:string;reading:string;jef:string;grade:string;checked:boolean;sportsMember:string;instructorMember:string;qualified:boolean;origin:Origin}
-export type ApplicationEntry={key:string;competition:string;rider:string;horse:string;op:boolean;rawRider:string;rawHorse:string;origin:Origin}
-export type Application={fileName:string;digest:string;eventId:string;club:string;clubOrigin:Origin;people:ApplicationPerson[];entries:ApplicationEntry[];amounts:{horse:string;jump:string;dressage:string;total:string};amountOrigins:Record<string,Origin>;issues:string[];sheets:string[]}
+import type {Origin,Application,ApplicationPerson} from './master/application'
+export type {Origin,Application,ApplicationPerson,ApplicationEntry} from './master/application'
 export const normalizeApplicationName=(s:string)=>s.normalize('NFKC').replace(/[\s　]/g,'').toLocaleLowerCase('ja')
 const norm=normalizeApplicationName
 const money=(s:string)=>/^\d+$/.test(s)&&Number.isSafeInteger(Number(s))?Number(s):null

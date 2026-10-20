@@ -19,6 +19,7 @@ import {WinterSettlementPanel} from '@/components/winter-settlement-panel'
 import {WinterRequestPanel} from '@/components/winter-request-panel'
 import {WinterAdminNavigation,winterAdminTabs,type WinterAdminTab} from '@/components/winter-admin-navigation'
 import {MasterPreRegistration,type PreRegistrationSection} from '@/components/master/pre-registration'
+import {WinterApplicationImport} from '@/components/winter-application-import'
 const sessionKey=winterStorageKey('admin-session')
 const field='mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-background px-4 text-lg'
 const button='inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-xl font-semibold'
@@ -45,6 +46,7 @@ export function WinterAdminDashboard(){
   let active=true
   if(window.location.hash==='#winter-admin-tools'){setTab('roster');setVisited(['requests','roster'])}
   if(window.location.hash==='#winter-initial-registration'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('entries')}
+  if(window.location.hash==='#winter-application-import'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('application')}
   if(window.location.hash==='#winter-meeting'){setTab('meeting');setVisited(['requests','meeting'])}
   const raw=sessionStorage.getItem(sessionKey)
   if(!raw){setChecking(false);return}
@@ -82,7 +84,8 @@ export function WinterAdminDashboard(){
  {t.id==='roster'?<MasterPreRegistration selected={registrationSection} onSelect={setRegistrationSection}
  roster={<><p className="text-lg">団体を選ぶ → 参加する選手と馬にチェック →「参加チェックを保存」の順です。見つからない人馬は名簿全体を検索し、新規の場合は「新しい選手・馬を登録」を使います。</p><SharedRosterManager session={session} onParticipantsSaved={refresh}/>{data&&<WinterMasterRegistration session={session} organizations={data.organizations} onRegistered={refresh}/>}<button type="button" className={button} onClick={()=>openRegistration('entries')}>次へ：出番表の登録</button></>}
  entries={<div id="winter-initial-registration" className="space-y-4"><p className="text-lg">馬の所属団体 → 馬 → 競技・騎乗する選手を選び、内容と料金を確認して登録します。</p>{data?<WinterInitialEntryRegistration data={data} session={session} onChanged={refresh} onChooseParticipants={()=>openRegistration('roster')}/>:<p role="status">Winterのデータを読み込んでいます…</p>}<button type="button" className={button} onClick={()=>select('startlist')}>登録した出番表を確認</button></div>}
- ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">ファイルからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVに対応しています。Excel申込書（.xlsx）の直接取込は未対応です。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
+ application={<WinterApplicationImport session={session} onSession={updateSession}/>}
+ ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">CSV・TSVからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVは、これまでの取込準備画面を使えます。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
  t.id==='meeting'?<WinterMeetingPanel session={session} onSession={updateSession} onChanged={refresh} onStartlist={()=>select('startlist')}/>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
