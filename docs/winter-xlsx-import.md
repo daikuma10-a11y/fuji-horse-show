@@ -1,6 +1,8 @@
-# Winter Excel import — checkpoint 2 (not released)
+# Winter Excel import — checkpoint 3 (not released)
 
 Checkpoint 1 (`3923b25`) is preserved and reused. Checkpoint 2 connects its extraction/review helpers to Winter admin → 事前登録 → 申込書の読み込み. The new screen supports local Excel selection/drop, an explicit read action, source/edited value comparison, roster candidate selection, fee review, revision comparison and review-only JSON/local checkpoints. Database registration is deliberately not connected at this small checkpoint. No participant registration or payment operation has been performed. The existing CSV/TSV registration flow remains unchanged.
+
+Checkpoint 3 adds the registration runner, result checkpoint codec and adapters for the existing Winter services. The screen still does not call that runner: explicit confirmation, result display, unknown-person resolution and registration-result file controls are the next checkpoint. The runner has been tested only against synthetic in-memory data and service stubs, never the live database.
 
 ## Supported source
 
@@ -18,13 +20,20 @@ All matching entry sheets are inspected regardless of sheet name, visibility or 
 
 JEF verification, membership and instructor qualifications require explicit administrator confirmation. Planned transfer dates do not establish payment. Confirmed paid amount is a separate input, initially blank. Fees reuse `reviewWinterImport`, `winterEntryPrice` and `WINTER_HORSE_REGISTRATION_FEE`.
 
+## Registration core implemented in checkpoint 3
+
+- `winter-application-services` verifies the existing admin session before each operation and calls existing roster, participant and initial-entry functions. The existing Winter identity bridge is read by UUID with authenticated, paginated GETs; no name-to-event-ID inference or new database object is introduced.
+- `winter-application-registration` rechecks source/fees/event/affiliation before writes, records an unknown outcome before each request, confirms success from authoritative reads, and reuses the existing one-entry runner and retry IDs.
+- Existing selected people require matching names/JEF and the application-club affiliation. No existing identity update or affiliation replacement is called. A new person with any existing candidate is blocked. If a new-person response is lost before its ID is recorded, execution stops without resending; an administrator must explicitly match the saved identity, including its reading and affiliation. If no saved identity can be established, this module does not infer that it is safe to resend.
+- Participant publication receives the union of current participants and selected people, with the existing expected-ID check. Existing event names/JEF/snapshots are checked first because that RPC can refresh event records from snapshots; differences block publication rather than being overwritten.
+- A versioned `winter-application-registration` checkpoint freezes the original/edited review, reference, identity choices, original invoice and separate confirmed paid amount. It records people, participation and per-entry outcomes. Stale-save and rollback checks preserve previous results. No payment write is called.
+
 ## Remaining implementation
 
-- Connect the selected database identity and safe new-person registration through existing roster functions.
-- Preserve a versioned checkpoint before every save; unknown outcome must stop new-person resubmission until checked against actual roster.
-- Connect participant union and existing one-entry-at-a-time import registration, retaining retry IDs.
-- Extend revision safeguards to partial database registration. Current revisions are comparison-only and never replace the active review.
-- Registration orchestration tests and real-screen checks.
+- Connect the core to explicit admin confirmation and display authoritative save results, stop/resume controls, unknown-person resolution and registration-result JSON import/export in the shared screen.
+- Prevent concurrent registration actions in the screen and coordinate tabs. The checkpoint compare-and-write guard alone is not an atomic cross-tab/cross-device lock. Existing new-person RPCs have no client retry ID or name uniqueness constraint; do not claim safety for simultaneous new-person creation by independent administrators/devices.
+- Connect frozen review/revision safeguards to partial-registration UI. Current revisions are comparison-only and never replace the active review; the registration codec rejects altered source, mappings or amounts on resume.
+- Real-screen and real-device checks after an authorized delivery path is available. No new-code push, PR or deployment is authorized at this point.
 
 ## Review operations and persistence
 
@@ -42,6 +51,8 @@ Shared presentation lives in `components/master`; neutral types live in `lib/mas
 
 Fixtures are entirely synthetic and contain no original workbook bytes, real participants, contact details or bank instructions. Tests cover extraction (`winter-application.cjs`), bounded/versioned JSON and stale-save detection (`winter-application-draft.cjs`), review interactions using component mocks (`winter-application-components.cjs`), and shared two/three-section compatibility plus signed-out access (`winter-preregistration-components.cjs`). Component mocks are not real browser/DB evidence. A standalone TypeScript check is necessary because the existing Next configuration skips build-time type validation.
 
-Database saving, real-device downloads, actual browser controls, real authentication/roster reads and the complete Excel-to-registration flow remain unverified. No management tests, dummy database insertion, payment writes, schema/permission changes or Autumn deployment are part of this checkpoint.
+Checkpoint 3 tests (`winter-application-registration.cjs`, `winter-application-services.cjs`, `winter-roster-bindings.cjs`) cover normal registration, existing identity mapping, reimport without a second charge, losses of responses at all three save stages, explicit resolution of an unknown new person, stop/resume between people and between entries, preservation of unrelated participant/entry/fee history, fee/category/affiliation/event/auth/storage failures, frozen checkpoints and bridge pagination/validation. Relevant existing shared-roster loading/refresh and import-registration tests were also run. All use synthetic data or stubs, not real database state. Standalone TypeScript and Next.js build passed; no full or management suite was repeated.
+
+Actual database saving, real-device downloads, actual browser controls, real authentication/roster reads, concurrent operators and the complete Excel-to-registration screen flow remain unverified. No management tests, dummy database insertion, payment writes, schema/permission changes or Autumn deployment are part of this checkpoint.
 
 Automatic Library saving remains blocked by the earlier `hosted apps tools/list` HTTP 403. It has not been retried. The organizer approved temporary manual preservation: produce and independently verify a recovery archive, provide its bytes/hash/base commit, and stop additional implementation until the organizer confirms downloading it.
