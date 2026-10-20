@@ -45,7 +45,7 @@ export default function Page() {
   return <main className="mx-auto min-h-dvh max-w-6xl space-y-6 bg-slate-50 p-5 text-slate-900">
     <h1 className="text-3xl font-bold">{WINTER_EVENT_NAME}</h1>
     <h2 className="text-3xl font-bold">名簿・出番表・精算の読み込み準備</h2>
-    <Link className={button+' inline-block'} href="/winter/admin">大会本部に戻る</Link>
+    <Link className={button+' inline-block'} href="/winter/admin#winter-admin-tools">事前登録に戻る</Link>
     <div className="rounded-xl bg-blue-100 p-5 text-xl">締切前の確認用です。Excelの表を見出しごと貼り付けるか、雛形に合わせたCSV UTF-8を選んでください。入力資料はこの画面内で処理します。読込だけでは登録しません。画面下の照合と確認一覧で管理者が確定すると、既存の事前登録処理へ接続します。</div>
     <p className="text-lg">今回の対応は3種類のCSV／TSV雛形です。元の申込書.xlsx・PDFの直接読込は未対応です。識別番号は先頭の0を残すため、Excelでは文字列で扱ってください。団体・選手・馬はそれぞれ重複しない番号で結び付けます。</p>
     <div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={()=>{if(!Object.values(source).some(Boolean)||window.confirm('現在の準備内容を確認用サンプルに置き換えますか？'))replace({...IMPORT_SAMPLE},true)}}>2人馬の確認用サンプルを入れる</button><label className={button}>保存した準備ファイルを開く<input className="mt-2 block max-w-full text-base" disabled={busy} type="file" accept=".json" onChange={e=>void file(e,'draft')} /></label></div>
