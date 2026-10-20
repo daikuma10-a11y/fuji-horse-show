@@ -291,3 +291,8 @@ Winter専用のタブ管理画面に変更。Autumnと同じ順番（申請一�
 - 残確認：ローカルブラウザーが利用可能になったら上記UI試験を実行し、チェック・入力・確認一覧の往復保持と取込画面からの復帰を確認する。公開反映後の実管理画面、実端末・実印刷は別途未検証。
 
 保全対象は本記録を含む新コミットと、8b62ced以降の既存未pushコミット。差分bundle・変更ソースのhash manifest・復元手順をリポジトリ外に作成し、保存実IDから再取得して別領域への復元を確認する。保存実ID・hash・復元結果は完了報告で示す。ローカルcommitだけを継続保存完了とは扱わない。
+
+### 2026-10-20 16:16 JSTの公開画面反映依頼・再停止
+利用者の「こちらで確認できるように公開中の管理画面に反映してください」を受け、実装版 `4886f434da2ea1350d79fd37e1e99d5d01b51f68` の既存Winter Previewへの通常pushを1回実行した。送信前に公開GitHubリポジトリ `daikuma10-a11y/fuji-horse-show`、対象 `prep/winter-2026`、Vercel既存プロジェクト `fhs_fix` と同ブランチのPreview aliasの対応を確認。GitHub/Previewとも8b62ced、予期しないリモート変更なし。未公開5コミット・24ファイル版・最終17変更ファイルを保全済みmanifestと照合し、既存公開前点検を再利用、秘密情報パターン・実資料形式・無関係なファイルの混入なしを確認。
+`git push origin 4886f434da2ea1350d79fd37e1e99d5d01b51f68:refs/heads/prep/winter-2026` は終了コード128、`could not read Username for 'https://github.com': No such device or address`。Git送信用認証の取得不能であり、自動承認審査の拒否ではない。GitHub connectorの読取・権限確認が成功しても、通常git pushに認証が渡ることを意味しない。別認証・別送信経路への切替は行わず再停止した。
+失敗後の再照会でもGitHubとVercel Previewは8b62cedのまま、READY。main・Autumn本番・権限・公開範囲・DBは変更なし。実装4886f43は未公開で、公開画面の新UI確認は未実施。通常push用認証が利用可能になることが反映再開の前提。アプリコードを変更せず、今回の停止記録を含めて再保全する。
