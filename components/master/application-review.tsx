@@ -4,7 +4,9 @@ import type {Application,ApplicationPerson,ApplicationEntry,ApplicationDifferenc
 import type {ReactNode} from 'react'
 
 const field='mt-1 min-h-12 w-full rounded-lg border-2 border-slate-400 bg-white p-2 text-base text-slate-900'
-const button='min-h-14 rounded-xl border-2 border-blue-800 bg-white px-4 py-3 text-lg font-bold text-blue-900 disabled:opacity-40'
+const buttonBase='min-h-14 rounded-xl border-2 border-blue-800 px-4 py-3 text-lg font-bold disabled:opacity-40'
+const button=buttonBase+' bg-white text-blue-900'
+const primaryButton=buttonBase+' bg-blue-800 text-white'
 const cell='border border-slate-300 p-3 align-top'
 const yen=(v:number|null)=>v===null?'未確認':`${v.toLocaleString('ja-JP')}円`
 type AmountRow={key:keyof Application['amounts'];label:string;original:number|null;calculated:number|null;reason:string}
@@ -29,7 +31,7 @@ export function MasterApplicationReview(p:{
   <div className="space-y-3 rounded-xl border-2 border-dashed border-blue-700 p-5" onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='copy'}} onDrop={e=>{e.preventDefault();if(!p.busy)p.onFiles(e.dataTransfer.files)}}>
    <label className="block text-lg font-bold">Excelファイルを選択、またはここへドラッグして置く<input className={field} type="file" accept=".xlsx" disabled={p.busy} onChange={e=>{p.onFiles(e.target.files);e.target.value=''}}/></label>
    <p>選択中：{p.fileName||'未選択'}</p>
-   <button type="button" className={button+' bg-blue-800 !text-white'} disabled={p.busy||!p.fileName} onClick={p.onRead}>{p.busy?'処理中…':app?'選択したExcelを読み込み・差分を確認':'読み込みを開始'}</button>
+   <button type="button" className={primaryButton} disabled={p.busy||!p.fileName} onClick={p.onRead}>{p.busy?'処理中…':app?'選択したExcelを読み込み・差分を確認':'読み込みを開始'}</button>
   </div>
   <p>{p.formatDescription} .xls・PDF・マクロ・外部参照は対象外です。数式はExcelで保存された計算結果を使います。</p>
   <label className="block text-lg font-semibold">確認再開JSONを開く<input type="file" accept=".json" className={field} disabled={p.busy||p.frozen} onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)p.onRestoreFile(f)}}/></label>
