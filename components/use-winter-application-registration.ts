@@ -1,0 +1,139 @@
+'use client'
+
+import {useEffect,useRef,useState} from 'react'
+import type {ApplicationRegistrationPanelProps} from './master/application-registration'
+import {applicationDifferences,applicationReview,rosterCandidates} from '@/lib/winter-application'
+import {readApplicationDraft,type ApplicationDraft} from '@/lib/winter-application-draft'
+import {applicationRegistrationDifferences,applicationRegistrationKey,createApplicationRegistration,parseApplicationRegistration,persistApplicationRegistration,readApplicationRegistration,reviewApplicationRegistration,resolveUnknownApplicationPerson,runApplicationRegistration,serializeApplicationRegistration,type ApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
+import {winterApplicationServices} from '@/lib/winter-application-services'
+import {winterStorageKey} from '@/lib/winter-event'
+import type {AdminSession} from '@/lib/supabase-rest'
+
+type Plan=Awaited<ReturnType<typeof reviewApplicationRegistration>>
+const copy=<T,>(v:T):T=>structuredClone(v)
+// In-progress edits may be invalid; invalidate confirmation without throwing during render.
+function signature(d:ApplicationDraft){try{return JSON.stringify(readApplicationDraft(d))}catch{return null}}
+const status=(s:string)=>s==='registered'?'登録済み':s==='unknown'?'結果不明':'未登録'
+function download(value:ApplicationRegistration){
+ const url=URL.createObjectURL(new Blob([serializeApplicationRegistration(value)],{type:'application/json'}))
+ const a=document.createElement('a');a.href=url;a.download='Winter-Excel登録再開.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+}
+async function exclusive(task:()=>Promise<void>){
+ if(typeof navigator==='undefined'||!navigator.locks)throw new Error('このブラウザーでは同時登録の防止を利用できません。登録を停止します。再開JSONを保持してください。')
+ await navigator.locks.request(winterStorageKey('application-registration-write'),{mode:'exclusive',ifAvailable:true},async lock=>{
+  if(!lock)throw new Error('別のタブでExcel登録を処理中です。その処理を確認してから再度照合してください。')
+  await task()
+ })
+}
+/** Winter operations only; presentation and controls stay in the shared master. */
+export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;session:AdminSession;onSession:(s:AdminSession)=>void;isReviewBusy:()=>boolean;canReplaceReview:()=>boolean;onAdopt:(draft:ApplicationDraft)=>void;onClear:()=>void}){
+ const [work,setWork]=useState<ApplicationRegistration|null>(null),[preview,setPreview]=useState<{work:ApplicationRegistration;plan:Plan}|null>(null)
+ const [snapshot,setSnapshot]=useState<ApplicationSnapshot|null>(null),[busy,setBusy]=useState(false),[running,setRunning]=useState(false)
+ const [accepted,setAccepted]=useState(false),[singleOperator,setSingleOperator]=useState(false),[choices,setChoices]=useState<Record<string,string>>({})
+ const [message,setMessage]=useState(''),[error,setError]=useState('')
+ const current=useRef<ApplicationRegistration|null>(null),expected=useRef<string|null>(null),lock=useRef(false),stop=useRef(false)
+ const alive=useRef(true)
+ const services=()=>winterApplicationServices(p.session,p.onSession)
+ const activeReview=work?.review??p.draft
+ const shown=preview&&activeReview&&signature(preview.work.review)===signature(activeReview)?preview:null
+ useEffect(()=>{if(!current.current){setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
+ useEffect(()=>{alive.current=true;return()=>{alive.current=false;stop.current=true}},[])
+ function remember(value:ApplicationRegistration){const clean=readApplicationRegistration(value);current.current=clean;setWork(clean);return clean}
+ function persist(value:ApplicationRegistration){
+  // Retain an ID returned by the server even if the following local write fails.
+  const clean=remember(value)
+  expected.current=persistApplicationRegistration(localStorage,clean,expected.current)
+ }
+ function local(value:ApplicationRegistration){return localStorage.getItem(applicationRegistrationKey(value.review.reference))}
+ function frozenMatch(saved:ApplicationRegistration,next:ApplicationRegistration){
+  if(signature(saved.review)===signature(next.review))return
+  const differences=applicationDifferences(saved.review.edited,next.review.edited).map(d=>`${d.location}：保存「${d.before}」／今回「${d.after}」`)
+  if(saved.review.paid!==next.review.paid)differences.push(`確認済み入金額：保存 ${saved.review.paid}／今回 ${next.review.paid}`)
+  for(const person of saved.review.edited.people)if(saved.review.choices[person.key]!==next.review.choices[person.key])differences.push(`${person.name}の対応：保存 ${saved.review.choices[person.key]}／今回 ${next.review.choices[person.key]??'未選択'}`)
+  if(saved.review.original.digest!==next.review.original.digest)differences.push('原本ファイルの内容が保存時と異なります')
+  throw new Error('同じ資料番号の確定時の原本・対応・金額と異なります。登録途中を開き、訂正版との差分を確認してください。\n'+differences.join('\n'))
+ }
+ function candidate(){
+  if(current.current){
+   if(local(current.current)!==expected.current)throw new Error('この端末の登録記録が別の画面で変わりました。現在の登録再開JSONを保存し、上書きせず確認してください。')
+   return readApplicationRegistration(current.current)
+  }
+  if(!p.draft)throw new Error('Excelまたは登録再開JSONを開いてください')
+  const next=readApplicationRegistration(createApplicationRegistration(p.draft)),raw=local(next)
+  if(raw){const saved=parseApplicationRegistration(raw);frozenMatch(saved,next);expected.current=raw;remember(saved);p.onAdopt(saved.review);return saved}
+  expected.current=null;return next
+ }
+ async function action(task:()=>Promise<void>|void){
+  if(lock.current||p.isReviewBusy())return
+  lock.current=true;setBusy(true);setError('');setMessage('')
+  try{await task()}catch(e){setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setError((e instanceof Error?e.message:'処理を完了できません')+(current.current?'\n現在の登録再開JSONを保存してください。再送する前に既存登録を照合してください。':''))}
+  finally{lock.current=false;setBusy(false);setRunning(false)}
+ }
+ async function inspect(value:ApplicationRegistration,service=services()){
+  const s=await service.load(),plan=await reviewApplicationRegistration(value,s)
+  setSnapshot(s);setPreview({work:copy(value),plan});setChoices({});return plan
+ }
+ function restore(value:ApplicationRegistration){
+  const clean=readApplicationRegistration(value),raw=local(clean)
+  // A newer exported result may retain an ID that could not be written locally.
+  // Accept only forward-compatible results, retaining the raw local value until explicit save.
+  if(raw&&applicationRegistrationDifferences(parseApplicationRegistration(raw),clean).length)throw new Error('この端末の登録再開記録と原本・対応・保存結果が異なります。上書きせず「この資料番号の登録途中を開く」で確認してください。')
+  if(current.current&&applicationRegistrationDifferences(current.current,clean).length)throw new Error('現在の保存結果を置き換えられません。最新の登録再開JSONを保存してから確認してください。')
+  if(!p.canReplaceReview())return
+  expected.current=raw;remember(clean);p.onAdopt(clean.review);setPreview(null);setSnapshot(null);setChoices({});setAccepted(false);setSingleOperator(false)
+  setMessage('登録再開記録を開きました。まだDB登録は行っていません。「既存登録を照合」で現在の結果を確認してください。')
+ }
+ const model=shown?.work??work,plan=shown?.plan??null,review=model?.review??p.draft
+ const people=(model?.review.edited.people??[]).map(person=>{
+  const recorded=model!.people[person.key],row=plan?.people.find(r=>r.key===person.key)
+  const options=snapshot?rosterCandidates(person,snapshot.roster,model!.review.edited.club).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs})):[]
+  return {key:person.key,label:`${person.kind==='rider'?'選手':'馬'} ${person.name}`,id:row?.entityId??recorded.entityId,state:row?.issues.length?'要確認':row?status(row.state):`端末記録：${status(recorded.state)}（未再照合）`,issues:row?.issues??[],resolve:!!work&&recorded.state==='unknown'&&!recorded.entityId,candidates:options,selected:choices[person.key]??''}
+ })
+ const appReview=review?applicationReview(review.edited,review.paid,review.accountChecked):null
+ const savedStates=Object.values(work?.entries?.states??{}),registered=savedStates.filter(s=>s==='registered').length,unknown=savedStates.filter(s=>s==='unknown').length
+ const panel:ApplicationRegistrationPanelProps={
+  busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready,canReview:!!activeReview,canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
+  reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
+  entries:(model?.review.edited.entries??[]).map((entry,i)=>{const row=plan?.entries?.rows.find(r=>r.index===i);return {key:entry.key,label:`第${entry.competition}競技 ／ ${review!.edited.people.find(p=>p.key===entry.rider)?.name??'選手未対応'} ／ ${review!.edited.people.find(p=>p.key===entry.horse)?.name??'馬未対応'}${entry.op?' ／ OP':''}`,fee:row?.fee??appReview?.report.entries[i]?.price??null,id:row?.registeredId??row?.id,state:row?.differences.length?'要確認':row?status(row.state):work?.entries?'未再照合（端末の途中記録あり）':'参加登録後に出番を照合',issues:row?.differences??[]}}),
+  onReview:()=>void action(async()=>{
+   setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false)
+   const next=candidate(),result=await inspect(next)
+   setMessage(result.ready?'照合が終わりました。確認一覧を見て、確定する場合は下の確認欄にチェックしてください。':'差分・未確認の項目があります。登録は行っていません。')
+  }),
+  onAccepted:v=>{if(!lock.current)setAccepted(v)},onSingleOperator:v=>{if(!lock.current)setSingleOperator(v)},
+  onRun:()=>void action(async()=>{
+   if(!shown?.plan.ready||!accepted||!singleOperator)throw new Error('最新の照合結果と、同時登録しないことを確認してください')
+   setAccepted(false);setSingleOperator(false)
+   await exclusive(async()=>{
+    const next=candidate();frozenMatch(shown.work,next)
+    if(local(next)!==expected.current)throw new Error('登録記録が変わりました。上書きせず照合してください')
+    const service=services(),fresh=await reviewApplicationRegistration(next,await service.load())
+    if(!fresh.ready)throw new Error(fresh.issues.join('\n'))
+    if(!alive.current)throw new Error('画面が閉じられたため登録を開始しませんでした')
+    persist(next);p.onAdopt(next.review);setPreview(null);stop.current=false;setRunning(true)
+    const result=await runApplicationRegistration(next,{...service,persist,stop:()=>stop.current||!alive.current})
+    await inspect(result,service)
+    setMessage(stop.current?'停止しました。保存済みは保持しています。照合結果を確認して残りを再開できます。':'保存結果を読み直しました。登録済み・未登録・差分を一覧で確認してください。入金処理は行っていません。')
+   })
+  }),
+  onStop:()=>{stop.current=true;setMessage('停止を受け付けました。処理中の1件の結果確認後に停止します。')},
+  onChoice:(key,id)=>{if(!lock.current)setChoices(old=>({...old,[key]:id}))},
+  onResolve:key=>void action(async()=>{
+   if(!current.current||!choices[key])throw new Error('保存結果を照合する人馬を選択してください')
+   await exclusive(async()=>{
+    const value=candidate(),service=services(),next=await resolveUnknownApplicationPerson(value,key,choices[key],await service.load())
+    persist(next);setAccepted(false);setSingleOperator(false);await inspect(next,service)
+    setMessage('選択した既存人馬と照合し、再開記録を保存しました。新規登録・上書きは行っていません。照合結果を確認して再開してください。')
+   })
+  }),
+  onOpenSaved:()=>void action(()=>{const reference=current.current?.review.reference??p.draft?.reference;if(!reference)throw new Error('資料番号を入力してください');const raw=localStorage.getItem(applicationRegistrationKey(reference));if(!raw)throw new Error('この資料番号の登録途中は端末にありません');restore(parseApplicationRegistration(raw))}),
+  onRestoreFile:file=>void action(async()=>{if(file.size>8_000_000)throw new Error('登録再開ファイルは8MB以内です');restore(parseApplicationRegistration(new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer())))}),
+  onDownload:()=>void action(()=>{if(current.current){download(current.current);setMessage('登録再開JSONのダウンロードを開始しました。保存先で最新ファイルを確認してください。')}}),
+  onClose:()=>void action(()=>{
+   if(!current.current||!window.confirm('最新の登録再開JSONをダウンロードして、この申込書を閉じます。保存先の確認後に次の申込書を開いてください。端末の登録記録は残します。'))return
+   download(current.current);current.current=null;expected.current=null;setWork(null);setPreview(null);setSnapshot(null);setChoices({});setAccepted(false);setSingleOperator(false);p.onClear()
+   setMessage('登録再開JSONの保存先を確認してください。端末の登録記録も保持しています。')
+  }),
+ }
+ return {panel,busy,frozen:!!work,isBusy:()=>lock.current,isFrozen:()=>current.current!==null}
+}
