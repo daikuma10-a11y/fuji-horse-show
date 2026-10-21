@@ -13,7 +13,9 @@ export type ApplicationRegistrationPanelProps={
  onChoice:(key:string,id:string)=>void;onResolve:(key:string)=>void
  onOpenSaved:()=>void;onRestoreFile:(file:File)=>void;onDownload:()=>void;onClose:()=>void
 }
-const button='min-h-14 rounded-xl border-2 border-blue-800 bg-white px-4 py-3 text-lg font-bold text-blue-900 disabled:opacity-40'
+const buttonBase='min-h-14 rounded-xl border-2 border-blue-800 px-4 py-3 text-lg font-bold disabled:opacity-40'
+const button=buttonBase+' bg-white text-blue-900'
+const primaryButton=buttonBase+' bg-blue-800 text-white'
 const cell='border border-slate-300 p-3 align-top'
 export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProps){
  return <section aria-label="申込書の確定登録と再開" className="space-y-4 rounded-xl border-2 border-blue-800 p-5">
@@ -47,7 +49,7 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
     <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・所属・資格・料金と照合結果を確認しました。</label>
     <label className="flex gap-3"><input type="checkbox" checked={p.singleOperator} disabled={p.busy||!p.ready} onChange={e=>p.onSingleOperator(e.target.checked)}/>この申込はこの画面だけで登録し、人馬登録など別の画面・端末・管理者と同時に登録しません。</label>
     <p>別画面・別端末・別ブラウザーとの同時操作は自動では防げません。途中再開では保存済みを照合し、未登録の分だけを処理します。</p>
-    <button type="button" className={button+' bg-blue-800 !text-white'} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>管理者として確定・1件ずつ登録／再開</button>
+    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>管理者として確定・1件ずつ登録／再開</button>
    </>}
   </>}
   {p.running&&<button type="button" className={button+' border-red-800 !text-red-900'} onClick={p.onStop}>処理中の1件を確認して停止</button>}
