@@ -32,7 +32,7 @@ export function MasterApplicationReview(p:{
  busy:boolean;message:string;error:string;fileName:string;eventName:string;formatDescription:string
  frozen?:boolean;registration?:ReactNode;stage?:number;todos?:ApplicationTodo[];clubSummary?:ApplicationClubSummary|null
  onReview?:()=>void;onChanges?:()=>void;onUseRevision?:()=>void
- intent?:'addition'|'change'|'';onIntent?:(value:'addition'|'change')=>void
+ intent?:'addition'|'';onIntent?:(value:'addition'|'')=>void
  original:Application|null;edited:Application|null;reference:string;paid:string;accountChecked:boolean
  review:ApplicationReviewModel|null;candidates:Record<string,IdentityCandidate[]>;choices:Record<string,string>;rosterLoaded:boolean
  differences:ApplicationDifference[]|null;revisionName:string
@@ -79,7 +79,14 @@ export function MasterApplicationReview(p:{
      <p className="mt-3 text-lg font-bold">{p.clubSummary?.label??'既存登録の確認待ちです'}</p><p>{p.clubSummary?.detail??'読み込み後に団体・人馬の登録状況を確認します。確認できない場合は再確認してください。'}</p>
      <button type="button" className={button+' mt-3'} onClick={p.onLoadRoster}>既存登録を再確認</button>
      {p.clubSummary&&p.clubSummary.entries.length>0&&<details className="mt-3"><summary className="cursor-pointer font-semibold">この団体の登録済み出番を見る（{p.clubSummary.entries.length}件）</summary><ul className="mt-3 space-y-2">{p.clubSummary.entries.map(e=><li key={e.id} className="rounded border p-2">{e.label} ／ {e.status}</li>)}</ul></details>}
-     {p.clubSummary?.state==='registered'&&<div className="mt-4 space-y-3 rounded-lg bg-blue-50 p-3"><p className="font-bold">今回の作業を選んでください</p><label className="flex gap-3"><input type="radio" name="application-intent" checked={p.intent==='addition'} onChange={()=>p.onIntent?.('addition')}/>初回のExcel取込・追加分の登録（登録済みの出番は残す）</label><label className="flex gap-3"><input type="radio" name="application-intent" checked={p.intent==='change'} onChange={()=>p.onIntent?.('change')}/>登録済みの内容を変更・取消する</label><p>追加では、登録済みと同じ出番を除いて未登録分だけ取り込みます。</p><p>変更・取消では、上の既存出番を確認して変更・棄権の手続きへ進みます。Excelから消えた行は自動で取り消しません。</p>{p.onChanges&&<button type="button" className={button} onClick={p.onChanges}>登録済みの変更・取消へ</button>}</div>}
+     {p.clubSummary?.state==='registered'&&<div className="mt-4 space-y-3 rounded-lg bg-blue-50 p-3">
+      <h6 className="font-bold">このExcelの取込方法</h6>
+      <p>新規・追加の出番と、選手の所有資格級・馬のグレード宣言は、このまま②で確認して③で取り込みます。</p>
+      <label className="flex items-start gap-3 font-bold"><input className="mt-1 size-5 shrink-0" type="checkbox" name="application-intent" checked={p.intent==='addition'} onChange={e=>p.onIntent?.(e.target.checked?'addition':'')}/>登録済みの出番を残して、このExcelを取り込む</label>
+      <p>同じ出番は重複登録せず、未登録の出番だけ追加します。出番がすべて登録済みでも、資格級・グレード宣言を保存できます。</p>
+      {p.intent==='addition'&&<p role="status" className="font-semibold text-emerald-800">取込方法を確認しました。②の残りの項目を確認して「取込内容を確認する → ③へ」を押してください。</p>}
+      {p.onChanges&&<div className="space-y-2 border-t border-blue-200 pt-3"><p>登録済み出番の競技・選手・馬・OPの変更や取消は、専用画面で行います。Excelから消えた行は自動では取り消しません。</p><button type="button" className={button} onClick={p.onChanges}>登録済み出番の変更・取消画面を開く</button></div>}
+     </div>}
      {notices('application-club')}
     </div>
     <details id="application-reference" tabIndex={-1} className="rounded-lg border p-3"><summary className="cursor-pointer font-semibold">資料番号（自動発行済み・通常は入力不要）</summary><p className="my-2">同じファイルには同じ番号を使います。追加・訂正版は別番号になり、既存の出番と照合します。</p><label>資料番号<input className={field} maxLength={100} value={p.reference} onChange={e=>p.onReference(e.target.value)}/></label></details>

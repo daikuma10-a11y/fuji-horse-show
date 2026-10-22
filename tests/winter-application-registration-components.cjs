@@ -46,6 +46,11 @@ const {MasterApplicationRegistration}=require('../components/master/application-
 const props={session:{accessToken:'synthetic-secret-not-for-export',refreshToken:'synthetic-refresh',expiresAt:9999999999999,email:'synthetic@example.test'},onSession(){},onChanges(){changeNavigation++}}
 const render=()=>h.render(()=>WinterApplicationImport(props)).props
 const panel=p=>p.registration.props
+function importCheckbox(p){
+ const matches=[]
+ function visit(node){if(Array.isArray(node))return node.forEach(visit);if(!React.isValidElement(node))return;if(node.type==='input'&&node.props.name==='application-intent')matches.push(node);visit(node.props.children)}
+ visit(MasterApplicationReview(p));assert.equal(matches.length,1,'one import confirmation, no competing change-mode selector');assert.equal(matches[0].props.type,'checkbox');return matches[0].props
+}
 const tick=()=>new Promise(resolve=>setImmediate(resolve))
 async function settled(){const deadline=Date.now()+3000;while(Date.now()<deadline){await new Promise(resolve=>setTimeout(resolve,1));const p=render();if(!p.busy)return p}throw Error('Synthetic action did not finish')}
 const file=value=>{const bytes=new TextEncoder().encode(typeof value==='string'?value:JSON.stringify(value));return {name:'synthetic.json',size:bytes.length,arrayBuffer:async()=>bytes.buffer}}
@@ -76,19 +81,21 @@ async function main(){
  const mapped=structuredClone(saved.review);p.onRestoreFile(file(mapped));p=await settled();panel(p).onReview();p=await settled();assert.equal(p.frozen,true);assert.equal(panel(p).entries[0].state,'登録済み')
  assert(lockNames.every(name=>name.includes(env.work.eventId)))
 
- // Registered-club intent is enforced by the real controller, including stale confirmations.
+ // Registered-club import confirmation clears its warning; change/cancel is a separate navigation action.
  p=await start()
  const riderId=env.addPerson({kind:'rider',name:'合成選手',reading:'ごうせいせんしゅ',jefNumber:'',clubName:p.edited.club})
  const horseId=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:p.edited.club})
  env.publish(env.snapshot.roster.clubs[0].id,[riderId,horseId],[])
  p.onLoadRoster();p=await settled();assert.equal(p.clubSummary.state,'registered')
  p.onChoice('r1',riderId);p=render();p.onChoice('h1',horseId);p=render()
- panel(p).onReview();p=await settled();assert.equal(panel(p).ready,false,'registered club requires an explicit purpose')
+ assert.equal(importCheckbox(p).checked,false);assert.equal(panel(p).canReview,false)
+ const importMarkup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.match(importMarkup,/出番がすべて登録済みでも、資格級・グレード宣言を保存/);assert(!importMarkup.includes('type="radio"'));assert.equal(importMarkup.split('登録済み出番の変更・取消画面を開く').length-1,1)
+ panel(p).onReview();p=await settled();assert.equal(panel(p).ready,false,'registered club requires an explicit purpose');assert.equal(panel(p).hasPlan,false);assert.match(panel(p).error,/このExcelを取り込む/);assert(!panel(p).message.includes('照合が終わりました'))
  panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);p=render();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
- p.onIntent('addition');p=render();p=await ready();assert.equal(panel(p).ready,true)
- p.onIntent('change');p=render();assert.equal(panel(p).hasPlan,false,'changing purpose invalidates confirmation')
+ importCheckbox(p).onChange({target:{checked:true}});p=render();assert.equal(panel(p).error,'');assert.equal(panel(p).canReview,true);assert(!p.todos.some(t=>t.target==='application-club'&&t.blocking));p=await ready();assert.equal(panel(p).ready,true);assert.equal(p.stage,3)
+ importCheckbox(p).onChange({target:{checked:false}});p=render();assert.equal(panel(p).hasPlan,false,'withdrawing consent invalidates confirmation');assert.equal(panel(p).canReview,false);assert(p.todos.some(t=>t.target==='application-club'&&t.blocking))
  panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
- p.onChanges();p=await settled();assert.equal(changeNavigation,1);assert.equal(downloads,0)
+ p.onChanges();p=await settled();assert.equal(changeNavigation,1);assert.equal(downloads,0);assert.deepEqual(env.posts,{person:0,participants:0,entry:0});assert.equal(env.credentialPosts,0)
  const {applicationDraftKey,parseApplicationDraft}=require('../lib/winter-application-draft.ts')
  assert.equal(parseApplicationDraft(map.get(applicationDraftKey(p.original.digest))).choices.r1,riderId,'navigation retains review locally')
 

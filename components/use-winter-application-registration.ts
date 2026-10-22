@@ -96,17 +96,19 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const panel:ApplicationRegistrationPanelProps={
   complete:!!plan?.ready&&plan.credentialsComplete&&plan.participating&&!!plan.entries?.rows.length&&plan.entries.rows.length===review?.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered'),
   credentials:plan?.credentials,
-  busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview,canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
+  busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview&&(!!work||!p.canImport||p.canImport()),canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
   reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
   entries:(model?.review.edited.entries??[]).map((entry,i)=>{const row=plan?.entries?.rows.find(r=>r.index===i);return {key:entry.key,label:`第${entry.competition}競技 ／ ${review!.edited.people.find(p=>p.key===entry.rider)?.name??'選手未対応'} ／ ${review!.edited.people.find(p=>p.key===entry.horse)?.name??'馬未対応'}${entry.op?' ／ OP':''}`,fee:row?.fee??appReview?.report.entries[i]?.price??null,id:row?.registeredId??row?.id,state:row?.differences.length?'要確認':row?status(row.state):work?.entries?'未再照合（端末の途中記録あり）':'参加登録後に出番を照合',issues:row?.differences??[]}}),
   onReview:()=>void action(async()=>{
    setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false)
-   const next=candidate(),result=await inspect(next)
+   const next=candidate()
+   if(!current.current&&p.canImport&&!p.canImport())throw new Error('②の「団体と登録状況」を確認し、「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。')
+   const result=await inspect(next)
    setMessage(result.ready?'照合が終わりました。確認一覧を見て、確定する場合は下の確認欄にチェックしてください。':'差分・未確認の項目があります。登録は行っていません。')
   }),
   onAccepted:v=>{if(!lock.current)setAccepted(v)},onSingleOperator:v=>{if(!lock.current)setSingleOperator(v)},
   onRun:()=>void action(async()=>{
-   if(!current.current&&p.canImport&&!p.canImport())throw new Error('団体の登録状況と、今回の追加・変更の選択を確認してください。変更は既存の変更・取消手続きへ進んでください。')
+   if(!current.current&&p.canImport&&!p.canImport())throw new Error('②の「団体と登録状況」を確認し、「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。')
    if(!shown?.plan.ready||!accepted||!singleOperator)throw new Error('最新の照合結果と、同時登録しないことを確認してください')
    setAccepted(false);setSingleOperator(false)
    await exclusive(async()=>{
@@ -143,5 +145,5 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
    setMessage('取り込み記録をこの端末に保存しました。次の申込書を選んでください。')
   }),
  }
- return {panel,busy,frozen:!!work,isBusy:()=>lock.current,isFrozen:()=>current.current!==null,openRecord:restore,invalidate:()=>{if(!lock.current){setPreview(null);setAccepted(false);setSingleOperator(false)}}}
+ return {panel,busy,frozen:!!work,isBusy:()=>lock.current,isFrozen:()=>current.current!==null,openRecord:restore,invalidate:()=>{if(!lock.current){setPreview(null);setAccepted(false);setSingleOperator(false);setMessage('');setError('')}}}
 }

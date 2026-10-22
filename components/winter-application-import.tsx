@@ -26,7 +26,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const [file,setFile]=useState<File|null>(null),[draft,setDraft]=useState<ApplicationDraft|null>(null)
  const [revision,setRevision]=useState<Application|null>(null),[roster,setRoster]=useState<SharedRoster|null>(null)
  const [context,setContext]=useState<ApplicationSnapshot|null>(null)
- const [intent,setIntent]=useState<'addition'|'change'|''>('')
+ const [intent,setIntent]=useState<'addition'|''>('')
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[dirty,setDirty]=useState(false)
  const lock=useRef(false),expectedSaved=useRef<string|null>(null)
  const registration=useWinterApplicationRegistration({draft,session,onSession,isReviewBusy:()=>lock.current,
@@ -35,7 +35,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onClear:()=>{setDraft(null);setFile(null);setRevision(null);setRoster(null);setContext(null);expectedSaved.current=null;setDirty(false)},
   onChanged,
   canImport:()=>{
-   if(!draft||!context||intent==='change')return false
+   if(!draft||!context)return false
    const state=applicationClubSummary(draft,context).state
    return state!=='ambiguous'&&(state!=='registered'||intent==='addition')
   },
@@ -74,8 +74,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const differences=useMemo(()=>draft&&revision?applicationDifferences(draft.original,revision):null,[draft,revision])
  const clubSummary=draft&&context?applicationClubSummary(draft,context):null
  const todos=draft?applicationTodos(draft,roster!==null):[]
- if(clubSummary?.state==='registered'&&!intent)todos.push({label:'追加・変更の選択',message:'今回のExcelで追加するのか、登録済みの内容を変更するのか選んでください。',target:'application-club',blocking:true})
- if(intent==='change')todos.push({label:'登録済みの変更・取消',message:'登録済みの出番を選んで変更・取消の手続きへ進んでください。追加としては取り込みません。',target:'application-club',blocking:true})
+ if(clubSummary?.state==='registered'&&intent!=='addition')todos.push({label:'Excelの取込方法',message:'「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。新規・追加の出番や資格級・グレード宣言の保存に進めます。',target:'application-club',blocking:true})
  if(clubSummary?.state==='ambiguous')todos.push({label:'団体名',message:clubSummary.detail,target:'application-club',blocking:true})
  async function loadContext(){
   setRoster(null);setContext(null)
