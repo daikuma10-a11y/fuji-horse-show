@@ -34,7 +34,12 @@ const nodes=t=>!t||typeof t!=='object'?[]:[t,...[t.props?.children].flat(Infinit
 const list=MasterRegistrationOverview(props),buttons=nodes(list).filter(n=>n.type==='button')
 assert.equal(buttons.length,3);buttons[0].props.onClick();assert.equal(selected,'a')
 const detail=renderToStaticMarkup(React.createElement(MasterRegistrationOverview,{...props,selectedId:'a'}))
-for(const expected of ['選手名簿','馬名簿','未出場馬','出場登録なし','団体B','OP','棄権済み','エントリー一覧（2件'])assert.ok(detail.includes(expected),expected)
+for(const expected of ['選手名簿','馬名簿','所有資格級','グレード宣言','未確認','未出場馬','出場登録なし','団体B','OP','棄権済み','エントリー一覧（2件'])assert.ok(detail.includes(expected),expected)
+const withGrades=structuredClone(groups)
+withGrades[0].riders[0].credential={value:'A級',source:'過去原本（Autumn・要確認）',needsReview:true}
+withGrades[0].horses[0].credential={value:'中障害A',source:'日馬連マスター（2026-10-04取得）',needsReview:false}
+const gradeDetail=renderToStaticMarkup(React.createElement(MasterRegistrationOverview,{...props,groups:withGrades,selectedId:'a'}))
+for(const expected of ['A級','過去原本（Autumn・要確認）','中障害A','日馬連マスター（2026-10-04取得）'])assert.ok(gradeDetail.includes(expected),expected)
 nodes(MasterRegistrationOverview({...props,selectedId:'a'})).find(n=>n.type==='button').props.onClick();assert.equal(selected,'')
 for(const state of [{loading:true},{error:'読込失敗'}])assert.ok(!renderToStaticMarkup(React.createElement(MasterRegistrationOverview,{...props,...state,selectedId:'a'})).includes('合成馬'),'stale detail is hidden on loading/error')
 assert.ok(renderToStaticMarkup(React.createElement(MasterRegistrationOverview,{...props,groups:[]})).includes('登録済みの団体はまだありません'))

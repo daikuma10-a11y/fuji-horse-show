@@ -5,10 +5,10 @@ const cell='border-b border-border px-4 py-3 text-left align-top'
 function PeopleTable({title,rows}:{title:string;rows:readonly RegistrationOverviewPerson[]}){
  return <section className="overflow-hidden rounded-2xl border-2 border-border bg-card">
   <h4 className="border-b border-border bg-muted/40 px-4 py-3 text-xl font-bold">{title}（{rows.length}{title==='選手名簿'?'名':'頭'}）</h4>
-  {!rows.length?<p className="p-4">登録された{title==='選手名簿'?'選手':'馬'}はいません。</p>:<div className="overflow-x-auto"><table className="w-full text-base"><caption className="sr-only">{title}</caption><thead className="bg-muted/20"><tr>{['名前・馬名','日馬連番号','所属','この団体の出場登録'].map(label=><th key={label} scope="col" className={cell}>{label}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.id}><th scope="row" className={`${cell} min-w-36 font-semibold`}>{row.name}</th><td className={cell}>{row.number||'未登録'}</td><td className={cell}>{row.organization}</td><td className={`${cell} whitespace-nowrap`}>{row.entryCount?`${row.entryCount}件`:'出場登録なし'}</td></tr>)}</tbody></table></div>}
+  {!rows.length?<p className="p-4">登録された{title==='選手名簿'?'選手':'馬'}はいません。</p>:<div className="overflow-x-auto"><table className="w-full text-base"><caption className="sr-only">{title}</caption><thead className="bg-muted/20"><tr>{['名前・馬名','日馬連番号',title==='選手名簿'?'所有資格級':'グレード宣言','所属','この団体の出場登録'].map(label=><th key={label} scope="col" className={cell}>{label}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.id}><th scope="row" className={`${cell} min-w-36 font-semibold`}>{row.name}</th><td className={cell}>{row.number||'未登録'}</td><td className={`${cell} min-w-40`}><span className={`font-bold ${row.credential?.needsReview?'text-amber-800':''}`}>{row.credential?.value||'未確認'}</span>{row.credential?.source&&<span className="mt-1 block text-sm">{row.credential.source}</span>}</td><td className={cell}>{row.organization}</td><td className={`${cell} whitespace-nowrap`}>{row.entryCount?`${row.entryCount}件`:'出場登録なし'}</td></tr>)}</tbody></table></div>}
  </section>
 }
-export function MasterRegistrationOverview({groups,selectedId,onSelect,loading=false,error=''}:{groups:readonly RegistrationOverviewGroup[];selectedId:string;onSelect:(id:string)=>void;loading?:boolean;error?:string}){
+export function MasterRegistrationOverview({groups,selectedId,onSelect,loading=false,error='',credentialNotice=''}:{groups:readonly RegistrationOverviewGroup[];selectedId:string;onSelect:(id:string)=>void;loading?:boolean;error?:string;credentialNotice?:string}){
  const selected=groups.find(group=>group.id===selectedId)
  return <section aria-label="団体別の登録内容" className="space-y-5">
   <div><h3 className="text-2xl font-bold">団体別の登録内容</h3><p className="mt-2 text-lg">団体を選ぶと、この大会の選手・馬・エントリーをまとめて確認できます。Excel取込分と、以前から登録されている分を含みます。</p></div>
@@ -21,6 +21,8 @@ export function MasterRegistrationOverview({groups,selectedId,onSelect,loading=f
     </dl>
     <p className="mt-3 text-sm">他所属の騎乗者・馬がエントリーに含まれる場合は、名簿にも所属を併記します。エントリー件数は棄権済みを除きます。</p>
    </div>
+   <p className="text-sm">所有資格級・グレード宣言は保存済み記録を表示します。「未確認」は資格や宣言がないことを意味しません。過去原本の資格級は現在の内容を確認してください。</p>
+   {credentialNotice&&<p role="alert" className="rounded-xl bg-amber-50 p-4">{credentialNotice}</p>}
    <PeopleTable title="選手名簿" rows={selected.riders}/>
    <PeopleTable title="馬名簿" rows={selected.horses}/>
    <section className="overflow-hidden rounded-2xl border-2 border-border bg-card">

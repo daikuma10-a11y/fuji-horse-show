@@ -118,3 +118,37 @@ and `tsc --noEmit` pass. `next build --webpack` generates all 24 pages, and
 `git diff --check` passes. The settlement suite also verifies unchanged Autumn
 rendering. Authenticated browser inspection is not available for this addition;
 the organizer can review the new section in the dedicated Winter preview.
+
+## Follow-up: rider qualifications and horse grade declarations
+
+The club detail now has `所有資格級` in the rider roster and `グレード宣言` in
+the horse roster. A separate read-only loader runs only while the overview is
+open, using the existing administrator session and bounded GET queries for the
+current Winter participants. It selects only the number, grade and import date
+from the existing JEF master tables. The latest record for an exact JEF number
+is used; conflicting same-date records and missing/blank data remain unconfirmed.
+No identity is matched by name, and no grade is inferred from entered classes.
+
+When the JEF rider master has no record, an existing Winter ID bridge may supply
+the rider's historical `autumn_player` source grade. This is explicitly labeled
+`過去原本（Autumn・要確認）`, not treated as current JEF verification. Multiple
+conflicting source grades remain unresolved. Loading, lookup failures and missing
+data are distinguished; failed credential reads do not hide the saved club list.
+No raw JEF master data, birth dates or unrelated identities are requested.
+
+Read-only schema/data inspection found that the existing JEF master tables have
+the required columns but currently contain no rows. Some shared roster source
+records retain historical rider grades; horse grade declarations are not retained
+by the current Excel import. Therefore the new horse column honestly shows
+`未確認` until grade records are available. Display support does not imply that
+missing grade data has been imported or saved. This change does not modify the
+database, source records, permissions, eligibility checks or Excel save behavior.
+
+Synthetic tests cover latest records, conflicting/blank/missing grades, strict
+number/ID correspondence, historical provenance, request scoping, no mutations,
+event/auth guards, display columns and the active-section loading gate. Live
+inspection used only SELECT queries; no applicant data is included in this record.
+Validation passed: credential-loader, registration-overview, pre-registration and
+shared settlement component tests, `tsc --noEmit`, `git diff --check`, and
+`next build --webpack` (24 pages). Authenticated browser rendering remains
+unverified in this environment.
