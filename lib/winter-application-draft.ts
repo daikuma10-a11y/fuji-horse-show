@@ -35,7 +35,7 @@ function application(v:unknown):Application{
   issues:list(a.issues,10000).map(x=>string(x,4000)),sheets:list(a.sheets,32).map(x=>string(x,100))}
 }
 export function createApplicationDraft(app:Application):ApplicationDraft{
- return {kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original:structuredClone(app),edited:structuredClone(app),reference:'',paid:'',accountChecked:false,choices:{}}
+ return {kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original:structuredClone(app),edited:structuredClone(app),reference:`WINTER-2026-${app.digest.slice(0,32)}`,paid:'',accountChecked:false,choices:{}}
 }
 export function readApplicationDraft(v:unknown):ApplicationDraft{
  const d=object(v)

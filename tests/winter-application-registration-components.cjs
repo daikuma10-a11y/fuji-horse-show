@@ -17,7 +17,7 @@ function hooks(){
   close(){cells.forEach(c=>c?.cleanup?.())},
  }
 }
-let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null
+let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,changeNavigation=0
 const lockNames=[]
 global.fetch=()=>{network++;throw Error('Real network forbidden')}
 global.window={confirm:()=>true,addEventListener(){},removeEventListener(){}}
@@ -37,25 +37,25 @@ Module._load=function(name,...args){
   load:async()=>{loads++;if(deny)throw Error('synthetic admin denied');if(gateLoad)await gateLoad;return structuredClone(env.snapshot)},
   savePerson:input=>env.deps.savePerson(input),saveParticipants:(...args)=>env.deps.saveParticipants(...args),saveEntry:input=>env.deps.saveEntry(input),
  })}
- if(name==='@/lib/winter-application'){const actual=originalLoad.call(this,name,...args);return {...actual,readWinterApplication:async()=>{const app=structuredClone(env.work.review.original);app.digest='c'.repeat(64);app.people[0].name='訂正版の合成選手';return app}}}
+ if(name==='@/lib/winter-application'){const actual=originalLoad.call(this,name,...args);return {...actual,readWinterApplication:async()=>{const app=structuredClone(env.work.review.original);if(!readOriginal){app.digest='c'.repeat(64);app.people[0].name='訂正版の合成選手'}return app}}}
  return originalLoad.call(this,name,...args)
 }
 const {WinterApplicationImport}=require('../components/winter-application-import.tsx')
 const {MasterApplicationReview}=require('../components/master/application-review.tsx')
 const {MasterApplicationRegistration}=require('../components/master/application-registration.tsx')
-const props={session:{accessToken:'synthetic-secret-not-for-export',refreshToken:'synthetic-refresh',expiresAt:9999999999999,email:'synthetic@example.test'},onSession(){}}
+const props={session:{accessToken:'synthetic-secret-not-for-export',refreshToken:'synthetic-refresh',expiresAt:9999999999999,email:'synthetic@example.test'},onSession(){},onChanges(){changeNavigation++}}
 const render=()=>h.render(()=>WinterApplicationImport(props)).props
 const panel=p=>p.registration.props
 const tick=()=>new Promise(resolve=>setImmediate(resolve))
 async function settled(){for(let i=0;i<50;i++){await tick();const p=render();if(!p.busy)return p}throw Error('Synthetic action did not finish')}
 const file=value=>{const bytes=new TextEncoder().encode(typeof value==='string'?value:JSON.stringify(value));return {name:'synthetic.json',size:bytes.length,arrayBuffer:async()=>bytes.buffer}}
 async function start(){
- h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null
+ h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;changeNavigation=0
  let p=render();p.onRestoreFile(file(env.work.review));return settled()
 }
 async function ready(){let p=render();panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true,panel(p).error);panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);return render()}
 async function main(){
- let p=await start();assert.equal(loads,0);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ let p=await start();assert.equal(loads,1);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
  panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true);assert.equal(panel(p).people.length,2);assert.equal(panel(p).entries.length,1);assert.equal(panel(p).originalTotal,'19000');assert.equal(panel(p).paid,'0')
  assert.deepEqual(env.posts,{person:0,participants:0,entry:0},'read/restore/review do not register')
  panel(p).onRun();p=await settled();assert.match(panel(p).error,/確認/);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
@@ -63,7 +63,7 @@ async function main(){
  assert.deepEqual(env.posts,{person:2,participants:1,entry:1});assert.equal(p.frozen,true);assert.equal(panel(p).people[0].state,'登録済み');assert.equal(panel(p).entries[0].state,'登録済み');assert.equal(panel(p).participantState,'登録済み')
  assert.equal(env.stored.review.paid,'0');assert.equal(env.stored.review.original.amounts.total,'19000')
  const frozen=JSON.stringify(p.edited);p.onPerson('r1',{name:'unauthorized overwrite'});p.onReference('CHANGED');p.onPaid('999');p=render();assert.equal(JSON.stringify(p.edited),frozen);assert.equal(p.reference,env.work.review.reference);assert.equal(p.paid,'0')
- const markup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.match(markup,/fieldset disabled/);assert(!markup.includes('確認再開JSONを保存して別の申込書へ'));assert(markup.includes('管理者として確定'))
+ const markup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.match(markup,/fieldset disabled/);assert(!markup.includes('確認再開JSONを保存して別の申込書へ'));assert(markup.includes('④ 取り込み結果'))
  panel(p).onDownload();p=await settled();const raw=await downloadBlob.text();const saved=parseApplicationRegistration(raw);assert.equal(saved.people.r1.state,'registered');assert(!raw.includes('synthetic-secret'));assert(!raw.includes('synthetic-refresh'))
  // Revised Excel remains a comparison: no edits to the fixed review or stored registration.
  p.onFiles([{name:'synthetic-revision.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)}]);p=render();p.onRead();p=await settled();assert(p.differences.length);assert.equal(JSON.stringify(p.edited),frozen);assert.deepEqual(env.posts,{person:2,participants:1,entry:1})
@@ -75,6 +75,32 @@ async function main(){
  // Same original/review reaches the existing record, not a new-person create.
  const mapped=structuredClone(saved.review);p.onRestoreFile(file(mapped));p=await settled();panel(p).onReview();p=await settled();assert.equal(p.frozen,true);assert.equal(panel(p).entries[0].state,'登録済み')
  assert(lockNames.every(name=>name.includes(env.work.eventId)))
+
+ // Registered-club intent is enforced by the real controller, including stale confirmations.
+ p=await start()
+ const riderId=env.addPerson({kind:'rider',name:'合成選手',reading:'ごうせいせんしゅ',jefNumber:'',clubName:p.edited.club})
+ const horseId=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:p.edited.club})
+ env.publish(env.snapshot.roster.clubs[0].id,[riderId,horseId],[])
+ p.onLoadRoster();p=await settled();assert.equal(p.clubSummary.state,'registered')
+ p.onChoice('r1',riderId);p=render();p.onChoice('h1',horseId);p=render()
+ panel(p).onReview();p=await settled();assert.equal(panel(p).ready,false,'registered club requires an explicit purpose')
+ panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);p=render();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ p.onIntent('addition');p=render();p=await ready();assert.equal(panel(p).ready,true)
+ p.onIntent('change');p=render();assert.equal(panel(p).hasPlan,false,'changing purpose invalidates confirmation')
+ panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ p.onChanges();p=await settled();assert.equal(changeNavigation,1);assert.equal(downloads,0)
+ const {applicationDraftKey,parseApplicationDraft}=require('../lib/winter-application-draft.ts')
+ assert.equal(parseApplicationDraft(map.get(applicationDraftKey(p.original.digest))).choices.r1,riderId,'navigation retains review locally')
+
+ // Same Excel automatically finds its checkpoint; next-file workflow requires no export download.
+ p=await start();h.close();h=hooks();map.clear();readOriginal=true;p=render()
+ const excel={name:'synthetic.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)}
+ p.onFiles([excel]);p=render();p.onRead();p=await settled();assert.match(p.reference,/^WINTER-2026-/)
+ p.onChoice('r1','new');p=render();p.onChoice('h1','new');p=render();p.onPaid('0');p=render();p.onAccountChecked(true);p=render()
+ p=await ready();panel(p).onRun();p=await settled();assert.equal(panel(p).complete,true)
+ panel(p).onClose();p=await settled();assert.equal(p.edited,null);assert.equal(downloads,0)
+ p.onFiles([excel]);p=render();p.onRead();p=await settled();assert.equal(p.frozen,true,'same-file checkpoint restored automatically');assert.equal(panel(p).hasPlan,false,'local completion never substitutes for fresh server review')
+ panel(p).onReview();p=await settled();assert.equal(panel(p).complete,true);assert.equal(downloads,0);assert.deepEqual(env.posts,{person:2,participants:1,entry:1})
 
  // Stop after one person; the input cannot be edited while a save is active.
  p=await start();p=await ready();const savePerson=env.deps.savePerson;let release

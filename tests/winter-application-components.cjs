@@ -18,7 +18,7 @@ URL.createObjectURL=blob=>{downloadBlob=blob;return 'blob:synthetic'};URL.revoke
 Module._load=function(name,...args){
  if(name==='react')return {...React,...Object.fromEntries(['useState','useRef','useMemo','useEffect'].map(k=>[k,(...args)=>h[k](...args)]))}
  if(name==='@/lib/winter-application'){const actual=originalLoad.call(this,name,...args);return {...actual,readWinterApplication:async()=>{reads++;return structuredClone(nextApp)}}}
- if(name==='@/lib/shared-roster')return {loadSharedRoster:async()=>{rosterReads++;return {entities:[{id,kind:'rider',name:'合成選手',reading:'ごうせいせんしゅ',jef_number:'',archived_at:null}],clubs:[{id:'club',name:'別所属'}],affiliations:[{entity_id:id,club_id:'club',ended_at:null}],participants:[]}}}
+ if(name==='@/lib/winter-application-services')return {winterApplicationServices:()=>({load:async()=>{auth++;if(authDenied)throw Error('管理者権限を確認できません');rosterReads++;return {roster:{entities:[{id,kind:'rider',name:'合成選手',reading:'ごうせいせんしゅ',jef_number:'',archived_at:null}],clubs:[{id:'club',name:'別所属'}],affiliations:[{entity_id:id,club_id:'club',ended_at:null}],participants:[]},bindings:[],initial:[],data:{eventId:nextApp.eventId,organizations:[],entries:[],riders:[],horses:[],competitions:[]}}}})}
  if(name==='@/lib/supabase-rest')return {verifyAdminSession:async s=>{auth++;if(authDenied)throw Error('管理者権限を確認できません');return s}}
  return originalLoad.call(this,name,...args)
 }
@@ -32,21 +32,21 @@ const file={name:'synthetic.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)
 ;(async()=>{
  let p=render();assert.equal(p.edited,null);assert.equal(reads,0)
  p.onFiles([file]);p=render();assert.equal(reads,0,'select alone never reads or saves')
- p.onRead();p.onRead();p=await settle();assert.equal(reads,1,'double-click is locked');assert.equal(auth,0);assert.equal(rosterReads,0);assert.equal(p.edited.entries.length,1)
+ p.onRead();p.onRead();p=await settle();assert.equal(reads,1,'double-click is locked');assert.equal(auth,1);assert.equal(rosterReads,1);assert.equal(p.edited.entries.length,1)
  p.onPaid('0');p=render();p.onAccountChecked(true);p=render();assert.equal(p.review.ready,true)
- p.onLoadRoster();p=await settle();assert.equal(auth,1);assert.equal(rosterReads,1);assert.equal(p.candidates.r1[0].clubs[0],'別所属');assert.deepEqual(p.choices,{})
+ p.onLoadRoster();p=await settle();assert.equal(auth,2);assert.equal(rosterReads,2);assert.equal(p.candidates.r1[0].clubs[0],'別所属');assert.deepEqual(p.choices,{})
  p.onChoice('r1',id);p=render();assert.equal(p.choices.r1,id)
  p.onPerson('r1',{name:'訂正選手'});p=render();assert.equal(p.original.people[0].name,'合成選手');assert.equal(p.edited.people[0].name,'訂正選手');assert.equal(p.choices.r1,undefined);assert.equal(p.accountChecked,false)
  p.onReference('TEST-ONLY');p=render();p.onSave();p=await settle();assert.match(p.message,/保存しました/)
  const stored=map.get(applicationDraftKey(p.original.digest));assert.equal(parseApplicationDraft(stored).edited.people[0].name,'訂正選手')
  p.onDownload();p=await settle();const downloaded=await downloadBlob.text();assert.equal(parseApplicationDraft(downloaded).reference,'TEST-ONLY');assert.ok(!downloaded.includes('synthetic-session-only'))
  nextApp=fixture();nextApp.digest='b'.repeat(64);nextApp.people[0].name='訂正版候補';p.onFiles([file]);p=render();p.onRead();p=await settle();assert.ok(p.differences.length);assert.equal(p.edited.people[0].name,'訂正選手','revision comparison does not replace current draft')
- const markup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.ok(markup.includes('原本請求と料金の照合'));assert.ok(markup.includes('合成選手'));assert.ok(markup.includes('訂正選手'));assert.ok(markup.includes('読み込んだだけでは登録しません'));assert.ok(markup.includes('照合・確定登録・途中再開'))
+ const markup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.ok(markup.includes('原本請求と料金の照合'));assert.ok(markup.includes('合成選手'));assert.ok(markup.includes('訂正選手'));assert.ok(markup.includes('読み込んだだけでは登録しません'));assert.ok(markup.includes('③ 確認した内容を取り込む'))
  // A different tab saved the same original after our last read.
  map.set(applicationDraftKey(p.original.digest),JSON.stringify({...parseApplicationDraft(stored),reference:'OTHER-TAB'}));p.onSave();p=await settle();assert.match(p.error,/別の確認/);assert.equal(parseApplicationDraft(map.get(applicationDraftKey(p.original.digest))).reference,'OTHER-TAB')
  const bad=JSON.stringify({...parseApplicationDraft(stored),eventId:'Autumn'});p.onRestoreFile({size:bad.length,arrayBuffer:async()=>new TextEncoder().encode(bad).buffer});p=await settle();assert.match(p.error,/Winter/);assert.equal(p.edited.people[0].name,'訂正選手')
  h=hooks();p=render();p.onRestoreFile({size:stored.length,arrayBuffer:async()=>new TextEncoder().encode(stored).buffer});p=await settle();assert.match(p.error,/異なる確認記録/);assert.equal(p.edited,null)
- map.clear();p.onRestoreFile({size:stored.length,arrayBuffer:async()=>new TextEncoder().encode(stored).buffer});p=await settle();assert.equal(p.edited.people[0].name,'訂正選手');assert.equal(p.rosterLoaded,false)
+ map.clear();p.onRestoreFile({size:stored.length,arrayBuffer:async()=>new TextEncoder().encode(stored).buffer});p=await settle();assert.equal(p.edited.people[0].name,'訂正選手');assert.equal(p.rosterLoaded,true)
  authDenied=true;const previousReads=rosterReads;p.onLoadRoster();p=await settle();assert.match(p.error,/管理者権限/);assert.equal(rosterReads,previousReads);assert.equal(p.rosterLoaded,false);assert.equal(p.edited.people[0].name,'訂正選手')
  assert.equal(network,0,'no real auth, database or payment requests')
  Module._load=originalLoad;URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke
