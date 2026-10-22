@@ -83,3 +83,38 @@ Follow-up checks passed: `tsc --noEmit`, `tests/winter-settlement.cjs`,
 `tests/master-admin-settlement.cjs`, `git diff --check`, and
 `next build --webpack` (24 pages). No authenticated browser or live balance query
 was available in this follow-up; verification covers source and synthetic data.
+
+## Follow-up: organization registration overview
+
+The organizer requested a settlement-style organization selector inside
+pre-registration for inspecting saved people, horses and entries after Excel
+import. A fourth optional section, `団体別の登録内容`, now opens a club list and
+read-only detail. The detail includes participating riders and horses, JEF
+numbers, affiliations, entry counts, and entries ordered by date and competition
+with start order, OP and withdrawal status. A horse without entries remains
+visible. Saved earlier/manual registrations and Excel imports appear together;
+an unsaved workbook draft is not treated as a completed registration.
+
+The Winter adapter projects the dashboard's existing event-scoped snapshot.
+Exact IDs preserve same-name identities and other-club riders. It uses each
+entry's recorded organization, with the established horse-organization fallback
+for legacy entries. Withdrawn entries remain visible but are excluded from
+active counts. Loading and errors hide stale details. The selected club survives
+ordinary data refreshes, and switching sections keeps existing form inputs
+mounted. `/winter/admin#winter-registration-overview` opens the section directly.
+
+Rendering and neutral types are in the shared master. The section is optional:
+the existing two- and three-section contracts remain intact, and Autumn does not
+yet consume this overview. No additional API, database, registration, payment,
+permission or storage operation was introduced.
+
+Synthetic checks cover club isolation, same-name IDs, cross-club affiliations,
+unentered horses, date/competition ordering, OP, withdrawal, empty/error/loading
+states, club selection/back navigation, event/reference guards and unchanged
+source data. Dashboard integration checks cover the deep link, section selection
+and preserved Excel form. `tests/winter-registration-overview.cjs`,
+`tests/winter-preregistration-components.cjs`, `tests/master-admin-settlement.cjs`
+and `tsc --noEmit` pass. `next build --webpack` generates all 24 pages, and
+`git diff --check` passes. The settlement suite also verifies unchanged Autumn
+rendering. Authenticated browser inspection is not available for this addition;
+the organizer can review the new section in the dedicated Winter preview.

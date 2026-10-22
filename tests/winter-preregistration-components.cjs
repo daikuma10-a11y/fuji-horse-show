@@ -70,11 +70,16 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
  assert.equal(workspace.props.selected,'application')
  assert.equal(nodes(MasterPreRegistration(workspace.props)).find(n=>n.props?.id==='pre-registration-application').props.hidden,false)
  assert.ok(text(MasterPreRegistration(workspace.props)).includes('申込書の読み込み'))
+ assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.data,data)
+ workspace.props.onSelect('overview');tree=render();workspace=find(tree,MasterPreRegistration)
+ assert.equal(nodes(MasterPreRegistration(workspace.props)).find(n=>n.props?.id==='pre-registration-overview').props.hidden,false)
+ assert.ok(find(workspace.props.application,stub('WinterApplicationImport')),'Excel form remains mounted while viewing saved registration')
  assert.equal(nodes(tree).filter(n=>n.props?.href==='/winter/prepare').length,1,'Only one import link exists')
  assert.equal(nodes(workspace.props.children).filter(n=>n.props?.href==='/winter/prepare').length,1)
  restart('#winter-initial-registration');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'entries')
  restart('#winter-admin-tools');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'roster')
  restart('#winter-application-import');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'application')
+ restart('#winter-registration-overview');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'overview')
  const props={selected:'roster',onSelect(){},roster:React.createElement('input',{defaultValue:'dummy-roster-draft'}),entries:React.createElement('input',{defaultValue:'dummy-entry-draft'})}
  for(const selected of ['roster','entries']){
   const markup=renderToStaticMarkup(React.createElement(MasterPreRegistration,{...props,selected}))
@@ -87,6 +92,12 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
   const markup=renderToStaticMarkup(React.createElement(MasterPreRegistration,{...props,selected,application:React.createElement('input',{defaultValue:'dummy-application-draft'})}))
   assert.equal((markup.match(/aria-pressed="true"/g)||[]).length,1)
   assert.equal((markup.match(/hidden=""/g)||[]).length,2)
+  assert.ok(markup.includes('dummy-application-draft')&&markup.includes('dummy-roster-draft')&&markup.includes('dummy-entry-draft'))
+ }
+ for(const selected of ['roster','entries','application','overview']){
+  const markup=renderToStaticMarkup(React.createElement(MasterPreRegistration,{...props,selected,application:React.createElement('input',{defaultValue:'dummy-application-draft'}),overview:React.createElement('p',null,'saved-overview')}))
+  assert.equal((markup.match(/aria-pressed="true"/g)||[]).length,1)
+  assert.equal((markup.match(/hidden=""/g)||[]).length,3)
   assert.ok(markup.includes('dummy-application-draft')&&markup.includes('dummy-roster-draft')&&markup.includes('dummy-entry-draft'))
  }
  assert.equal(writes,0)
