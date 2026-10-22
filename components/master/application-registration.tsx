@@ -5,6 +5,7 @@ import type {IdentityCandidate} from '@/lib/master/application'
 type ResultRow={key:string;label:string;state:string;id?:string;issues:string[]}
 export type ApplicationRegistrationPanelProps={
  busy:boolean;running:boolean;frozen:boolean;hasCheckpoint:boolean;hasPlan:boolean;ready:boolean
+ credentials?:{key:string;name:string;kind:string;value:string;previous:string;saved:boolean}[]
  complete?:boolean;onStartlist?:()=>void;onSettlement?:()=>void;onNext?:()=>void
  canReview:boolean;canOpenSaved:boolean;accepted:boolean;singleOperator:boolean
  reference:string;originalTotal:string;paid:string;participantState:string;savedSummary:string;message:string;error:string
@@ -46,16 +47,17 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
      <button type="button" className={button} disabled={p.busy||!row.selected||!p.hasPlan} onClick={()=>p.onResolve(row.key)}>この人馬と照合して再開記録を保存</button>
     </>}</td>
    </tr>)}</tbody></table></div>
+   {p.credentials&&<div className="rounded-lg border border-slate-300 p-3"><h4 className="text-lg font-bold">団体別一覧に保存する資格・グレード</h4><ul className="mt-2 space-y-2">{p.credentials.map(c=><li key={c.key}>{c.name} ／ {c.kind==='rider'?'所有資格級':'グレード宣言'}：{c.value?(c.saved?`${c.value}（保存済み）`:c.previous?`保存済み ${c.previous} → 今回 ${c.value}`:`今回 ${c.value} を保存`):c.previous?`${c.previous}（今回の原本は空欄・保存済みを保持）`:'記載なし・未確認'}</li>)}</ul><p className="mt-2 text-sm">申込書で確認した値を保存します。日馬連マスターの登録内容を変更する操作ではありません。</p></div>}
    <p>Winter参加登録：{p.participantState}</p>
    <div className="overflow-x-auto"><table className="w-full min-w-[650px] border-collapse"><caption className="mb-2 text-left text-xl font-bold">エントリーの登録確認</caption><thead><tr>{['競技・人馬','計算料金','状態・差分'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.entries.map(row=><tr key={row.key}>
     <td className={cell}>{row.label}</td><td className={cell}>{row.fee===null?'未照合':`${row.fee.toLocaleString('ja-JP')}円`}</td><td className={cell}>{row.state}{row.id&&<details className="text-sm"><summary>登録番号</summary><p className="break-all">{row.id}</p></details>}{row.issues.map((issue,i)=><p key={i}>{issue}</p>)}</td>
    </tr>)}</tbody></table></div>
    <p>確認した原本請求総額：{p.originalTotal||'未確認'}円 ／ 別途確認した入金額：{p.paid||'未確認'}円。出番の計算額と分けて再開記録に保持します。入金処理は行いません。</p>
    {p.hasPlan&&!p.complete&&<>
-    <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・所属・資格・料金と照合結果を確認しました。</label>
+    <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・所属・資格・グレード宣言・料金と照合結果を確認しました。</label>
     <label className="flex gap-3"><input type="checkbox" checked={p.singleOperator} disabled={p.busy||!p.ready} onChange={e=>p.onSingleOperator(e.target.checked)}/>この申込はこの画面だけで登録し、人馬登録など別の画面・端末・管理者と同時に登録しません。</label>
     <p>別画面・別端末・別ブラウザーとの同時操作は自動では防げません。途中再開では保存済みを照合し、未登録の分だけを処理します。</p>
-    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>{p.running?'取り込み中…':`確認した${remaining}件を取り込む`}</button>
+    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>{p.running?'取り込み中…':remaining?`確認した${remaining}件を取り込む`:'確認した資格・グレードを保存する'}</button>
    </>}
   </>}
   {p.complete&&<div className="flex flex-wrap gap-3">{p.onStartlist&&<button type="button" className={primaryButton} onClick={p.onStartlist}>出番表を見る</button>}{p.onSettlement&&<button type="button" className={button} onClick={p.onSettlement}>精算を見る</button>}<p className="w-full">請求への反映を確認できます。ここで確認した入金額は、精算の入金登録には使いません。</p></div>}

@@ -1,3 +1,4 @@
+import {loadWinterApplicationCredentials,credentialDisplay} from './winter-application-credentials'
 import type {loadWinterData} from './winter-data'
 import type {RegistrationOverviewCredential} from './master/registration-overview'
 import {assertWinterEvent} from './winter-event'
@@ -48,9 +49,10 @@ export async function loadWinterOverviewCredentials(data:Data,token:string,signa
  if(!token)throw new Error('本部ログインが必要です')
  for(const row of [...data.riders,...data.horses]){assertWinterEvent(row.event_id);if(!uuid(row.id))throw new Error('人馬IDを確認できません')}
  const numbers=(values:(string|null)[])=>[...new Set(values.map(number).filter(n=>/^\d{1,100}$/.test(n)))]
- const [riderRows,horseRows]=await Promise.all([
+ const [riderRows,horseRows,confirmed]=await Promise.all([
   read('jef_rider_master','id,member_no,rider_grade,import_date','member_no',numbers(data.riders.map(r=>r.jef_member_no)),'member_no.asc,import_date.desc,id.asc',token,signal),
   read('jef_horse_master','id,registration_no,grade,import_date','registration_no',numbers(data.horses.map(h=>h.jef_registration_no)),'registration_no.asc,import_date.desc,id.asc',token,signal),
+  loadWinterApplicationCredentials(token,signal),
  ])
  const riders=latest(riderRows,'member_no','rider_grade'),horses=latest(horseRows,'registration_no','grade'),result:OverviewCredentials={}
  for(const row of [...data.riders,...data.horses]){
@@ -72,6 +74,10 @@ export async function loadWinterOverviewCredentials(data:Data,token:string,signa
   const values=[...new Set(refs.filter(r=>r&&r.source==='autumn_player').map(r=>grade(r.grade)).filter(Boolean))]
   if(values.length===1)result[String(binding.rider_id)]={value:riderGrade(values[0]),source:'過去原本（Autumn・要確認）',needsReview:true}
   if(values.length>1)result[String(binding.rider_id)]=missing('過去原本の資格級が不一致')
+ }
+ for(const c of confirmed){
+  const row=(c.kind==='rider'?data.riders:data.horses).find(r=>r.id===c.target_id)
+  if(row)result[row.id]={value:credentialDisplay(c.kind,c.value),source:'Winter申込書（管理者確認済み）',needsReview:false}
  }
  return result
 }

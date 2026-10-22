@@ -22,7 +22,7 @@ function application(v:unknown):Application{
  if(a.eventId!==WINTER_EVENT_ID||!/^[0-9a-f]{64}$/.test(digest))throw failure()
  const people:ApplicationPerson[]=list(a.people,50).map(v=>{
   const p=object(v);if(!['rider','horse'].includes(String(p.kind)))throw failure()
-  return {key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
+  return {key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),...(p.horseGrade===undefined?{}:{horseGrade:string(p.horseGrade,100)}),...(p.credentialOrigin===undefined?{}:{credentialOrigin:source(p.credentialOrigin)}),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
  })
  const entries:ApplicationEntry[]=list(a.entries,5000).map(v=>{
   const e=object(v);return {key:string(e.key,200),competition:string(e.competition,20),rider:string(e.rider,100),horse:string(e.horse,100),op:flag(e.op),rawRider:string(e.rawRider,1000),rawHorse:string(e.rawHorse,1000),origin:source(e.origin)}
@@ -47,7 +47,7 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
   if(original[section].length!==edited[section].length)throw failure()
   original[section].forEach((p,i)=>{if(p.key!==edited[section][i].key||JSON.stringify(p.origin)!==JSON.stringify(edited[section][i].origin))throw failure()})
  }
- original.people.forEach((p,i)=>{if(p.kind!==edited.people[i].kind)throw failure()})
+ original.people.forEach((p,i)=>{if(p.kind!==edited.people[i].kind||JSON.stringify(p.credentialOrigin)!==JSON.stringify(edited.people[i].credentialOrigin))throw failure()})
  original.entries.forEach((p,i)=>{if(p.rawRider!==edited.entries[i].rawRider||p.rawHorse!==edited.entries[i].rawHorse)throw failure()})
  for(const key of ['clubOrigin','amountOrigins','issues','sheets'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
  for(const key of Object.keys(rawChoices)){

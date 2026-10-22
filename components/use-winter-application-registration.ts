@@ -94,7 +94,8 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const appReview=review?applicationReview(review.edited,review.paid,review.accountChecked):null
  const savedStates=Object.values(work?.entries?.states??{}),registered=savedStates.filter(s=>s==='registered').length,unknown=savedStates.filter(s=>s==='unknown').length
  const panel:ApplicationRegistrationPanelProps={
-  complete:!!plan?.ready&&plan.participating&&!!plan.entries?.rows.length&&plan.entries.rows.length===review?.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered'),
+  complete:!!plan?.ready&&plan.credentialsComplete&&plan.participating&&!!plan.entries?.rows.length&&plan.entries.rows.length===review?.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered'),
+  credentials:plan?.credentials,
   busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview,canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
   reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
   entries:(model?.review.edited.entries??[]).map((entry,i)=>{const row=plan?.entries?.rows.find(r=>r.index===i);return {key:entry.key,label:`第${entry.competition}競技 ／ ${review!.edited.people.find(p=>p.key===entry.rider)?.name??'選手未対応'} ／ ${review!.edited.people.find(p=>p.key===entry.horse)?.name??'馬未対応'}${entry.op?' ／ OP':''}`,fee:row?.fee??appReview?.report.entries[i]?.price??null,id:row?.registeredId??row?.id,state:row?.differences.length?'要確認':row?status(row.state):work?.entries?'未再照合（端末の途中記録あり）':'参加登録後に出番を照合',issues:row?.differences??[]}}),
@@ -110,6 +111,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
    setAccepted(false);setSingleOperator(false)
    await exclusive(async()=>{
     const next=candidate();frozenMatch(shown.work,next)
+    if(!next.credentials)next.credentials=Object.fromEntries(shown.plan.credentials.filter(c=>c.value).map(c=>[c.key,{requestId:c.requestId,expected:c.expected}]))
     if(local(next)!==expected.current)throw new Error('登録記録が変わりました。上書きせず照合してください')
     const service=services(),fresh=await reviewApplicationRegistration(next,await service.load())
     if(!fresh.ready)throw new Error(fresh.issues.join('\n'))

@@ -1,3 +1,4 @@
+import {horseDeclaration,validHorseDeclaration} from './master/application-credentials'
 import {readInputXlsx,type InputBook,type InputSheet} from './master/xlsx-input'
 import {IMPORT_HEADERS,reviewWinterImport,type ImportSource} from './winter-import-review'
 import {WINTER_EVENT_ID} from './winter-event'
@@ -26,7 +27,7 @@ export function extractWinterApplication(book:InputBook,fileName:string,digest:s
   for(const r of rosterRows){
    const cell='B'+(r+1),name=value(s,cell),reading=value(s,'B'+r),jef=value(s,(kind==='rider'?'D':'C')+r)
    if(!name){if(jef||reading&&!s.cells['B'+r]?.formula||s.cells[cell]?.formula)app.issues.push(`${s.name}!${cell}：名前のない入力欄があります。数式の場合は再計算して保存してください`);continue}
-   app.people.push({key:kind[0]+value(s,'A'+r),kind,name,reading,jef,grade:kind==='rider'?value(s,'E'+r).normalize('NFKC').replace(/級/g,''):'',checked:false,sportsMember:'',instructorMember:'',qualified:false,origin:origin(s,cell)})
+   app.people.push({key:kind[0]+value(s,'A'+r),kind,name,reading,jef,grade:kind==='rider'?value(s,'E'+r).normalize('NFKC').replace(/級/g,''):'',...(kind==='horse'?{horseGrade:horseDeclaration(value(s,'C'+(r+2))),credentialOrigin:origin(s,'C'+(r+2))}:{credentialOrigin:origin(s,'E'+r)}),checked:false,sportsMember:'',instructorMember:'',qualified:false,origin:origin(s,cell)})
   }
  }
  if(app.people.filter(p=>p.kind==='rider').length>30||app.people.filter(p=>p.kind==='horse').length>20)app.issues.push('この様式の対応上限は選手30人・馬20頭です')
@@ -78,7 +79,8 @@ export function applicationReview(app:Application,paid:string,checked:boolean){
  calculated.total=calculated.jump===null||calculated.dressage===null?null:calculated.horse+calculated.jump+calculated.dressage
  const labels={horse:'馬匹登録料',jump:'障害エントリー料',dressage:'馬場エントリー料',total:'合計'}
  const amounts=(Object.keys(labels) as (keyof typeof labels)[]).map(key=>({key,label:labels[key],original:money(app.amounts[key]),calculated:calculated[key],reason:calculated[key]===null?'人馬・会員区分・資格・OPを確認してください':money(app.amounts[key])===null?'原本に保存された計算結果がありません。Excelで再計算・保存するか原本確認後に入力してください':money(app.amounts[key])!==calculated[key]?(key==='horse'?'名簿の馬数×既存の馬匹登録料と一致しません':'追加シート、人数、OP・会員区分、原本の数式を確認してください'):''}))
- return {report,amounts,ready:!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
+ const credentialIssues=app.people.filter(p=>p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??'')).map(p=>`${p.name}：グレード宣言を原本で確認して選択してください`)
+ return {report,amounts,credentialIssues,ready:!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
 }
 export function rosterCandidates(person:ApplicationPerson,data:SharedRoster,club:string){
  return data.entities.filter(e=>e.kind===person.kind&&!e.archived_at&&(person.jef&&person.jef===e.jef_number||norm(person.name)===norm(e.name)||person.reading&&norm(person.reading)===norm(e.reading))).map(entity=>({entity,reason:person.jef&&person.jef===entity.jef_number?'日馬連番号一致':norm(person.name)===norm(entity.name)?'氏名・馬名一致（空白・全半角を除く）':'読み一致',clubs:data.affiliations.filter(a=>a.entity_id===entity.id&&!a.ended_at).map(a=>data.clubs.find(c=>c.id===a.club_id)?.name??''),sameClub:data.affiliations.some(a=>a.entity_id===entity.id&&!a.ended_at&&data.clubs.some(c=>c.id===a.club_id&&c.name===club))})).sort((a,b)=>Number(b.sameClub)-Number(a.sameClub))

@@ -17,7 +17,7 @@ function hooks(){
   close(){cells.forEach(c=>c?.cleanup?.())},
  }
 }
-let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,changeNavigation=0
+let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,readCredentials=false,changeNavigation=0
 const lockNames=[]
 global.fetch=()=>{network++;throw Error('Real network forbidden')}
 global.window={confirm:()=>true,addEventListener(){},removeEventListener(){}}
@@ -35,9 +35,9 @@ Module._load=function(name,...args){
  if(name==='react')return {...React,...Object.fromEntries(['useState','useRef','useMemo','useEffect'].map(k=>[k,(...args)=>h[k](...args)]))}
  if(name==='@/lib/winter-application-services')return {winterApplicationServices:()=>({
   load:async()=>{loads++;if(deny)throw Error('synthetic admin denied');if(gateLoad)await gateLoad;return structuredClone(env.snapshot)},
-  savePerson:input=>env.deps.savePerson(input),saveParticipants:(...args)=>env.deps.saveParticipants(...args),saveEntry:input=>env.deps.saveEntry(input),
+  saveCredential:input=>env.deps.saveCredential(input),savePerson:input=>env.deps.savePerson(input),saveParticipants:(...args)=>env.deps.saveParticipants(...args),saveEntry:input=>env.deps.saveEntry(input),
  })}
- if(name==='@/lib/winter-application'){const actual=originalLoad.call(this,name,...args);return {...actual,readWinterApplication:async()=>{const app=structuredClone(env.work.review.original);if(!readOriginal){app.digest='c'.repeat(64);app.people[0].name='訂正版の合成選手'}return app}}}
+ if(name==='@/lib/winter-application'){const actual=originalLoad.call(this,name,...args);return {...actual,readWinterApplication:async()=>{const app=structuredClone(env.work.review.original);if(!readOriginal){app.digest='c'.repeat(64);app.people[0].name='訂正版の合成選手'}if(readCredentials){app.people[1].horseGrade='中B';app.people[1].credentialOrigin={sheet:'馬匹名簿',cell:'C7',value:'中Ｂ'}}return app}}}
  return originalLoad.call(this,name,...args)
 }
 const {WinterApplicationImport}=require('../components/winter-application-import.tsx')
@@ -47,10 +47,10 @@ const props={session:{accessToken:'synthetic-secret-not-for-export',refreshToken
 const render=()=>h.render(()=>WinterApplicationImport(props)).props
 const panel=p=>p.registration.props
 const tick=()=>new Promise(resolve=>setImmediate(resolve))
-async function settled(){for(let i=0;i<50;i++){await tick();const p=render();if(!p.busy)return p}throw Error('Synthetic action did not finish')}
+async function settled(){const deadline=Date.now()+3000;while(Date.now()<deadline){await new Promise(resolve=>setTimeout(resolve,1));const p=render();if(!p.busy)return p}throw Error('Synthetic action did not finish')}
 const file=value=>{const bytes=new TextEncoder().encode(typeof value==='string'?value:JSON.stringify(value));return {name:'synthetic.json',size:bytes.length,arrayBuffer:async()=>bytes.buffer}}
 async function start(){
- h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;changeNavigation=0
+ h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;readCredentials=false;changeNavigation=0
  let p=render();p.onRestoreFile(file(env.work.review));return settled()
 }
 async function ready(){let p=render();panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true,panel(p).error);panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);return render()}
@@ -102,10 +102,17 @@ async function main(){
  p.onFiles([excel]);p=render();p.onRead();p=await settled();assert.equal(p.frozen,true,'same-file checkpoint restored automatically');assert.equal(panel(p).hasPlan,false,'local completion never substitutes for fresh server review')
  panel(p).onReview();p=await settled();assert.equal(panel(p).complete,true);assert.equal(downloads,0);assert.deepEqual(env.posts,{person:2,participants:1,entry:1})
 
+ // Re-reading a completed legacy import opens a review for newly supported credentials.
+ panel(p).onClose();p=await settled();readCredentials=true
+ p.onFiles([excel]);p=render();p.onRead();p=await settled();assert.equal(p.frozen,false);assert.equal(p.edited.people[1].horseGrade,'中B');assert.match(p.reference,/^WINTER-CREDENTIALS-/);assert.equal(p.accountChecked,false)
+ p.onAccountChecked(true);p=render();p.onIntent('addition');p=render();p=await ready();assert.equal(panel(p).complete,false)
+ const credentialMarkup=renderToStaticMarkup(React.createElement(MasterApplicationRegistration,panel(p)));assert.match(credentialMarkup,/確認した資格・グレードを保存する/);assert.match(credentialMarkup,/今回 中B を保存/)
+ panel(p).onRun();p=await settled();assert.equal(panel(p).complete,true);assert.deepEqual(env.posts,{person:2,participants:1,entry:1});assert.equal(env.credentialPosts,2)
+
  // Stop after one person; the input cannot be edited while a save is active.
  p=await start();p=await ready();const savePerson=env.deps.savePerson;let release
  env.deps.savePerson=async input=>{const id=await savePerson(input);await new Promise(resolve=>release=resolve);return id}
- panel(p).onRun();await tick();p=render();assert.equal(panel(p).running,true);assert.equal(p.busy,true)
+ panel(p).onRun();for(let i=0;i<100&&!release;i++)await tick();assert(release,'save boundary reached');p=render();assert.equal(panel(p).running,true);assert.equal(p.busy,true)
  p.onPerson('r1',{name:'edited while saving'});p=render();assert.equal(p.edited.people[0].name,'合成選手')
  panel(p).onStop();release();p=await settled();assert.deepEqual(env.posts,{person:1,participants:0,entry:0});assert.equal(env.stored.people.r1.state,'registered');assert.equal(env.stored.people.h1.state,'unregistered')
  env.deps.savePerson=savePerson;p=await ready();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:2,participants:1,entry:1})

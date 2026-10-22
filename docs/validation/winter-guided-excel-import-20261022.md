@@ -152,3 +152,32 @@ Validation passed: credential-loader, registration-overview, pre-registration an
 shared settlement component tests, `tsc --noEmit`, `git diff --check`, and
 `next build --webpack` (24 pages). Authenticated browser rendering remains
 unverified in this environment.
+
+
+## 資格級・グレード宣言の保存（2026-10-22、承認後の追補）
+
+利用者の追加承認に基づき、従来の「表示だけ・DB変更なし」から、Winter申込書で確認した資格・宣言の保存まで拡張した。既存の人馬、出番、請求、入金、日馬連マスターの更新は行わない。
+
+- 標準原本を読み取り専用で確認。選手資格はE列、馬の宣言はC列の各馬ブロック最終行（C7、C10等）。「Ｓ・中Ａ・中Ｂ・中Ｃ・中Ｄ・未」は様式の初期表示なので未選択として扱う。
+- 原本セルと訂正値を保持し、②で馬の宣言を確認できる。③で保存済みと今回の値を表示し、確定後に保存・読み戻しする。
+- 出番がすべて登録済みでも資格・宣言だけ保存可能。空欄は既存値を消さず、資格やグレードを出場競技から推測しない。
+- 旧版の完了記録がある同一Excelを読み直す場合、新たに対応した宣言欄を含む確認へ進む。旧確定記録は保持し、補完用資料番号を自動発行する。未完了の旧記録は元の再開経路を保つ。
+- Winter固有の参加人馬・団体ID・既存受付IDを照合する。保存開始時の比較元を保持し、管理者確定後に他の操作で更新された場合は停止。再送は同じ保存番号を使い、古い保存要求が新しい宣言を巻き戻さない。
+- 団体別一覧は「Winter申込書（管理者確認済み）」の値を優先する。公式資格の認定や日馬連マスター更新を意味しない。
+
+### DBと権限の範囲
+
+適用済みmigration: `20261022104650_winter_application_credentials.sql`。追加した履歴テーブルと現在値ビューはWinterイベント限定。既存テーブル・ポリシー・権限は変更しない。管理者だけがSELECT可能で、直接INSERT/UPDATE/DELETE権限は付与しない。公開RPCはinvoker、履歴の追記だけを行うprivate関数は空のsearch_path、明示的な管理者検証、明示的なEXECUTE制限を持つ。
+
+CLIが未導入で、取得処理のネットワーク承認が成立しなかったため、接続済みSupabase MCPのmigration経路を使用した。SQLをBEGIN/ROLLBACK内で検証した後に一度適用し、サーバーのmigration履歴から実際の版番号を取得して同一SQLを保存した。架空のmigration番号は使用していない。
+
+合成DB試験は `tests/winter-application-credentials.sql`。初回保存、更新、再送、古い再送、競合、別イベント、誤った人馬/団体、空欄、不正形式、非管理者、user_metadataによる偽装、RLSを確認し、全試験データをROLLBACKした。適用後の保存件数は0件。実申込者の資格・宣言は補完登録していない。security advisorsは変更前後56件で、この追加による新規指摘は0件。既存の指摘は今回の範囲外として変更しない。
+
+### コード検証
+
+- 資格・宣言、既存登録のみの補完、旧再開JSON互換、保存応答喪失後の読み戻し、旧版Excel再読込、古い再開の停止を合成データで確認。
+- Excel抽出、draft、guide、review component、registration core/component、service adapter、資格表示、団体別一覧、事前登録、共通精算の関連試験。
+- TypeScript型検査、webpackビルド24ページ、diff空白検査。
+- 共通マスターに欄を追加し、Winterのデータ/保存アダプターに限定。Autumn精算の既存HTML比較は通過。
+
+認証済みChromeを操作する機能はこのWorkに公開されていないため、実申込書のブラウザー上の再取込は未実施。利用者が専用Previewで原本を読み直し、②の資格・宣言、③の保存内容、事前登録の団体別一覧を確認する。実原本・画像・個人情報・認証情報はGitHubに含めない。PR6の専用ブランチのみ更新し、prep/winter-2026・main・Autumn本番は更新しない。

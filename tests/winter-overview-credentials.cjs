@@ -13,6 +13,7 @@ global.fetch=async(input,options)=>{
  assert.ok(options.signal)
  if(mode==='error')return {ok:false}
  const rows={
+  fhs_winter_current_credentials:[],
   jef_rider_master:[
    {member_no:'101',rider_grade:'B',import_date:'2025-01-01'},{member_no:'101',rider_grade:'Ａ',import_date:'2026-10-04'},
    {member_no:'102',rider_grade:'B(D)',import_date:'2026-10-04'},{member_no:'102',rider_grade:'A',import_date:'2026-10-04'},
@@ -26,6 +27,7 @@ global.fetch=async(input,options)=>{
    {id:id(26),kind:'rider',source_reference:JSON.stringify([{source:'autumn_player',grade:'A'},{source:'autumn_player',grade:'B'}])},
   ],
  }
+ if(mode==='confirmed')rows.fhs_winter_current_credentials=[{event_id:eventId,entity_id:id(24),club_id:id(40),target_id:id(4),kind:'rider',value:'A',request_id:'a'.repeat(64),source_reference:'SYNTHETIC',confirmed_at:'2026-10-22T00:00:00Z'},{event_id:eventId,entity_id:id(30),club_id:id(40),target_id:id(10),kind:'horse',value:'中B',request_id:'b'.repeat(64),source_reference:'SYNTHETIC',confirmed_at:'2026-10-22T00:00:00Z'}]
  if(mode==='empty')rows.jef_horse_master=[]
  if(mode==='wrong')rows.jef_horse_master=[{registration_no:'999',grade:'中障害A',import_date:'2026-10-04'}]
  if(mode==='invalid')rows.fhs_winter_reception_roster=[{rider_id:id(4),entity_id:'bad-id'}]
@@ -41,9 +43,10 @@ global.fetch=async(input,options)=>{
  assert.equal(values[id(10)].value,'中障害A');assert.equal(values[id(11)].value,'未確認')
  const bindings=requests.find(r=>r.url.pathname.endsWith('fhs_winter_reception_roster'))
  assert.ok(!bindings.url.searchParams.get('rider_id').includes(id(3)),'Explicit latest blank does not resurrect an old grade')
- assert.ok(requests.every(r=>[...r.url.searchParams.values()].some(v=>v.startsWith('in.('))),'Reads are bounded to exact numbers/IDs')
+ assert.ok(requests.every(r=>r.url.searchParams.get('event_id')===`eq.${eventId}`||[...r.url.searchParams.values()].some(v=>v.startsWith('in.('))),'Reads are bounded to exact numbers/IDs')
  assert.equal(JSON.stringify(data),before)
  mode='empty';assert.equal((await load(data,'synthetic'))[id(10)].value,'未確認','No fabricated horse grade')
+ mode='confirmed';const confirmed=await load(data,'synthetic');assert.equal(confirmed[id(4)].value,'A級');assert.equal(confirmed[id(4)].needsReview,false);assert.equal(confirmed[id(10)].value,'中B');assert.ok(confirmed[id(10)].source.includes('管理者確認済み'));
  mode='wrong';await assert.rejects(load(data,'synthetic'),/対応/)
  mode='invalid';await assert.rejects(load(data,'synthetic'),/対応/)
  mode='error';await assert.rejects(load(data,'synthetic'),/取得できません/)

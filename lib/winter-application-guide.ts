@@ -1,3 +1,4 @@
+import {validHorseDeclaration} from './master/application-credentials'
 import type {ApplicationDraft} from './winter-application-draft'
 import type {ApplicationSnapshot} from './winter-application-registration'
 import type {ApplicationTodo,ApplicationClubSummary} from './master/application-guide'
@@ -8,6 +9,7 @@ import {applicationReview,normalizeApplicationName} from './winter-application'
 export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):ApplicationTodo[]{
  const app=d.edited,review=applicationReview(app,d.paid,d.accountChecked),items:ApplicationTodo[]=[]
  const add=(label:string,message:string,target:string,blocking=true)=>items.push({label,message,target,blocking})
+ for(const p of app.people)if(p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??''))add(p.name,'グレード宣言を原本で確認して選択してください。',applicationPersonTarget(p.key))
  for(const message of app.issues)add('Excel原本',message,'application-source')
  if(!rosterLoaded)add('既存登録の確認','登録済みの団体・人馬を読み込んでください。','application-club')
  for(const p of app.people)if(!d.choices[p.key])add(p.name||'名前未入力','既存の人馬を選ぶか、新規登録を選んでください。',applicationPersonTarget(p.key))

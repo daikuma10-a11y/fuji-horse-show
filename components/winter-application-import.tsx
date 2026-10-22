@@ -13,6 +13,7 @@ import {WINTER_EVENT_NAME} from '@/lib/winter-event'
 import {applicationTodos,applicationClubSummary} from '@/lib/winter-application-guide'
 import {winterApplicationServices} from '@/lib/winter-application-services'
 import {applicationRegistrationKey,parseApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
+import {credentialReviewUpgrade} from '@/lib/winter-credential-review-upgrade'
 import preparation from '@/config/winter-2026-preparation.json'
 
 function download(draft:ApplicationDraft){
@@ -83,13 +84,18 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  }
  async function begin(app:Application){
   setIntent('')
-  const stored=localStorage.getItem(applicationDraftKey(app.digest)),next=stored?parseApplicationDraft(stored):createApplicationDraft(app)
+  const stored=localStorage.getItem(applicationDraftKey(app.digest))
+  let next=stored?parseApplicationDraft(stored):createApplicationDraft(app)
   const needsReference=!next.reference.trim()
   if(needsReference)next.reference=createApplicationDraft(app).reference
-  expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference)
-  const saved=localStorage.getItem(applicationRegistrationKey(next.reference))
-  if(saved){const record=parseApplicationRegistration(saved);if(record.review.original.digest!==app.digest)throw new Error('同じ資料番号の原本が異なります。保存済み記録を確認してください。');registration.openRecord(record)}
-  setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
+  let saved=localStorage.getItem(applicationRegistrationKey(next.reference))
+  const record=saved?parseApplicationRegistration(saved):undefined
+  if(record&&record.review.original.digest!==app.digest)throw new Error('同じ資料番号の原本が異なります。保存済み記録を確認してください。')
+  const upgraded=credentialReviewUpgrade(app,record?.review??next,record)
+  if(upgraded){next=upgraded;saved=localStorage.getItem(applicationRegistrationKey(next.reference))}
+  expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded)
+  if(saved)registration.openRecord(parseApplicationRegistration(saved))
+  setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
   try{await loadContext()}catch(e){setError('Excelは読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
  }
  function saveAndGo(next?:()=>void){void action(()=>{

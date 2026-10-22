@@ -1,5 +1,7 @@
 'use client'
 
+import {HORSE_DECLARATIONS} from '@/lib/master/application-credentials'
+
 import type {Application,ApplicationPerson,ApplicationEntry,ApplicationDifference,IdentityCandidate} from '@/lib/master/application'
 import {applicationPersonTarget,applicationEntryTarget,type ApplicationTodo,type ApplicationClubSummary} from '@/lib/master/application-guide'
 import type {ReactNode} from 'react'
@@ -19,7 +21,7 @@ function differenceText(text:string){
  try{const value=JSON.parse(text);if(typeof value==='string')return value
   if(value&&typeof value==='object'){
    if('competition' in value)return `第${value.competition}競技 ／ ${value.rawRider||'選手空欄'}（対応：${value.rider||'未選択'}） ／ ${value.rawHorse||'馬名空欄'}（対応：${value.horse||'未選択'}） ／ OP：${value.op?'あり':'なし'}`
-   if('name' in value)return `${value.name} ／ 読み：${value.reading||'空欄'} ／ 日馬連：${value.jef||'空欄'}（${value.checked?'確認済み':'未確認'}）${value.kind==='rider'?` ／ 資格：${value.grade||'未選択'} ／ 乗馬協会：${value.sportsMember||'未確認'} ／ 指導者協会：${value.instructorMember||'未確認'} ／ 地域乗馬指導者資格：${value.qualified?'確認済み':'未確認'}`:''}`
+   if('name' in value)return `${value.name} ／ 読み：${value.reading||'空欄'} ／ 日馬連：${value.jef||'空欄'}（${value.checked?'確認済み':'未確認'}）${value.kind==='rider'?` ／ 資格：${value.grade||'未選択'} ／ 乗馬協会：${value.sportsMember||'未確認'} ／ 指導者協会：${value.instructorMember||'未確認'} ／ 地域乗馬指導者資格：${value.qualified?'確認済み':'未確認'}`:` ／ グレード宣言：${value.horseGrade||'記載なし'}`}`
   }
  }catch{/* Non-JSON labels, including a missing source row, are already readable. */}
  return text
@@ -98,7 +100,8 @@ export function MasterApplicationReview(p:{
         {(['sportsMember','instructorMember'] as const).map((key,i)=><label key={key}>{i===0?'乗馬協会':'指導者協会'}の会員区分<select className={field} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value})}><option value="">未確認</option><option>会員</option><option>非会員</option></select></label>)}
         <label className="flex items-center gap-3"><input type="checkbox" className="size-5" checked={person.qualified} onChange={e=>p.onPerson(person.key,{qualified:e.target.checked})}/>地域乗馬指導者資格を確認済み</label>
        </div>}
-       <details className="mt-3 text-sm"><summary className="cursor-pointer">Excel原本の値を見る</summary><p>{old.origin.sheet}!{old.origin.cell} ／ {old.name} ／ 読み：{old.reading||'空欄'} ／ 日馬連：{old.jef||'空欄'}{person.kind==='rider'?` ／ 資格：${old.grade||'未選択'}`:''}</p></details>
+       {person.kind==='horse'&&<label className="mt-3 block">グレード宣言<select aria-label={`${person.key} グレード宣言`} className={field} value={person.horseGrade??''} onChange={e=>p.onPerson(person.key,{horseGrade:e.target.value})}><option value="">記載なし・未確認</option>{person.horseGrade&&!HORSE_DECLARATIONS.includes(person.horseGrade as typeof HORSE_DECLARATIONS[number])&&<option value={person.horseGrade}>{person.horseGrade}（要確認）</option>}{HORSE_DECLARATIONS.map(value=><option key={value}>{value}</option>)}</select><span className="text-sm">申込書の宣言を確認してください。空欄では保存済みの宣言を消しません。</span></label>}
+       <details className="mt-3 text-sm"><summary className="cursor-pointer">Excel原本の値を見る</summary><p>{old.origin.sheet}!{old.origin.cell} ／ {old.name} ／ 読み：{old.reading||'空欄'} ／ 日馬連：{old.jef||'空欄'}{person.kind==='rider'?` ／ 資格：${old.grade||'未選択'}`:` ／ グレード宣言：${old.horseGrade||'記載なし'}`}{old.credentialOrigin&&` ／ ${old.credentialOrigin.sheet}!${old.credentialOrigin.cell}：${old.credentialOrigin.value||'空欄'}`}</p></details>
       </div>
      })}
     </section>
