@@ -4,6 +4,7 @@ import {applicationReview,applicationSource,normalizeApplicationName,rosterCandi
 import {assertWinterEvent,WINTER_EVENT_ID,winterCompetition,winterStorageKey} from './winter-event'
 import {importBindingKey,importCheckpointDifferences,importReference,readImportCheckpoint,reviewImportRegistration,runImportRegistration,type ImportCheckpoint,type ImportSnapshot,type ImportState} from './winter-import-registration'
 import type {ApplicationPerson} from './master/application'
+import type {JefRiderRecord} from './master/application-autofill'
 import type {SharedRoster,WinterRosterBinding,saveRosterEntity,saveWinterParticipants} from './shared-roster'
 import type {saveWinterInitialEntry} from './winter-initial-entry'
 
@@ -12,9 +13,9 @@ export type ApplicationRegistration={
  kind:'winter-application-registration';version:1;eventId:string;review:ApplicationDraft
  people:Record<string,PersonResult>;participants:{state:ImportState;clubId?:string};entries:ImportCheckpoint|null;credentials?:Record<string,CredentialExpectation>
 }
-export type ApplicationSnapshot=ImportSnapshot&{roster:SharedRoster;bindings:WinterRosterBinding[];credentials:WinterCredential[]}
+export type ApplicationSnapshot=ImportSnapshot&{roster:SharedRoster;bindings:WinterRosterBinding[];credentials:WinterCredential[];riderGrades?:JefRiderRecord[];riderGradesError?:string}
 export type ApplicationRegistrationServices={
- load:()=>Promise<ApplicationSnapshot>
+ load:(riderNumbers?:string[])=>Promise<ApplicationSnapshot>
  savePerson:(input:Parameters<typeof saveRosterEntity>[0])=>ReturnType<typeof saveRosterEntity>
  saveParticipants:(...args:Parameters<typeof saveWinterParticipants> extends [...infer A,string]?A:never)=>ReturnType<typeof saveWinterParticipants>
  saveCredential:(input:CredentialSave)=>Promise<string>
@@ -227,7 +228,7 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
   if(!targetId)throw new Error('資格・グレードの登録先を確認できません')
   // The immutable expectation was persisted before any request. Lost responses are safe to read back.
   persist()
-  await deps.saveCredential({eventId:WINTER_EVENT_ID,entityId,clubId,targetId,kind:p.kind,name:p.name.trim(),jef:p.jef.trim(),value:row.value,requestId:row.requestId,expected:work.credentials![p.key].expected,digest:work.review.original.digest,reference:work.review.reference,location:p.credentialOrigin?`${p.credentialOrigin.sheet}!${p.credentialOrigin.cell}`:`${p.origin.sheet}!${p.origin.cell}（原本確認）`})
+  await deps.saveCredential({eventId:WINTER_EVENT_ID,entityId,clubId,targetId,kind:p.kind,name:p.name.trim(),jef:p.jef.trim(),value:row.value,requestId:row.requestId,expected:work.credentials![p.key].expected,digest:work.review.original.digest,reference:work.review.reference,location:p.gradeAutofill?`日馬連マスター ${p.gradeAutofill.importDate}（会員番号${p.gradeAutofill.memberNo}）`:p.credentialOrigin?`${p.credentialOrigin.sheet}!${p.credentialOrigin.cell}`:`${p.origin.sheet}!${p.origin.cell}（原本確認）`})
   const after=await check();if(!after.plan.credentials.find(c=>c.key===p.key)?.saved)throw new Error('資格・グレードの保存結果が一致しません。再照合してください')
   s=after.s;persist()
  }

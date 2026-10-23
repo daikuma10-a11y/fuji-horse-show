@@ -35,6 +35,7 @@ export function MasterApplicationReview(p:{
  intent?:'addition'|'';onIntent?:(value:'addition'|'')=>void
  original:Application|null;edited:Application|null;reference:string;paid:string;accountChecked:boolean
  review:ApplicationReviewModel|null;candidates:Record<string,IdentityCandidate[]>;choices:Record<string,string>;rosterLoaded:boolean
+ qualificationNotes?:Record<string,string>
  differences:ApplicationDifference[]|null;revisionName:string
  onFiles:(files:FileList|null)=>void;onRead:()=>void;onRestoreFile:(file:File)=>void;onSave:()=>void;onOpenSaved:()=>void;onDownload:()=>void;onLoadRoster:()=>void;onReset:()=>void
  onReference:(s:string)=>void;onClub:(s:string)=>void;onPaid:(s:string)=>void;onAccountChecked:(v:boolean)=>void
@@ -101,9 +102,12 @@ export function MasterApplicationReview(p:{
         {selected&&<p className="mt-2">既存値：{selected.name} ／ 読み {selected.reading||'空欄'} ／ 日馬連 {selected.jef||'空欄'}。原本との差は自動で上書きしません。</p>}
        </div>
        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(['name','reading','jef'] as const).map((key,i)=><label key={key}>{['名前・馬名','ふりがな','日馬連番号'][i]}<input aria-label={`${person.key} ${key}`} className={field} maxLength={100} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value})}/></label>)}</div>
+       {person.readingAutofill&&person.reading===person.readingAutofill&&<p className="mt-2 text-sm">馬名がカタカナ・ひらがなのため、馬名をフリガナに自動入力しました。</p>}
        <label className="mt-3 flex items-center gap-3"><input type="checkbox" className="size-5" checked={person.checked} onChange={e=>p.onPerson(person.key,{checked:e.target.checked})}/>日馬連番号を確認済み</label>
        {person.kind==='rider'&&<div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label>騎乗者資格<select className={field} value={person.grade} onChange={e=>p.onPerson(person.key,{grade:e.target.value})}><option value="">未選択</option>{!['','A','B','C','未登録'].includes(person.grade)&&<option value={person.grade}>{person.grade}（要選択）</option>}{['A','B','C','未登録'].map(x=><option key={x}>{x}</option>)}</select></label>
+        {person.gradeAutofill&&<p className="self-end text-sm">日馬連マスター（{person.gradeAutofill.importDate}取得）・会員番号{person.gradeAutofill.memberNo}から{person.gradeAutofill.grade}級を自動入力しました。{old.grade&&old.grade!==person.grade?`申込書の記載：${old.grade}。差を確認してください。`:''}</p>}
+        {p.qualificationNotes?.[person.key]&&<p className="self-end text-sm">{p.qualificationNotes[person.key]}</p>}
         {(['sportsMember','instructorMember'] as const).map((key,i)=><label key={key}>{i===0?'乗馬協会':'指導者協会'}の会員区分<select className={field} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value})}><option value="">未確認</option><option>会員</option><option>非会員</option></select></label>)}
         <label className="flex items-center gap-3"><input type="checkbox" className="size-5" checked={person.qualified} onChange={e=>p.onPerson(person.key,{qualified:e.target.checked})}/>地域乗馬指導者資格を確認済み</label>
        </div>}

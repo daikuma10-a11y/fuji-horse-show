@@ -2,6 +2,8 @@
 
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {MasterApplicationReview} from './master/application-review'
+import {autofillApplicationPerson,jefRiderQualification} from '@/lib/master/application-autofill'
+import {autofillApplicationDraft} from '@/lib/winter-application-draft'
 import {MasterApplicationRegistration} from './master/application-registration'
 import {useWinterApplicationRegistration} from './use-winter-application-registration'
 import type {Application,ApplicationPerson,ApplicationEntry,IdentityCandidate} from '@/lib/master/application'
@@ -53,7 +55,13 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  function edit(fn:(d:ApplicationDraft)=>ApplicationDraft){if(lock.current||registration.isBusy()||registration.isFrozen())return;setDraft(d=>d?fn(d):d);setDirty(true);setMessage('')}
  function person(key:string,patch:Partial<ApplicationPerson>){edit(d=>{
   const choices={...d.choices};if('name' in patch||'reading' in patch||'jef' in patch)delete choices[key]
-  return {...d,choices,accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>p.key===key?{...p,...patch}:p)}}
+  return {...d,choices,accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>{
+   if(p.key!==key)return p
+   const next={...p,...patch}
+   if('grade' in patch){next.gradeManual=true;delete next.gradeAutofill}
+   if('reading' in patch)delete next.readingAutofill
+   return autofillApplicationPerson(next,context?.riderGrades??[])
+  })}}
  })}
  function entry(key:string,patch:Partial<ApplicationEntry>){edit(d=>({...d,accountChecked:false,edited:{...d.edited,entries:d.edited.entries.map(e=>e.key===key?{...e,...patch}:e)}}))}
  function open(value:ApplicationDraft){
@@ -63,7 +71,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   if(dirty&&!window.confirm('現在の未保存の訂正を、選択した確認記録で置き換えます。続けますか？'))return
   expectedSaved.current=stored;setDraft(clean);setFile(null);setRevision(null);setRoster(null);setIntent('');setDirty(!stored)
   setMessage('確認途中を開きました。既存名簿の対応は候補を読み直して確認してください。登録結果を示すファイルではありません。')
-  return true
+  return clean
  }
  const review=useMemo(()=>draft?applicationReview(draft.edited,draft.paid,draft.accountChecked):null,[draft])
  const candidates=useMemo(()=>{
@@ -76,10 +84,16 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const todos=draft?applicationTodos(draft,roster!==null):[]
  if(clubSummary?.state==='registered'&&intent!=='addition')todos.push({label:'Excelの取込方法',message:'「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。新規・追加の出番や資格級・グレード宣言の保存に進めます。',target:'application-club',blocking:true})
  if(clubSummary?.state==='ambiguous')todos.push({label:'団体名',message:clubSummary.detail,target:'application-club',blocking:true})
- async function loadContext(){
+ if(context?.riderGradesError)todos.push({label:'資格の自動補完',message:context.riderGradesError,target:'application-club',blocking:false})
+ const qualificationNotes=Object.fromEntries((draft?.edited.people??[]).filter(p=>p.kind==='rider'&&p.jef).map(p=>[p.key,context?.riderGrades&&!context.riderGradesError?jefRiderQualification(p,context.riderGrades).message:'']))
+ async function loadContext(target:ApplicationDraft|null=draft){
   setRoster(null);setContext(null)
-  const snapshot=await winterApplicationServices(session,onSession).load()
+  const snapshot=await winterApplicationServices(session,onSession).load(target?.edited.people.filter(p=>p.kind==='rider').map(p=>p.jef))
   setRoster(snapshot.roster);setContext(snapshot)
+  if(target&&!registration.isFrozen()){
+   const filled=autofillApplicationDraft(target,snapshot.riderGrades??[])
+   if(filled!==target){setDirty(true);setDraft(current=>current?.original.digest===target.original.digest?filled:current)}
+  }
  }
  async function begin(app:Application){
   setIntent('')
@@ -95,7 +109,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded)
   if(saved)registration.openRecord(parseApplicationRegistration(saved))
   setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
-  try{await loadContext()}catch(e){setError('Excelは読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
+  try{await loadContext(next)}catch(e){setError('Excelは読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
  }
  function saveAndGo(next?:()=>void){void action(()=>{
   if(draft&&!registration.isFrozen()){expectedSaved.current=persistApplicationDraft(localStorage,draft,expectedSaved.current);setDirty(false)}
@@ -120,7 +134,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   formatDescription="対応：2026 Winterの指定様式（選手30人・馬20頭、障害・馬場の追加入力欄とコピーシート）。"
   original={draft?.original??null} edited={draft?.edited??null} reference={draft?.reference??''} paid={draft?.paid??''} accountChecked={draft?.accountChecked??false}
   review={review?{amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),issues:[...draft!.edited.issues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
-  candidates={candidates} choices={draft?.choices??{}} rosterLoaded={roster!==null} differences={differences} revisionName={revision?.fileName??''} competitions={preparation.competitions}
+  candidates={candidates} choices={draft?.choices??{}} qualificationNotes={qualificationNotes} rosterLoaded={roster!==null} differences={differences} revisionName={revision?.fileName??''} competitions={preparation.competitions}
   onFiles={files=>{if(lock.current||registration.isBusy())return;if(!files||files.length!==1){setError('Excelファイルを1つ選択してください');return}setFile(files[0]);setError('')}}
   onRead={()=>void action(async()=>{
    if(!file)throw new Error('Excelファイルを選択してください')
@@ -129,9 +143,9 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
    if(draft){setRevision(app);setMessage(app.digest===draft.original.digest?'同じ原本です。現在の訂正・対応を保持しました。':'訂正版との差分を表示しました。現在の原本・訂正値を保持しています。');return}
    await begin(app)
   })}
-  onRestoreFile={f=>void action(async()=>{if(f.size>8_000_000)throw new Error('確認再開ファイルは8MB以内です');if(open(parseApplicationDraft(new TextDecoder('utf-8',{fatal:true}).decode(await f.arrayBuffer()))))await loadContext()})}
+  onRestoreFile={f=>void action(async()=>{if(f.size>8_000_000)throw new Error('確認再開ファイルは8MB以内です');const opened=open(parseApplicationDraft(new TextDecoder('utf-8',{fatal:true}).decode(await f.arrayBuffer())));if(opened)await loadContext(opened)})}
   onSave={()=>void action(()=>{if(!draft||registration.isFrozen())return;expectedSaved.current=persistApplicationDraft(localStorage,draft,expectedSaved.current);setDirty(false);setMessage('確認途中をこの端末に保存しました。端末を替える前に確認再開JSONも保存してください。')})}
-  onOpenSaved={()=>void action(async()=>{if(!draft)return;const raw=localStorage.getItem(applicationDraftKey(draft.original.digest));if(!raw)throw new Error('この原本の確認記録は端末にありません');if(open(parseApplicationDraft(raw)))await loadContext()})}
+  onOpenSaved={()=>void action(async()=>{if(!draft)return;const raw=localStorage.getItem(applicationDraftKey(draft.original.digest));if(!raw)throw new Error('この原本の確認記録は端末にありません');const opened=open(parseApplicationDraft(raw));if(opened)await loadContext(opened)})}
   onDownload={()=>void action(()=>{if(draft&&!registration.isFrozen()){download(draft);setMessage('確認再開JSONのダウンロードを開始しました。保存先でファイルを確認してください。')}})}
   onReset={nextApplication}
   onLoadRoster={()=>void action(async()=>{if(registration.isFrozen())return;await loadContext();setMessage('既存登録を確認しました。候補の所属・番号を確認して選んでください。')})}

@@ -1,5 +1,6 @@
 import type {Application,ApplicationPerson,ApplicationEntry,Origin} from './master/application'
 import {WINTER_EVENT_ID,winterStorageKey} from './winter-event'
+import {autofillApplicationPerson,type JefRiderRecord} from './master/application-autofill'
 
 /** Review-only checkpoint. It must never be interpreted as a database save result. */
 export type ApplicationDraft = {
@@ -22,7 +23,9 @@ function application(v:unknown):Application{
  if(a.eventId!==WINTER_EVENT_ID||!/^[0-9a-f]{64}$/.test(digest))throw failure()
  const people:ApplicationPerson[]=list(a.people,50).map(v=>{
   const p=object(v);if(!['rider','horse'].includes(String(p.kind)))throw failure()
-  return {key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),...(p.horseGrade===undefined?{}:{horseGrade:string(p.horseGrade,100)}),...(p.credentialOrigin===undefined?{}:{credentialOrigin:source(p.credentialOrigin)}),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
+  let gradeAutofill:ApplicationPerson['gradeAutofill']
+  if(p.gradeAutofill!==undefined){const s=object(p.gradeAutofill);gradeAutofill={memberNo:string(s.memberNo,100),name:string(s.name,100),grade:string(s.grade,1),importDate:string(s.importDate,10)};if(!/^\d+$/.test(gradeAutofill.memberNo)||!['A','B','C'].includes(gradeAutofill.grade)||!/^\d{4}-\d{2}-\d{2}$/.test(gradeAutofill.importDate)||p.kind!=='rider')throw failure()}
+  return {key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),...(p.horseGrade===undefined?{}:{horseGrade:string(p.horseGrade,100)}),...(p.credentialOrigin===undefined?{}:{credentialOrigin:source(p.credentialOrigin)}),...(gradeAutofill?{gradeAutofill}:{}),...(p.gradeManual===undefined?{}:{gradeManual:flag(p.gradeManual)}),...(p.readingAutofill===undefined?{}:{readingAutofill:string(p.readingAutofill,100)}),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
  })
  const entries:ApplicationEntry[]=list(a.entries,5000).map(v=>{
   const e=object(v);return {key:string(e.key,200),competition:string(e.competition,20),rider:string(e.rider,100),horse:string(e.horse,100),op:flag(e.op),rawRider:string(e.rawRider,1000),rawHorse:string(e.rawHorse,1000),origin:source(e.origin)}
@@ -35,7 +38,12 @@ function application(v:unknown):Application{
   issues:list(a.issues,10000).map(x=>string(x,4000)),sheets:list(a.sheets,32).map(x=>string(x,100))}
 }
 export function createApplicationDraft(app:Application):ApplicationDraft{
- return {kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original:structuredClone(app),edited:structuredClone(app),reference:`WINTER-2026-${app.digest.slice(0,32)}`,paid:'',accountChecked:false,choices:{}}
+ return autofillApplicationDraft({kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original:structuredClone(app),edited:structuredClone(app),reference:`WINTER-2026-${app.digest.slice(0,32)}`,paid:'',accountChecked:false,choices:{}},[])
+}
+export function autofillApplicationDraft(draft:ApplicationDraft,rows:JefRiderRecord[]):ApplicationDraft{
+ const people=draft.edited.people.map(p=>autofillApplicationPerson(p,rows))
+ if(JSON.stringify(people)===JSON.stringify(draft.edited.people))return draft
+ return {...draft,edited:{...draft.edited,people},accountChecked:false}
 }
 export function readApplicationDraft(v:unknown):ApplicationDraft{
  const d=object(v)

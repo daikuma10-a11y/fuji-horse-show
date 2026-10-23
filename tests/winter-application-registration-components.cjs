@@ -81,6 +81,14 @@ async function main(){
  const mapped=structuredClone(saved.review);p.onRestoreFile(file(mapped));p=await settled();panel(p).onReview();p=await settled();assert.equal(p.frozen,true);assert.equal(panel(p).entries[0].state,'登録済み')
  assert(lockNames.every(name=>name.includes(env.work.eventId)))
 
+ // Autofill reaches the editable form after load, while preserving the source and manual corrections.
+ p=await start();env.snapshot.riderGrades=[{member_no:'123',name:'合成選手',rider_grade:'Ａ級',import_date:'2026-10-23'}]
+ p.onPerson('r1',{jef:'123'});p=render();p.onLoadRoster();p=await settled()
+ assert.equal(p.edited.people[0].grade,'A');assert.equal(p.original.people[0].grade,'未登録');assert.equal(p.edited.people[0].gradeAutofill.importDate,'2026-10-23')
+ p.onPerson('r1',{grade:'B'});p=render();p.onLoadRoster();p=await settled();assert.equal(p.edited.people[0].grade,'B');assert.equal(p.edited.people[0].gradeAutofill,undefined)
+ p.onPerson('h1',{name:'サクラブルー',reading:''});p=render();assert.equal(p.edited.people[1].reading,'サクラブルー');assert.equal(p.original.people[1].name,'合成馬')
+ p.onPerson('h1',{reading:'さくらぶるう'});p=render();p.onLoadRoster();p=await settled();assert.equal(p.edited.people[1].reading,'さくらぶるう');assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+
  // Registered-club import confirmation clears its warning; change/cancel is a separate navigation action.
  p=await start()
  const riderId=env.addPerson({kind:'rider',name:'合成選手',reading:'ごうせいせんしゅ',jefNumber:'',clubName:p.edited.club})
