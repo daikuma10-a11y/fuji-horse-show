@@ -1,4 +1,5 @@
--- PROPOSAL ONLY: not applied. Requires approval to change these two tables' access.
+-- Approved and applied 2026-10-24 as 20261024002951_protect_jef_master_lookup.sql.
+-- Retained proposal for history; do not run this duplicate separately.
 -- No changes to participant/entry/settlement tables, accounts or admin roles.
 -- Lookup reads use the same server-controlled app_metadata admin claim as Winter.
 begin;
