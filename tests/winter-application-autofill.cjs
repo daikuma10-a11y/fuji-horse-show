@@ -1,7 +1,7 @@
 require('./register-ts.cjs')
 const assert=require('node:assert/strict')
 const fixture=require('./winter-application-fixture.cjs')
-const {kanaHorseReading,jefRiderQualification,autofillApplicationPerson}=require('../lib/master/application-autofill.ts')
+const {kanaHorseReading,jefRiderQualification,autofillApplicationPerson,applyApplicationCandidate}=require('../lib/master/application-autofill.ts')
 const {createApplicationDraft,autofillApplicationDraft,serializeApplicationDraft,parseApplicationDraft}=require('../lib/winter-application-draft.ts')
 const {loadJefRiderQualifications}=require('../lib/jef-rider-qualifications.ts')
 for(const name of ['サムライブルー','さくら','さくらブルー','ヴィーナス・ブルー','サクラ ブルー'])assert.equal(kanaHorseReading(name),name)
@@ -29,6 +29,11 @@ for(const grade of ['B(D)','B級／馬場馬術限定',null,'未登録'])assert.
 assert.equal(jefRiderQualification(person,[...rows,{...row,import_date:'2026-10-24',rider_grade:null}]).grade,'','do not reuse older grade after latest blank')
 assert.equal(autofillApplicationPerson(person,[{...row,rider_grade:'B(D)'}]).grade,'','remove old autofill when a newer record cannot confirm it')
 assert.equal(autofillApplicationDraft(filled,rows),filled,'unchanged reread preserves confirmations')
+const noNumber={id:'synthetic',name:person.name,reading:person.reading,jef:'',reason:'same name',clubs:[]}
+const cleared=applyApplicationCandidate({...person,checked:true},noNumber,rows)
+assert.equal(cleared.jef,'');assert.equal(cleared.checked,false);assert.equal(cleared.grade,'');assert.equal(cleared.gradeAutofill,undefined,'a no-number candidate cannot retain a different identity qualification')
+assert.equal(person.jef,'１２３','candidate choice does not mutate the previous review')
+assert.equal(applyApplicationCandidate({...person,grade:'C',gradeManual:true},noNumber,rows).grade,'C')
 let calls=0
 global.fetch=async(url,options)=>{
  calls++;const u=new URL(url);assert.equal(u.pathname,'/rest/v1/jef_rider_master');assert.equal(u.searchParams.get('member_no'),'in.(123)');assert.equal(u.searchParams.get('select'),'member_no,name,rider_grade,import_date');assert.equal(options.method,'GET');assert.equal(options.headers.Authorization,'Bearer synthetic-token');assert.equal(options.body,undefined)

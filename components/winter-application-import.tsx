@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {MasterApplicationReview} from './master/application-review'
-import {autofillApplicationPerson,jefRiderQualification} from '@/lib/master/application-autofill'
+import {applyApplicationCandidate,autofillApplicationPerson,jefRiderQualification} from '@/lib/master/application-autofill'
 import {autofillApplicationDraft} from '@/lib/winter-application-draft'
 import {MasterApplicationRegistration} from './master/application-registration'
 import {useWinterApplicationRegistration} from './use-winter-application-registration'
@@ -58,6 +58,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   return {...d,choices,accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>{
    if(p.key!==key)return p
    const next={...p,...patch}
+   if('name' in patch||'jef' in patch)next.checked=false
    if('grade' in patch){next.gradeManual=true;delete next.gradeAutofill}
    if('reading' in patch)delete next.readingAutofill
    return autofillApplicationPerson(next,context?.riderGrades??[])
@@ -95,6 +96,19 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
    if(filled!==target){setDirty(true);setDraft(current=>current?.original.digest===target.original.digest?filled:current)}
   }
  }
+ function choose(key:string,value:string){void action(async()=>{
+  if(!draft||registration.isFrozen())return
+  const current=draft.edited.people.find(p=>p.key===key)
+  if(!current)throw new Error('選択する人馬を確認できません')
+  const selected=candidates[key]?.find(c=>c.id===value)
+  if(value&&value!=='new'&&!selected)throw new Error('候補を確認できません。「既存登録を再確認」を押してください。')
+  const person=applyApplicationCandidate(current,selected,context?.riderGrades??[])
+  const next={...draft,choices:{...draft.choices,[key]:value},accountChecked:false,
+   edited:{...draft.edited,people:draft.edited.people.map(p=>p.key===key?person:p)}}
+  setDraft(next);setDirty(true);registration.invalidate()
+  // A previously blank workbook number could not have been included in the first lookup.
+  if(selected&&person.kind==='rider'&&person.jef&&person.jef!==current.jef)await loadContext(next)
+ })}
  async function begin(app:Application){
   setIntent('')
   const stored=localStorage.getItem(applicationDraftKey(app.digest))
@@ -154,6 +168,6 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onPaid={paid=>edit(d=>({...d,paid,accountChecked:false}))} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
   onPerson={person} onEntry={entry}
   onAmount={(key,value)=>edit(d=>({...d,accountChecked:false,edited:{...d.edited,amounts:{...d.edited.amounts,[key]:value}}}))}
-  onChoice={(key,value)=>edit(d=>({...d,choices:{...d.choices,[key]:value}}))}
+  onChoice={choose}
  />
 }

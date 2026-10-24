@@ -43,7 +43,7 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
     <td className={cell}>{row.label}</td><td className={cell}>{row.state}{row.id&&<details className="text-sm"><summary>登録番号</summary><p className="break-all">{row.id}</p></details>}</td>
     <td className={cell}>{row.issues.map((issue,i)=><p key={i}>{issue}</p>)}{row.resolve&&<>
      <p>自動再送はしません。名簿で保存結果を確認して、該当する人馬を選択してください。見つからない場合は既存の人馬登録欄で確認してください。</p>
-     <label className="block">保存された人馬<select aria-label={`${row.key} 結果不明の対応`} className="my-2 min-h-12 w-full rounded-lg border-2 p-2" value={row.selected} disabled={p.busy||!p.hasPlan} onChange={e=>p.onChoice(row.key,e.target.value)}><option value="">確認して明示選択</option>{row.candidates.map(c=><option key={c.id} value={c.id}>{c.name} ／ {c.reading} ／ 日馬連 {c.jef||'空欄'} ／ {c.clubs.join('、')||'所属なし'} ／ {c.id}</option>)}</select></label>
+     <label className="block">保存された人馬<select aria-label={`${row.key} 結果不明の対応`} className="my-2 min-h-12 w-full rounded-lg border-2 p-2" value={row.selected} disabled={p.busy||!p.hasPlan} onChange={e=>p.onChoice(row.key,e.target.value)}><option value="">確認して明示選択</option>{row.candidates.map(c=><option key={c.id} value={c.id}>{c.name} ／ {c.reading} ／ 日馬連 {c.jef.trim()||'なし'} ／ {c.clubs.join('、')||'所属なし'} ／ {c.id}</option>)}</select></label>
      <button type="button" className={button} disabled={p.busy||!row.selected||!p.hasPlan} onClick={()=>p.onResolve(row.key)}>この人馬と照合して再開記録を保存</button>
     </>}</td>
    </tr>)}</tbody></table></div>

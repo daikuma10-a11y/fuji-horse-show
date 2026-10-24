@@ -1,8 +1,12 @@
-import type {ApplicationPerson} from './application'
+import type {ApplicationPerson,IdentityCandidate} from './application'
 
 export type JefRiderRecord={member_no:string;name:string;rider_grade:string|null;import_date:string}
 const normalized=(s:string)=>s.normalize('NFKC').trim()
 const identity=(s:string)=>normalized(s).replace(/\s/g,'')
+/** An explicit identity choice supplies its number, including absence; it never verifies it. */
+export function applyApplicationCandidate(person:ApplicationPerson,candidate:IdentityCandidate|undefined,rows:JefRiderRecord[]){
+ return autofillApplicationPerson({...person,...(candidate?{jef:candidate.jef.trim()}:{}),checked:false},rows)
+}
 export function kanaHorseReading(name:string){
  const value=normalized(name)
  return /^[\p{Script=Hiragana}\p{Script=Katakana}ー・\s]+$/u.test(value)&&/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)?value:''

@@ -95,7 +95,7 @@ async function main(){
  const horseId=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:p.edited.club})
  env.publish(env.snapshot.roster.clubs[0].id,[riderId,horseId],[])
  p.onLoadRoster();p=await settled();assert.equal(p.clubSummary.state,'registered')
- p.onChoice('r1',riderId);p=render();p.onChoice('h1',horseId);p=render()
+ p.onChoice('r1',riderId);p=await settled();p.onChoice('h1',horseId);p=await settled();assert.equal(p.accountChecked,false);p.onAccountChecked(true);p=render()
  assert.equal(importCheckbox(p).checked,false);assert.equal(panel(p).canReview,false)
  const importMarkup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.match(importMarkup,/出番がすべて登録済みでも、資格級・グレード宣言を保存/);assert(!importMarkup.includes('type="radio"'));assert.equal(importMarkup.split('登録済み出番の変更・取消画面を開く').length-1,1)
  panel(p).onReview();p=await settled();assert.equal(panel(p).ready,false,'registered club requires an explicit purpose');assert.equal(panel(p).hasPlan,false);assert.match(panel(p).error,/このExcelを取り込む/);assert(!panel(p).message.includes('照合が終わりました'))
@@ -111,7 +111,7 @@ async function main(){
  p=await start();h.close();h=hooks();map.clear();readOriginal=true;p=render()
  const excel={name:'synthetic.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)}
  p.onFiles([excel]);p=render();p.onRead();p=await settled();assert.match(p.reference,/^WINTER-2026-/)
- p.onChoice('r1','new');p=render();p.onChoice('h1','new');p=render();p.onPaid('0');p=render();p.onAccountChecked(true);p=render()
+ p.onChoice('r1','new');p=await settled();p.onChoice('h1','new');p=await settled();p.onPaid('0');p=render();p.onAccountChecked(true);p=render()
  p=await ready();panel(p).onRun();p=await settled();assert.equal(panel(p).complete,true)
  panel(p).onClose();p=await settled();assert.equal(p.edited,null);assert.equal(downloads,0)
  p.onFiles([excel]);p=render();p.onRead();p=await settled();assert.equal(p.frozen,true,'same-file checkpoint restored automatically');assert.equal(panel(p).hasPlan,false,'local completion never substitutes for fresh server review')
