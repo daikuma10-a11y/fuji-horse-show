@@ -1,24 +1,25 @@
 import {validHorseDeclaration} from './master/application-credentials'
 import type {ApplicationDraft} from './winter-application-draft'
 import type {ApplicationSnapshot} from './winter-application-registration'
-import type {ApplicationTodo,ApplicationClubSummary} from './master/application-guide'
+import type {ApplicationTodo,ApplicationClubSummary,ApplicationIssueField} from './master/application-guide'
 import {applicationPersonTarget,applicationEntryTarget} from './master/application-guide'
 import {applicationReview,normalizeApplicationName} from './winter-application'
 
 /** Map validation back to the Excel row and the editable control, without relaxing any gate. */
 export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):ApplicationTodo[]{
  const app=d.edited,review=applicationReview(app,d.paid,d.accountChecked),items:ApplicationTodo[]=[]
- const add=(label:string,message:string,target:string,blocking=true)=>items.push({label,message,target,blocking})
- for(const p of app.people)if(p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??''))add(p.name,'グレード宣言を原本で確認して選択してください。',applicationPersonTarget(p.key))
+ const add=(label:string,message:string,target:string,blocking=true,fields?:ApplicationIssueField[])=>{if(!items.some(t=>t.target===target&&t.message===message&&JSON.stringify(t.fields)===JSON.stringify(fields)))items.push({label,message,target,blocking,...(fields?{fields}:{})})}
+ for(const p of app.people)if(p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??''))add(p.name,'グレード宣言を原本で確認して選択してください。',applicationPersonTarget(p.key),true,['horseGrade'])
  for(const message of app.issues)add('Excel原本',message,'application-source')
  if(!rosterLoaded)add('既存登録の確認','登録済みの団体・人馬を読み込んでください。','application-club')
- for(const p of app.people)if(!d.choices[p.key])add(p.name||'名前未入力','既存の人馬を選ぶか、新規登録を選んでください。',applicationPersonTarget(p.key))
+ for(const p of app.people)if(!d.choices[p.key])add(p.name||'名前未入力','既存の人馬を選ぶか、新規登録を選んでください。',applicationPersonTarget(p.key),true,['choice'])
  if(!d.reference.trim())add('資料番号','自動発行された資料番号を入力してください。','application-reference')
  for(const issue of review.report.issues){
   const person=issue.section==='名簿'?app.people[issue.row-3]:undefined
   const entry=issue.section==='出番表'?app.entries[issue.row-2]:undefined
   add(person?.name??(entry?`${entry.origin.sheet}!${entry.origin.cell}・第${entry.competition}競技`:issue.section),issue.message,
-   person?applicationPersonTarget(person.key):entry?applicationEntryTarget(entry.key):issue.section==='事前精算'?'application-payment':'application-club',issue.severity==='error')
+   person?applicationPersonTarget(person.key):entry?applicationEntryTarget(entry.key):issue.section==='事前精算'?'application-payment':'application-club',issue.severity==='error',issue.fields)
+  for(const related of issue.related??[]){const person=app.people.find(p=>p.key===related.personId);if(person)add(person.name,related.message,applicationPersonTarget(person.key),issue.severity==='error',[related.field])}
  }
  for(const row of review.amounts)if(row.reason)add(row.label,row.reason,`application-amount-${row.key}`)
  if(!app.entries.length)add('エントリー','Excelに出場する人馬が入力されているか確認してください。','application-entries')

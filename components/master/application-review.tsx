@@ -1,26 +1,28 @@
 'use client'
 
-import {MasterApplicationReviewRow} from './application-review-row'
+import {MasterApplicationReviewRow,MasterApplicationReviewField} from './application-review-row'
 import {HORSE_DECLARATIONS} from '@/lib/master/application-credentials'
 
 import type {Application,ApplicationPerson,ApplicationEntry,ApplicationDifference,IdentityCandidate} from '@/lib/master/application'
-import {applicationPersonTarget,applicationEntryTarget,type ApplicationTodo,type ApplicationClubSummary} from '@/lib/master/application-guide'
-import type {ReactNode} from 'react'
+import {applicationPersonTarget,applicationEntryTarget,type ApplicationTodo,type ApplicationClubSummary,type ApplicationIssueField} from '@/lib/master/application-guide'
+import {Fragment as ReactFragment,type ReactNode} from 'react'
 
 const field='mt-1 min-h-12 w-full rounded-lg border-2 border-slate-400 bg-white p-2 text-base text-slate-900'
 const buttonBase='min-h-12 rounded-xl border-2 border-blue-800 px-4 py-3 text-base font-bold disabled:opacity-40'
 const button=buttonBase+' bg-white text-blue-900'
 const primaryButton=buttonBase+' bg-blue-800 text-white'
-const cell='border border-slate-300 p-3 align-top'
-const tableHead='sticky top-0 z-20 border border-slate-300 bg-slate-100 px-3 py-3 text-left font-bold'
-const tableScroll='max-h-[65vh] overflow-auto rounded-lg border border-slate-300'
+const cell='min-w-0 border border-slate-300 p-1.5 align-top [overflow-wrap:anywhere]'
+const inlineField='min-h-10 w-full min-w-0 max-w-full rounded border border-slate-500 bg-white px-1.5 py-2 text-sm text-slate-950 focus:outline-2 focus:outline-blue-700 disabled:bg-slate-100'
+const inlineTable='w-full table-fixed border-separate border-spacing-0 text-sm @max-[760px]:block'
+const tableHead='sticky top-0 z-20 border border-slate-300 bg-slate-100 px-2 py-2 text-left font-bold [overflow-wrap:anywhere]'
+const tableScroll='@container w-full min-w-0 max-w-full max-h-[70vh] overflow-y-auto rounded-lg border border-slate-300'
 const yen=(v:number|null)=>v===null?'未確認':`${v.toLocaleString('ja-JP')}円`
 function go(id:string){
  const el=document.getElementById(id)
  if(el instanceof HTMLDetailsElement)el.open=true
- const toggle=el?.querySelector<HTMLButtonElement>('button[data-review-toggle]')
- if(toggle?.getAttribute('aria-expanded')==='false')toggle.click()
- requestAnimationFrame(()=>{el?.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'});el?.focus({preventScroll:true})})
+ const issue=el?.querySelector<HTMLElement>('[data-review-issue=blocking]')??el?.querySelector<HTMLElement>('[data-review-issue]')
+ const focus=issue?.querySelector<HTMLElement>('input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')??issue??el
+ requestAnimationFrame(()=>{focus?.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'});focus?.focus({preventScroll:true})})
 }
 function differenceText(text:string){
  try{const value=JSON.parse(text);if(typeof value==='string')return value
@@ -53,6 +55,9 @@ export function MasterApplicationReview(p:{
  for(const todo of todos){const list=notesByTarget.get(todo.target)??[];list.push(todo);notesByTarget.set(todo.target,list)}
  const notes=(target:string)=>notesByTarget.get(target)??[]
  const notices=(target:string)=><>{notes(target).map((t,i)=><p key={i} className={`mt-2 rounded-lg p-2 ${t.blocking?'bg-amber-100 text-amber-950':'bg-blue-50 text-blue-950'}`}>{t.blocking?'要確認：':'補足：'}{t.message}</p>)}</>
+ const fieldNotes=(target:string,key:ApplicationIssueField)=>notes(target).filter(n=>n.fields?.includes(key)||(!n.fields?.length&&(key==='name'||key==='competition')))
+ const attributes=(target:string,key:ApplicationIssueField)=>{const ns=fieldNotes(target,key);return {id:`${target}-${key}-input`,'aria-invalid':ns.some(n=>n.blocking)||undefined,'aria-describedby':ns.length?`${target}-${key}-message`:undefined}}
+ const inline=(target:string,key:ApplicationIssueField,content:ReactNode)=><MasterApplicationReviewField id={`${target}-${key}`} notes={fieldNotes(target,key)}>{content}</MasterApplicationReviewField>
  const panel=(target:string)=>`scroll-mt-24 rounded-xl border-2 p-4 ${notes(target).some(t=>t.blocking)?'border-amber-500 bg-amber-50/30':'border-slate-300 bg-white'}`
  return <section aria-label="申込書の読み込み" className="min-w-0 space-y-5 rounded-xl border-2 border-blue-300 bg-white p-4 text-slate-900 sm:p-5">
   <h3 className="text-2xl font-bold">Excel申込書の取り込み</h3>
@@ -99,51 +104,57 @@ export function MasterApplicationReview(p:{
     </div>
     <details id="application-reference" tabIndex={-1} className="rounded-lg border p-3"><summary className="cursor-pointer font-semibold">資料番号（自動発行済み・通常は入力不要）</summary><p className="my-2">同じファイルには同じ番号を使います。追加・訂正版は別番号になり、既存の出番と照合します。</p><label>資料番号<input className={field} maxLength={100} value={p.reference} onChange={e=>p.onReference(e.target.value)}/></label></details>
    </fieldset>
-    <section aria-label="人馬名簿：原本と読取・訂正値" className="space-y-4"><h5 className="text-xl font-bold">選手・馬の確認</h5><p>候補は所属・日馬連番号も確認して選びます。名前だけで同一人馬として統合しません。</p>
-     <p className="text-sm">各行の「確認・訂正」で候補・原本を確認して直せます。黄色の行は要確認です。幅が足りない場合は表を横にスクロールできます。</p>
-     {(['rider','horse'] as const).map(kind=>{const people=app.people.filter(p=>p.kind===kind),title=kind==='rider'?'選手一覧':'馬一覧',headers=kind==='rider'?['選手名','フリガナ','日馬連番号','所有資格級','乗馬協会','指導者協会','確認・訂正']:['馬名','フリガナ','日馬連番号','グレード宣言','確認・訂正'];return <section key={kind} aria-label={title} className="space-y-2">
+    <section aria-label="人馬名簿：原本と読取・訂正値" className="min-w-0 space-y-4"><h5 className="text-xl font-bold">選手・馬の確認</h5><p>表の入力欄でそのまま訂正できます。候補は所属・日馬連番号も確認して選びます。</p>
+     <p className="flex flex-wrap gap-2 text-sm"><span className="rounded border-2 border-amber-600 bg-amber-100 px-2 py-1">黄色：取り込み前に確認・訂正が必要</span><span className="rounded border-2 border-sky-600 bg-sky-50 px-2 py-1">水色：補足・任意の確認</span></p>
+     {(['rider','horse'] as const).map(kind=>{const people=app.people.filter(person=>person.kind===kind),title=kind==='rider'?'選手一覧':'馬一覧',headers=kind==='rider'?['選手名・登録先','フリガナ','日馬連番号','所有資格級','乗馬協会','指導者協会']:['馬名・登録先','フリガナ','日馬連番号','グレード宣言'];return <section key={kind} aria-label={title} className="min-w-0 space-y-2">
       <h6 className="text-lg font-bold">{title}（{people.length}{kind==='rider'?'名':'頭'}）</h6>
-      <div className={tableScroll} tabIndex={0} role="region" aria-label={`${title}の表・スクロール可能`}><table className={`w-full border-separate border-spacing-0 text-sm ${kind==='rider'?'min-w-[960px]':'min-w-[760px]'}`}>
-       <caption className="sr-only">{title}：読み込んだ全{people.length}件</caption><thead><tr>{headers.map((header,i)=><th scope="col" key={header} className={tableHead+(i===0?' left-0 z-30 min-w-40':i===1?' min-w-40':'')}>{header}</th>)}</tr></thead><tbody>
+      <div className={tableScroll} tabIndex={0} role="region" aria-label={`${title}の表`}><table className={inlineTable}>
+       <caption className="sr-only">{title}：読み込んだ全{people.length}件。表内で直接訂正できます。</caption>
+       <colgroup className="@max-[760px]:hidden">{(kind==='rider'?[24,17,16,14,13,16]:[32,23,20,25]).map((width,i)=><col key={i} style={{width:`${width}%`}}/>)}</colgroup>
+       <thead className="@max-[760px]:sr-only"><tr>{headers.map(header=><th scope="col" key={header} className={tableHead}>{header}</th>)}</tr></thead><tbody className="@max-[760px]:block">
      {people.map((person,index)=>{
       const old=source.people.find(x=>x.key===person.key)!,candidates=p.candidates[person.key]??[],choice=p.choices[person.key]??'',selected=candidates.find(c=>c.id===choice),target=applicationPersonTarget(person.key)
-      const rowNotes=notes(target),count=rowNotes.filter(t=>t.blocking).length
-      const values=[<><span className="mr-2 text-xs font-normal text-slate-500">{index+1}</span>{person.name||'名前未入力'}<span className="mt-1 block text-xs font-normal text-slate-600">{choice==='new'?'新規登録':choice?'既存の人馬を選択済み':'登録先未選択'}</span></>,person.reading||'未入力',<span className="whitespace-nowrap">{person.jef.trim()||'なし'}{person.jef.trim()&&<small className="mt-1 block">{person.checked?'番号確認済み':'番号未確認'}</small>}</span>,...(kind==='rider'?[person.grade||'未選択',person.sportsMember||'未確認',<>{person.instructorMember||'未確認'}<small className="mt-1 block">地域乗馬指導者資格：{person.qualified?'確認済み':'未確認'}</small></>]:[person.horseGrade||'記載なし・未確認'])]
-      return <MasterApplicationReviewRow key={`${app.digest}:${person.key}`} target={target} label={`${kind==='rider'?'選手':'馬'} ${person.name||index+1}`} cells={values} blocking={count} advisories={rowNotes.length-count} index={index} disabled={p.busy||!!p.frozen}><div className="max-w-5xl">
-       <h6 className="text-xl font-bold">{person.kind==='rider'?'選手':'馬'}：{person.name||'名前未入力'}</h6>
-       {notices(target)}
-       <div className="mt-3 rounded-lg bg-blue-50 p-3"><label className="block font-bold">対応する人馬<select className={field} value={choice} disabled={!p.rosterLoaded} onChange={e=>p.onChoice(person.key,e.target.value)}><option value="">確認して選択してください</option><option value="new">{p.frozen?'確定時の選択：新規登録':'新しい人馬として登録'}</option>{choice&&choice!=='new'&&!selected&&<option value={choice}>保存済みの対応（再確認が必要）</option>}{candidates.map(c=><option key={c.id} value={c.id}>登録済み：{c.name} ／ {c.clubs.join('、')||'所属なし'} ／ 日馬連 {c.jef.trim()||'なし'}</option>)}</select></label>
-        {p.frozen?<p>確定時の対応を保持しています。</p>:!p.rosterLoaded?<p>既存登録の確認待ちです。</p>:candidates.length===0?<p>一致候補なし。別の表記で登録されていないか確認してください。</p>:candidates.map(c=><p key={c.id} className="mt-2">既存候補：{c.name} ／ {c.reason} ／ 所属 {c.clubs.join('、')||'なし'}</p>)}
-        {selected&&<p className="mt-2">既存値：{selected.name} ／ 読み {selected.reading||'空欄'} ／ 日馬連 {selected.jef.trim()||'なし'}。候補を選ぶと番号を下の入力欄に反映します。</p>}
-       </div>
-       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(['name','reading','jef'] as const).map((key,i)=><label key={key}>{['名前・馬名','ふりがな','日馬連番号'][i]}<input aria-label={`${person.key} ${key}`} className={field} maxLength={100} placeholder={key==='jef'?'なし':undefined} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value})}/></label>)}</div>
-       {person.readingAutofill&&person.reading===person.readingAutofill&&<p className="mt-2 text-sm">馬名がカタカナ・ひらがなのため、馬名をフリガナに自動入力しました。</p>}
-       <label className="mt-3 flex items-center gap-3"><input type="checkbox" className="size-5" disabled={!person.jef.trim()&&!person.checked} checked={person.checked} onChange={e=>p.onPerson(person.key,{checked:e.target.checked})}/>日馬連番号を確認済み</label><p className="mt-1 text-sm">{person.jef.trim()?'選手・馬と番号の対応を確認してからチェックしてください。候補を選ぶだけでは確認済みになりません。':'日馬連番号：なし。番号の確認チェックは不要です。'}</p>
-       {person.kind==='rider'&&<div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label>騎乗者資格<select className={field} value={person.grade} onChange={e=>p.onPerson(person.key,{grade:e.target.value})}><option value="">未選択</option>{!['','A','B','C','未登録'].includes(person.grade)&&<option value={person.grade}>{person.grade}（要選択）</option>}{['A','B','C','未登録'].map(x=><option key={x}>{x}</option>)}</select></label>
-        {person.gradeAutofill&&<p className="self-end text-sm">日馬連マスター（{person.gradeAutofill.importDate}取得）・会員番号{person.gradeAutofill.memberNo}から{person.gradeAutofill.grade}級を自動入力しました。{old.grade&&old.grade!==person.grade?`申込書の記載：${old.grade}。差を確認してください。`:''}</p>}
-        {p.qualificationNotes?.[person.key]&&<p className="self-end text-sm">{p.qualificationNotes[person.key]}</p>}
-        {(['sportsMember','instructorMember'] as const).map((key,i)=><label key={key}>{i===0?'乗馬協会':'指導者協会'}の会員区分<select className={field} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value})}><option value="">未確認</option><option>会員</option><option>非会員</option></select></label>)}
-        <label className="flex items-center gap-3"><input type="checkbox" className="size-5" checked={person.qualified} onChange={e=>p.onPerson(person.key,{qualified:e.target.checked})}/>地域乗馬指導者資格を確認済み</label>
-       </div>}
-       {person.kind==='horse'&&<label className="mt-3 block">グレード宣言<select aria-label={`${person.key} グレード宣言`} className={field} value={person.horseGrade??''} onChange={e=>p.onPerson(person.key,{horseGrade:e.target.value})}><option value="">記載なし・未確認</option>{person.horseGrade&&!HORSE_DECLARATIONS.includes(person.horseGrade as typeof HORSE_DECLARATIONS[number])&&<option value={person.horseGrade}>{person.horseGrade}（要確認）</option>}{HORSE_DECLARATIONS.map(value=><option key={value}>{value}</option>)}</select><span className="text-sm">申込書の宣言を確認してください。空欄では保存済みの宣言を消しません。</span></label>}
-       <details className="mt-3 text-sm"><summary className="cursor-pointer">Excel原本の値を見る</summary><p>{old.origin.sheet}!{old.origin.cell} ／ {old.name} ／ 読み：{old.reading||'空欄'} ／ 日馬連：{old.jef||'空欄'}{person.kind==='rider'?` ／ 資格：${old.grade||'未選択'}`:` ／ グレード宣言：${old.horseGrade||'記載なし'}`}{old.credentialOrigin&&` ／ ${old.credentialOrigin.sheet}!${old.credentialOrigin.cell}：${old.credentialOrigin.value||'空欄'}`}</p></details>
-      </div></MasterApplicationReviewRow>
+      const textInput=(key:'name'|'reading')=>inline(target,key,<textarea {...attributes(target,key)} aria-label={`${person.key} ${key}`} className={inlineField+' resize-y'} rows={2} maxLength={100} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value.replace(/[\r\n]/g,'')})}/>)
+      const values:ReactNode[]=[<>
+       <span className="text-xs text-slate-600">{index+1}</span>{textInput('name')}
+       {inline(target,'choice',<><label className="block text-xs font-semibold" htmlFor={`${target}-choice-input`}>登録先</label><select {...attributes(target,'choice')} aria-label={`${person.key} 対応する人馬`} className={inlineField} title={selected?`${selected.name} ／ ${selected.clubs.join('、')||'所属なし'} ／ 日馬連 ${selected.jef.trim()||'なし'}`:choice==='new'?'新しい人馬として登録':'確認して選択してください'} value={choice} disabled={!p.rosterLoaded} onChange={e=>p.onChoice(person.key,e.target.value)}><option value="">確認して選択</option><option value="new">{p.frozen?'確定時：新規登録':'新しい人馬として登録'}</option>{choice&&choice!=='new'&&!selected&&<option value={choice}>保存済みの対応（再確認が必要）</option>}{candidates.map(c=><option key={c.id} value={c.id}>登録済み：{c.name} ／ {c.clubs.join('、')||'所属なし'} ／ 日馬連 {c.jef.trim()||'なし'}</option>)}</select>
+        {selected&&<p className="mt-1 text-xs">登録済み：{selected.name} ／ {selected.clubs.join('、')||'所属なし'} ／ 日馬連 {selected.jef.trim()||'なし'}</p>}
+        {!p.rosterLoaded&&<p className="text-xs">既存登録の確認待ちです。</p>}
+       </>)}
+       <details className="text-xs"><summary className="cursor-pointer">Excel原本・候補の情報</summary><p>{old.origin.sheet}!{old.origin.cell} ／ {old.name} ／ 読み：{old.reading||'空欄'} ／ 日馬連：{old.jef||'空欄'}{person.kind==='rider'?` ／ 資格：${old.grade||'未選択'}`:` ／ グレード宣言：${old.horseGrade||'記載なし'}`}{old.credentialOrigin&&` ／ ${old.credentialOrigin.sheet}!${old.credentialOrigin.cell}：${old.credentialOrigin.value||'空欄'}`}</p>
+        {p.frozen?<p>確定時の対応を保持しています。</p>:p.rosterLoaded&&candidates.length===0?<p>一致候補なし。別の表記で登録されていないか確認してください。</p>:candidates.map(c=><p key={c.id}>既存候補：{c.name} ／ {c.reason} ／ 所属 {c.clubs.join('、')||'なし'}</p>)}
+        {selected&&<p>既存の読み：{selected.reading||'空欄'}。候補の番号を入力欄に反映します。名前だけで統合しません。</p>}
+       </details>
+      </>,<>{textInput('reading')}{person.readingAutofill&&person.reading===person.readingAutofill&&<p className="text-xs text-slate-600">カナの馬名から自動入力</p>}</>,<>
+       {inline(target,'jef',<input {...attributes(target,'jef')} aria-label={`${person.key} jef`} className={inlineField} maxLength={100} placeholder="なし" value={person.jef} onChange={e=>p.onPerson(person.key,{jef:e.target.value})}/>)}
+       {inline(target,'checked',<label className="flex items-start gap-1 text-xs"><input {...attributes(target,'checked')} aria-label={`${person.key} 日馬連番号を確認済み`} type="checkbox" className="mt-0.5 size-5 shrink-0" disabled={!person.jef.trim()&&!person.checked} checked={person.checked} onChange={e=>p.onPerson(person.key,{checked:e.target.checked})}/>番号を確認済み</label>)}
+       <p className="text-xs text-slate-600">{person.jef.trim()?'本人・馬と番号の対応を確認':'日馬連番号：なし。チェック不要'}</p>
+      </>]
+      if(kind==='rider')values.push(<>
+       {inline(target,'grade',<select {...attributes(target,'grade')} aria-label={`${person.key} 騎乗者資格`} className={inlineField} value={person.grade} onChange={e=>p.onPerson(person.key,{grade:e.target.value})}><option value="">未選択</option>{!['','A','B','C','未登録'].includes(person.grade)&&<option value={person.grade}>{person.grade}（要選択）</option>}{['A','B','C','未登録'].map(x=><option key={x}>{x}</option>)}</select>)}
+       {person.gradeAutofill&&<p className="text-xs">日馬連から自動入力（{person.gradeAutofill.importDate}取得）{old.grade&&old.grade!==person.grade?`。申込書：${old.grade}`:''}</p>}
+       {p.qualificationNotes?.[person.key]&&<p className="text-xs">{p.qualificationNotes[person.key]}</p>}
+      </>,...(['sportsMember','instructorMember'] as const).map((key,i)=><ReactFragment key={key}>
+       {inline(target,key,<select {...attributes(target,key)} aria-label={`${person.key} ${i===0?'乗馬協会':'指導者協会'}の会員区分`} className={inlineField} value={person[key]} onChange={e=>p.onPerson(person.key,{[key]:e.target.value})}><option value="">未確認</option>{person[key]&&!['会員','非会員'].includes(person[key])&&<option value={person[key]}>{person[key]}（要選択）</option>}<option>会員</option><option>非会員</option></select>)}
+       {key==='instructorMember'&&inline(target,'qualified',<label className="flex items-start gap-1 text-xs"><input {...attributes(target,'qualified')} aria-label={`${person.key} 地域乗馬指導者資格を確認済み`} type="checkbox" className="mt-0.5 size-5 shrink-0" checked={person.qualified} onChange={e=>p.onPerson(person.key,{qualified:e.target.checked})}/>地域乗馬指導者資格を確認済み</label>)}
+      </ReactFragment>))
+      else values.push(<>{inline(target,'horseGrade',<select {...attributes(target,'horseGrade')} aria-label={`${person.key} グレード宣言`} className={inlineField} value={person.horseGrade??''} onChange={e=>p.onPerson(person.key,{horseGrade:e.target.value})}><option value="">記載なし・未確認</option>{person.horseGrade&&!HORSE_DECLARATIONS.includes(person.horseGrade as typeof HORSE_DECLARATIONS[number])&&<option value={person.horseGrade}>{person.horseGrade}（要確認）</option>}{HORSE_DECLARATIONS.map(value=><option key={value}>{value}</option>)}</select>)}<p className="text-xs text-slate-600">申込書の宣言を確認。空欄では保存済みの宣言を消しません。</p></>)
+      return <MasterApplicationReviewRow key={`${app.digest}:${person.key}`} target={target} cells={values.map((content,i)=>({label:headers[i],content}))} index={index} disabled={p.busy||!!p.frozen}/>
      })}
       </tbody></table></div></section>})}
     </section>
-    <section id="application-entries" tabIndex={-1} aria-label="エントリー確認一覧" className="space-y-3"><h5 className="text-xl font-bold">エントリー確認一覧（全{app.entries.length}件）</h5>
-     <p>要確認：{app.entries.filter(e=>notes(applicationEntryTarget(e.key)).some(t=>t.blocking)).length}行。所属は今回の申込団体です。表は縦・横にスクロールできます。</p>
-     <div className={tableScroll} tabIndex={0} role="region" aria-label="エントリー一覧の表・スクロール可能"><table className="w-full min-w-[980px] border-separate border-spacing-0 text-sm"><caption className="sr-only">エントリー確認一覧：原本の順に全{app.entries.length}件</caption><thead><tr>{['競技名','選手','馬名','所属（申込団体）','OP','料金','確認・訂正'].map((header,i)=><th key={header} scope="col" className={tableHead+(i===0?' left-0 z-30 min-w-60':i===1||i===2?' min-w-32':'')}>{header}</th>)}</tr></thead><tbody>
-     {app.entries.map((e,i)=>{const target=applicationEntryTarget(e.key),rowNotes=notes(target),count=rowNotes.filter(t=>t.blocking).length;return <MasterApplicationReviewRow key={`${app.digest}:${e.key}`} target={target} label={`${i+1}件目のエントリー`} cells={[
-      <><span className="mr-2 text-xs font-normal text-slate-500">{i+1}</span>{e.competition}：{p.competitions.find(c=>c.number===e.competition)?.name??'競技を確認してください'}</>,
-      app.people.find(p=>p.key===e.rider)?.name||'選手未対応',app.people.find(p=>p.key===e.horse)?.name||'馬未対応',app.club||'団体名未入力',e.op?'OP':'—',<span className="whitespace-nowrap tabular-nums">{yen(p.review?.entryPrices[i]??null)}</span>
-     ]} blocking={count} advisories={rowNotes.length-count} index={i} disabled={p.busy||!!p.frozen}><div className="max-w-5xl">
-     <p className="font-bold">{i+1}件目 ／ {e.origin.sheet}!{e.origin.cell} ／ {yen(p.review?.entryPrices[i]??null)}</p>{notices(target)}
-     <label className="mt-2 block">競技<select aria-label={`${e.key} 競技`} className={field} value={e.competition} onChange={v=>p.onEntry(e.key,{competition:v.target.value})}>{!p.competitions.some(c=>c.number===e.competition)&&<option value={e.competition}>要確認：{e.competition}</option>}{p.competitions.map(c=><option key={c.number} value={c.number}>{c.number}：{c.name}</option>)}</select></label>
-     <div className="mt-3 grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind}>{kind==='rider'?'選手':'馬'}<select aria-label={`${e.key} ${kind}`} className={field} value={e[kind]} onChange={v=>p.onEntry(e.key,{[kind]:v.target.value})}><option value="">未対応・選択してください</option>{app.people.filter(person=>person.kind===kind).map(person=><option key={person.key} value={person.key}>{person.name}</option>)}</select></label>)}</div>
-     <label className="mt-3 flex items-center gap-3"><input type="checkbox" className="size-5" checked={e.op} onChange={v=>p.onEntry(e.key,{op:v.target.checked})}/>OP参加</label><p className="mt-2 text-sm">原本：{source.entries[i].rawRider} ／ {source.entries[i].rawHorse}</p>
-    </div></MasterApplicationReviewRow>})}</tbody></table></div>
+    <section id="application-entries" tabIndex={-1} aria-label="エントリー確認一覧" className="min-w-0 space-y-3"><h5 className="text-xl font-bold">エントリー確認一覧（全{app.entries.length}件）</h5>
+     <p>要確認：{app.entries.filter(e=>notes(applicationEntryTarget(e.key)).some(t=>t.blocking)).length}行。競技・選手・馬・OPを表の中で訂正できます。所属は今回の申込団体です。</p>
+     <div className={tableScroll} tabIndex={0} role="region" aria-label="エントリー一覧の表"><table className={inlineTable}><caption className="sr-only">エントリー確認一覧：原本の順に全{app.entries.length}件</caption>
+      <colgroup className="@max-[760px]:hidden">{[29,19,19,14,7,12].map((width,i)=><col key={i} style={{width:`${width}%`}}/>)}</colgroup>
+      <thead className="@max-[760px]:sr-only"><tr>{['競技名','選手','馬名','所属（申込団体）','OP','料金'].map(header=><th key={header} scope="col" className={tableHead}>{header}</th>)}</tr></thead><tbody className="@max-[760px]:block">
+     {app.entries.map((e,i)=>{const target=applicationEntryTarget(e.key),competitionLabel=`${e.competition}：${p.competitions.find(c=>c.number===e.competition)?.name??'競技を確認してください'}`;return <MasterApplicationReviewRow key={`${app.digest}:${e.key}`} target={target} cells={[
+      {label:'競技名',content:<><span className="text-xs text-slate-600">{i+1}</span>{inline(target,'competition',<><select {...attributes(target,'competition')} aria-label={`${e.key} 競技`} title={competitionLabel} className={inlineField} value={e.competition} onChange={v=>p.onEntry(e.key,{competition:v.target.value})}>{!p.competitions.some(c=>c.number===e.competition)&&<option value={e.competition}>要確認：{e.competition}</option>}{p.competitions.map(c=><option key={c.number} value={c.number}>{c.number}：{c.name}</option>)}</select><p className="mt-1 text-xs">{competitionLabel}</p></>)}<details className="text-xs"><summary className="cursor-pointer">Excel原本</summary><p>{e.origin.sheet}!{e.origin.cell} ／ {source.entries[i].rawRider} ／ {source.entries[i].rawHorse}</p></details></>},
+      ...(['rider','horse'] as const).map(kind=>{const person=app.people.find(p=>p.key===e[kind]),label=kind==='rider'?'選手':'馬名';return {label,content:inline(target,kind,<><select {...attributes(target,kind)} aria-label={`${e.key} ${kind}`} title={person?.name??'未対応'} className={inlineField} value={e[kind]} onChange={v=>p.onEntry(e.key,{[kind]:v.target.value})}><option value="">未対応・選択</option>{app.people.filter(p=>p.kind===kind).map(person=><option key={person.key} value={person.key}>{person.name}</option>)}</select><p className="mt-1 text-xs">{person?.name||'未対応'}</p>{person&&fieldNotes(target,kind).length>0&&<button type="button" className="mt-1 text-xs text-blue-900 underline" onClick={()=>go(applicationPersonTarget(person.key))}>{label}の確認箇所へ</button>}</>)}}),
+      {label:'所属（申込団体）',content:<p>{app.club||'団体名未入力'}</p>},
+      {label:'OP',content:inline(target,'op',<label className="flex flex-wrap items-center gap-1"><input {...attributes(target,'op')} aria-label={`${e.key} OP参加`} type="checkbox" className="size-5 shrink-0" checked={e.op} onChange={v=>p.onEntry(e.key,{op:v.target.checked})}/><span className="text-xs">OP</span></label>)},
+      {label:'料金',content:inline(target,'fee',<span className="font-semibold tabular-nums">{yen(p.review?.entryPrices[i]??null)}</span>)}
+     ]} index={i} disabled={p.busy||!!p.frozen}/>})}</tbody></table></div>
      <div aria-label="今回のExcelの料金合計" className="rounded-xl border-2 border-blue-800 bg-blue-50 p-4">
       <h6 className="text-lg font-bold">今回のExcelの料金合計</h6>
       <dl className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -155,9 +166,13 @@ export function MasterApplicationReview(p:{
     </section>
    <fieldset disabled={p.busy||p.frozen} className="min-w-0 space-y-5"><legend className="sr-only">原本請求・入金額の確認</legend>
     <section aria-label="原本請求と料金の照合" className="space-y-3"><h5 className="text-xl font-bold">原本請求と料金の照合</h5><p>上の計算額とExcel原本を比べ、違いがあれば確認・訂正してください。</p>
-     <div className="overflow-x-auto rounded-lg border border-slate-300"><table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm"><caption className="sr-only">原本と入力額・計算額の比較</caption><thead><tr>{['項目','Excel原本','原本確認後の値','計算額','確認結果'].map(label=><th scope="col" key={label} className={tableHead}>{label}</th>)}</tr></thead><tbody>{p.review?.amounts.map(row=><tr key={row.key} id={`application-amount-${row.key}`} tabIndex={-1} className={row.reason?'bg-amber-50':'bg-white'}>
-      <th scope="row" className={cell}>{row.label}</th><td className={cell}>{source.amounts[row.key]?`${source.amounts[row.key]}円`:'空欄'}<details className="mt-1 text-xs"><summary>原本の位置</summary>{source.amountOrigins[row.key].sheet}!{source.amountOrigins[row.key].cell}</details></td><td className={cell}><input aria-label={`${row.label} 原本確認後の値`} className={field+' min-w-32'} inputMode="numeric" value={app.amounts[row.key]} onChange={e=>p.onAmount(row.key,e.target.value)}/></td><td className={cell+' whitespace-nowrap tabular-nums'}>{yen(row.calculated)}</td><td className={cell}>{row.reason?<><strong className="text-amber-900">要確認</strong><p>{row.reason}</p></>:'一致 ✓'}</td>
-     </tr>)}</tbody></table></div>
+     <div className={tableScroll} role="region" aria-label="原本請求と料金の比較表" tabIndex={0}><table className={inlineTable}><caption className="sr-only">原本と入力額・計算額の比較</caption><colgroup className="@max-[760px]:hidden">{[15,18,20,17,30].map((width,i)=><col key={i} style={{width:`${width}%`}}/>)}</colgroup><thead className="@max-[760px]:sr-only"><tr>{['項目','Excel原本','原本確認後の値','計算額','確認結果'].map(label=><th scope="col" key={label} className={tableHead}>{label}</th>)}</tr></thead><tbody className="@max-[760px]:block">{p.review?.amounts.map((row,i)=>{const target=`application-amount-${row.key}`;return <MasterApplicationReviewRow key={row.key} target={target} index={i} disabled={p.busy||!!p.frozen} cells={[
+      {label:'項目',content:<strong>{row.label}</strong>},
+      {label:'Excel原本',content:<>{source.amounts[row.key]?`${source.amounts[row.key]}円`:'空欄'}<details className="mt-1 text-xs"><summary>原本の位置</summary>{source.amountOrigins[row.key].sheet}!{source.amountOrigins[row.key].cell}</details></>},
+      {label:'原本確認後の値',content:<MasterApplicationReviewField id={`${target}-value`} notes={row.reason?[{label:row.label,message:row.reason,target,blocking:true}]:[]}><input aria-label={`${row.label} 原本確認後の値`} aria-invalid={!!row.reason||undefined} aria-describedby={row.reason?`${target}-value-message`:undefined} className={inlineField} inputMode="numeric" value={app.amounts[row.key]} onChange={e=>p.onAmount(row.key,e.target.value)}/></MasterApplicationReviewField>},
+      {label:'計算額',content:<span className="tabular-nums">{yen(row.calculated)}</span>},
+      {label:'確認結果',content:row.reason?<strong className="text-amber-900">要確認</strong>:'一致 ✓'}
+     ]}/>})}</tbody></table></div>
     </section>
     <div id="application-payment" tabIndex={-1} className={panel('application-payment')}><label className="block">別途確認した入金額（未入金と確認できた場合は0）<input aria-label="別途確認した入金額（確認した額を入力。未入金と確認できた場合は0）" className={field} inputMode="numeric" value={p.paid} onChange={e=>p.onPaid(e.target.value)}/></label><p className="mt-2">振込予定日から入金済みとは判断しません。この欄は確認記録です。精算の入金登録は別途行います。</p><label className="mt-3 flex items-center gap-3"><input className="size-5" type="checkbox" checked={p.accountChecked} onChange={e=>p.onAccountChecked(e.target.checked)}/>原本請求額と、別途確認した入金額を確認しました</label>{notices('application-payment')}</div>
    </fieldset>

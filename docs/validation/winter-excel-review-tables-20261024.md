@@ -1,5 +1,8 @@
 # Excel review tables (2026-10-24)
 
+The subsequent inline-editing revision is recorded in
+`winter-excel-inline-review-20261024.md`; expansion controls described below are historical.
+
 The organizer supplied sketches and requested a tabular review after Excel import,
 so larger applications can be checked without overlooking entries. The shared
 master now presents separate rider, horse and entry tables. Each item has one

@@ -1,7 +1,8 @@
+import type {ApplicationIssueField} from './master/application-guide'
 import { WINTER_EVENT_ID, winterCompetition, winterEntryPrice } from './winter-event'
 
 export type ImportSource = { roster: string; entries: string; accounts: string }
-export type ImportIssue = { section: string; row: number; severity: 'error' | 'warning'; message: string }
+export type ImportIssue = { section: string; row: number; severity: 'error' | 'warning'; message: string; fields?:ApplicationIssueField[]; related?:{personId:string;field:ApplicationIssueField;message:string}[] }
 export type ImportPerson = { row: number; kind: string; id: string; org: string; name: string; reading: string; jef: string; checked: boolean; grade: string; sportsMember: string; instructorMember: string; qualified: boolean }
 export type ImportEntry = { competition: string; order: number; rider: string; horse: string; op: boolean; price: number | null }
 export type ImportAccount = { org: string; total: number; paid: number; confirmed: boolean; outstanding: number }
@@ -40,7 +41,7 @@ export function parseImportTable(text: string): string[][] {
 
 export function reviewWinterImport(source: ImportSource) {
   const issues: ImportIssue[] = [], people: ImportPerson[] = [], entries: ImportEntry[] = [], accounts: ImportAccount[] = []
-  const issue = (section: string, row: number, message: string, severity: ImportIssue['severity'] = 'error') => issues.push({ section, row, message, severity })
+  const issue = (section: string, row: number, message: string, severity: ImportIssue['severity'] = 'error', fields?:ApplicationIssueField[], related?:ImportIssue['related']) => issues.push({ section, row, message, severity, ...(fields?{fields}:{}), ...(related?.length?{related}:{}) })
   function table(kind: keyof ImportSource, title: string) {
     try {
       const rows = parseImportTable(source[kind]); if (!rows.length) return []
@@ -53,33 +54,33 @@ export function reviewWinterImport(source: ImportSource) {
       })
     } catch (error) { issue(title, 0, error instanceof Error ? error.message : '読み取れません'); return [] }
   }
-  function flag(value: string, section: string, row: number, label: string, allowBlank = true) {
+  function flag(value: string, section: string, row: number, label: string, allowBlank = true, field?:ApplicationIssueField) {
     if (YES.has(value)) return true
     if (NO.has(value) || (allowBlank && !value)) return false
-    issue(section, row, `${label}は「はい／いいえ」で入力してください`); return false
+    issue(section, row, `${label}は「はい／いいえ」で入力してください`,'error',field?[field]:undefined); return false
   }
-  function membership(value: string, row: number, label: string) {
-    if (value && !['会員','非会員'].includes(value)) issue('名簿', row, `${label}は「会員／非会員／空欄」です`)
+  function membership(value: string, row: number, label: string, field:ApplicationIssueField) {
+    if (value && !['会員','非会員'].includes(value)) issue('名簿', row, `${label}は「会員／非会員／空欄」です`,'error',[field])
     return value
   }
   for (const { values: v, row } of table('roster', '名簿')) {
     const [kind,id,org,name,reading,jef,checked,grade,sportsMember,instructorMember,qualified] = v
     if (!['団体','選手','馬'].includes(kind)) issue('名簿', row, '種別は「団体／選手／馬」です')
-    if (!id || !name) issue('名簿', row, '識別番号と名前が必要です')
-    if ([id,org,name,reading,jef].some(value => value.length > 100)) issue('名簿', row, '番号・名前・ふりがなは100文字以内です')
+    if (!id || !name) issue('名簿', row, '識別番号と名前が必要です','error',['name'])
+    if ([id,org,name,reading,jef].some(value => value.length > 100)) issue('名簿', row, '番号・名前・ふりがなは100文字以内です','error',(['name','reading','jef'] as const).filter((_,i)=>[name,reading,jef][i].length>100))
     if (kind === '団体' && [org,jef,checked,grade,sportsMember,instructorMember,qualified].some(Boolean)) issue('名簿', row, '団体行は所属番号・資格・会員区分を空欄にしてください')
     if (kind !== '団体' && !org) issue('名簿', row, '選手と馬には所属団体番号が必要です')
     if (kind === '馬' && [grade,sportsMember,instructorMember,qualified].some(Boolean)) issue('名簿', row, '馬の行に選手の資格・会員区分は入力しません')
-    if (grade && !['A','B','C','未登録'].includes(grade)) issue('名簿', row, '騎乗者資格は「A／B／C／未登録」です')
-    const p = { row,kind,id,org,name,reading,jef,grade,checked:flag(checked,'名簿',row,'日馬連確認'),sportsMember:membership(sportsMember,row,'乗馬協会会員'),instructorMember:membership(instructorMember,row,'指導者協会会員'),qualified:flag(qualified,'名簿',row,'指導者資格確認') }
-    if (p.checked && !jef) issue('名簿', row, '日馬連確認済みですが登録番号がありません')
-    if (!reading && kind !== '団体') issue('名簿', row, '放送用のふりがなが未登録です。読みを推測して補いません', 'warning')
+    if (grade && !['A','B','C','未登録'].includes(grade)) issue('名簿', row, '騎乗者資格は「A／B／C／未登録」です','error',['grade'])
+    const p = { row,kind,id,org,name,reading,jef,grade,checked:flag(checked,'名簿',row,'日馬連確認',true,'checked'),sportsMember:membership(sportsMember,row,'乗馬協会会員','sportsMember'),instructorMember:membership(instructorMember,row,'指導者協会会員','instructorMember'),qualified:flag(qualified,'名簿',row,'指導者資格確認',true,'qualified') }
+    if (p.checked && !jef) issue('名簿', row, '日馬連確認済みですが登録番号がありません','error',['jef','checked'])
+    if (!reading && kind !== '団体') issue('名簿', row, '放送用のふりがなが未登録です。読みを推測して補いません', 'warning',['reading'])
     people.push(p)
   }
   const keys = new Set<string>(), names = new Set<string>(), jefs = new Set<string>()
   people.forEach((p,index) => {
     for (const [key,set,label] of [[`${p.kind}:${p.id}`,keys,'識別番号'],[`${p.kind}:${p.org}:${p.name.normalize('NFKC').replace(/\s/g,'')}`,names,'同一所属の名前'],...(p.jef ? [[`${p.kind}:${p.jef}`,jefs,'日馬連番号']] : [])] as [string,Set<string>,string][]) {
-      if (set.has(key)) issue('名簿', p.row, `${label}が重複しています：${p.name}。自動で同一人馬に統合しません`); set.add(key)
+      if (set.has(key)) issue('名簿', p.row, `${label}が重複しています：${p.name}。自動で同一人馬に統合しません`,'error',[label==='日馬連番号'?'jef':'name']); set.add(key)
     }
   })
   const orgs = new Map(people.filter(p=>p.kind==='団体').map(p=>[p.id,p])), riders = new Map(people.filter(p=>p.kind==='選手').map(p=>[p.id,p])), horses = new Map(people.filter(p=>p.kind==='馬').map(p=>[p.id,p]))
@@ -89,20 +90,35 @@ export function reviewWinterImport(source: ImportSource) {
     const [competition,orderText,rider,horse,opText] = v
     const order = /^\d+$/.test(orderText) ? Number(orderText) : NaN
     if (!Number.isSafeInteger(order) || order < 1) issue('出番表',row,'出番は1以上の整数です')
-    const op = flag(opText,'出番表',row,'OP',false), r = riders.get(rider), h = horses.get(horse)
-    if (!r) issue('出番表',row,`選手番号 ${rider || '（空欄）'} が名簿にありません`)
-    if (!h) issue('出番表',row,`馬番号 ${horse || '（空欄）'} が名簿にありません`)
+    const op = flag(opText,'出番表',row,'OP',false,'op'), r = riders.get(rider), h = horses.get(horse)
+    if (!r) issue('出番表',row,`選手番号 ${rider || '（空欄）'} が名簿にありません`,'error',['rider'])
+    if (!h) issue('出番表',row,`馬番号 ${horse || '（空欄）'} が名簿にありません`,'error',['horse'])
     const start = `${competition}:${order}`
     if(starts.has(start))issue('出番表',row,'同じ競技で出番が重複しています'); starts.add(start)
     const combination = `${competition}:${rider}:${horse}`
-    if(combinations.has(combination)&&!op)issue('出番表',row,'同じ競技の同一人馬が重複しています。2回目以降のOPを確認してください'); combinations.add(combination)
+    if(combinations.has(combination)&&!op)issue('出番表',row,'同じ競技の同一人馬が重複しています。2回目以降のOPを確認してください','error',['op']); combinations.add(combination)
     let price: number | null = null
+    let feeFields:ApplicationIssueField[]=['competition'], feeRelated:NonNullable<ImportIssue['related']>=[]
     try {
       const c = winterCompetition(competition)
-      if(c.official && (!r?.jef || !r.checked || !['A','B'].includes(r.grade) || !h?.jef || !h.checked)) issue('出番表',row,'公認競技は選手・馬の日馬連確認と選手のB級以上の資格が必要です。馬のグレード申請は原本で別途確認してください')
+      if(c.official && (!r?.jef || !r.checked || !['A','B'].includes(r.grade) || !h?.jef || !h.checked)) {
+        const related:NonNullable<ImportIssue['related']>=[]
+        for(const p of [r,h])if(p){
+          if(!p.jef)related.push({personId:p.id,field:'jef',message:'公認競技に出場するため日馬連番号が必要です。'})
+          else if(!p.checked)related.push({personId:p.id,field:'checked',message:'公認競技に出場するため番号の対応を確認してください。'})
+        }
+        if(r&&!['A','B'].includes(r.grade))related.push({personId:r.id,field:'grade',message:'公認競技はB級以上の騎乗者資格の確認が必要です。'})
+        issue('出番表',row,'公認競技は選手・馬の日馬連確認と選手のB級以上の資格が必要です。馬のグレード申請は原本で別途確認してください','error',[...(!r?.jef||!r.checked||!['A','B'].includes(r.grade)?['rider' as const]:[]),...(!h?.jef||!h.checked?['horse' as const]:[])],related)
+      }
       const member = ['5','25'].includes(competition) ? r?.sportsMember : ['8','32'].includes(competition) ? r?.instructorMember : ''
+      feeFields=['fee']
+      if(op&&(c.official||c.opFee==null))feeFields=['op']
+      else if(c.instructorRequired&&!r?.qualified){feeFields=['rider'];if(r)feeRelated=[{personId:r.id,field:'qualified',message:'この競技は地域乗馬指導者資格の確認が必要です。'}]}
+      else if((c.memberFee!=null||c.nonmemberFee!=null)&&!['会員','非会員'].includes(member??'')){
+        feeFields=['rider'];if(r)feeRelated=[{personId:r.id,field:['5','25'].includes(competition)?'sportsMember':'instructorMember',message:'会員・非会員の料金区分を選択してください。'}]
+      }
       price = winterEntryPrice(c,{ isOp:op,membership:member==='会員'?'member':member==='非会員'?'nonmember':undefined,instructorConfirmed:r?.qualified })
-    } catch(error) { issue('出番表',row,error instanceof Error?error.message:'料金を確認してください') }
+    } catch(error) { issue('出番表',row,error instanceof Error?error.message:'料金を確認してください','error',feeFields,feeRelated) }
     entries.push({competition,order,rider,horse,op,price})
   }
   for(const competition of new Set(entries.map(e=>e.competition))) {
