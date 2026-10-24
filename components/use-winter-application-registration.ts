@@ -2,6 +2,7 @@
 
 import {useEffect,useRef,useState} from 'react'
 import type {ApplicationRegistrationPanelProps} from './master/application-registration'
+import {rosterCorrectionInput,rosterCorrectionMatches,type RosterCorrectionInput} from '@/lib/winter-roster-correction'
 import {applicationDifferences,applicationReview,rosterCandidates} from '@/lib/winter-application'
 import {readApplicationDraft,type ApplicationDraft} from '@/lib/winter-application-draft'
 import {applicationRegistrationDifferences,applicationRegistrationKey,createApplicationRegistration,parseApplicationRegistration,persistApplicationRegistration,readApplicationRegistration,reviewApplicationRegistration,resolveUnknownApplicationPerson,runApplicationRegistration,serializeApplicationRegistration,type ApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
@@ -26,19 +27,20 @@ async function exclusive(task:()=>Promise<void>){
  })
 }
 /** Winter operations only; presentation and controls stay in the shared master. */
-export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;session:AdminSession;onSession:(s:AdminSession)=>void;isReviewBusy:()=>boolean;canReplaceReview:()=>boolean;onAdopt:(draft:ApplicationDraft)=>void;onClear:()=>void;onChanged?:()=>void;canImport?:()=>boolean}){
+export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;session:AdminSession;onSession:(s:AdminSession)=>void;isReviewBusy:()=>boolean;canReplaceReview:()=>boolean;onAdopt:(draft:ApplicationDraft)=>void;onClear:()=>void;onChanged?:()=>void;canImport?:()=>boolean;onBeforeRosterCorrection?:(input:RosterCorrectionInput)=>void;onRosterCorrected?:(snapshot:ApplicationSnapshot)=>void}){
  const [work,setWork]=useState<ApplicationRegistration|null>(null),[preview,setPreview]=useState<{work:ApplicationRegistration;plan:Plan}|null>(null)
  // Keep editable diagnostics after a draft change, never its authorization to register.
  const [lastInspection,setLastInspection]=useState<{work:ApplicationRegistration;plan:Plan;snapshot:ApplicationSnapshot}|null>(null)
  const [snapshot,setSnapshot]=useState<ApplicationSnapshot|null>(null),[busy,setBusy]=useState(false),[running,setRunning]=useState(false)
  const [accepted,setAccepted]=useState(false),[singleOperator,setSingleOperator]=useState(false),[choices,setChoices]=useState<Record<string,string>>({})
+ const [correctionAccepted,setCorrectionAccepted]=useState<Record<string,boolean>>({})
  const [message,setMessage]=useState(''),[error,setError]=useState('')
  const current=useRef<ApplicationRegistration|null>(null),expected=useRef<string|null>(null),lock=useRef(false),stop=useRef(false)
  const alive=useRef(true)
  const services=()=>winterApplicationServices(p.session,p.onSession)
  const activeReview=work?.review??p.draft
  const shown=preview&&activeReview&&signature(preview.work.review)===signature(activeReview)?preview:null
- useEffect(()=>{if(!p.draft)setLastInspection(null);if(!current.current){setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
+ useEffect(()=>{if(!p.draft)setLastInspection(null);if(!current.current){setCorrectionAccepted({});setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;stop.current=true}},[])
  function remember(value:ApplicationRegistration){const clean=readApplicationRegistration(value);current.current=clean;setWork(clean);return clean}
  function persist(value:ApplicationRegistration){
@@ -73,7 +75,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  }
  async function inspect(value:ApplicationRegistration,service=services()){
   const s=await service.load(),plan=await reviewApplicationRegistration(value,s)
-  setSnapshot(s);setPreview({work:copy(value),plan});setLastInspection({work:copy(value),plan,snapshot:s});setChoices({})
+  setSnapshot(s);setPreview({work:copy(value),plan});setLastInspection({work:copy(value),plan,snapshot:s});setCorrectionAccepted({});setChoices({})
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{const el=document.getElementById('application-registration');el?.scrollIntoView({block:'start',behavior:'smooth'});el?.focus({preventScroll:true})})
   return plan
  }
@@ -99,7 +101,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   const ids=new Set(previous?.issues.length&&roster&&before?[...rosterCandidates(before,roster,review!.edited.club),...rosterCandidates(person,roster,review!.edited.club)].map(c=>c.entity.id):[])
   ids.add(selected)
   const correction=correctionSource&&previous?.issues.length&&roster?{
-   person,selected,original:review!.original.people.find(r=>r.key===person.key),club:review!.edited.club,
+   person,selected,accepted:!!correctionAccepted[person.key],participantCount:roster.participants.filter(p=>p.entity_id===selected).length,original:review!.original.people.find(r=>r.key===person.key),club:review!.edited.club,
    candidates:roster.entities.filter(e=>ids.has(e.id)&&!e.archived_at&&e.kind===person.kind).map(e=>({id:e.id,name:e.name,reading:e.reading,jef:e.jef_number??'',reason:'照合時の候補',clubs:roster.affiliations.filter(a=>a.entity_id===e.id&&!a.ended_at).map(a=>roster.clubs.find(c=>c.id===a.club_id)?.name??'所属名不明')})),
   }:undefined
   return {key:person.key,label:`${person.kind==='rider'?'選手':'馬'} ${person.name}`,id:row?.entityId??recorded?.entityId,state:row?.issues.length?'要確認':row?status(row.state):work?`端末記録：${status(recorded?.state??'unregistered')}（未再照合）`:'訂正中・再照合が必要',issues:row?.issues??previous?.issues??[],resolve:!!work&&recorded?.state==='unknown'&&!recorded.entityId,candidates:options,selected:choices[person.key]??'',correction}
@@ -108,7 +110,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const savedStates=Object.values(work?.entries?.states??{}),registered=savedStates.filter(s=>s==='registered').length,unknown=savedStates.filter(s=>s==='unknown').length
  const panel:ApplicationRegistrationPanelProps={
   complete:!!plan?.ready&&plan.credentialsComplete&&plan.participating&&!!plan.entries?.rows.length&&plan.entries.rows.length===review?.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered'),
-  credentials:plan?.credentials,hasCorrections:!!correctionSource,reviewStale:!!correctionSource&&!plan,
+  credentials:plan?.credentials,showAccountConfirmation:!!(p.draft&&!work&&!p.draft.accountChecked&&(plan||correctionSource)),hasCorrections:!!correctionSource,reviewStale:!!correctionSource&&!plan,
   busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview&&(!!work||!p.canImport||p.canImport()),canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
   reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
   entries:(model?.review.edited.entries??[]).map((entry,i)=>{const row=plan?.entries?.rows.find(r=>r.index===i);return {key:entry.key,label:`第${entry.competition}競技 ／ ${review!.edited.people.find(p=>p.key===entry.rider)?.name??'選手未対応'} ／ ${review!.edited.people.find(p=>p.key===entry.horse)?.name??'馬未対応'}${entry.op?' ／ OP':''}`,fee:row?.fee??appReview?.report.entries[i]?.price??null,id:row?.registeredId??row?.id,state:row?.differences.length?'要確認':row?status(row.state):work?.entries?'未再照合（端末の途中記録あり）':'参加登録後に出番を照合',issues:row?.differences??[]}}),
@@ -138,6 +140,29 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
     setMessage(stop.current?'停止しました。保存済みは保持しています。照合結果を確認して残りを再開できます。':'保存結果を読み直しました。登録済み・未登録・差分を一覧で確認してください。入金処理は行っていません。')
    })
   }),
+  onCorrectionAccepted:(key,value)=>{if(!lock.current)setCorrectionAccepted(old=>({...old,[key]:value}))},
+  onSaveRoster:key=>void action(()=>exclusive(async()=>{
+   if(current.current||!p.draft||!correctionSource||!correctionAccepted[key])throw new Error('同じ人馬の訂正であることと変更内容を確認してください')
+   const person=p.draft.edited.people.find(x=>x.key===key),id=p.draft.choices[key]
+   if(!person)throw new Error('訂正する人馬を確認してください')
+   const input=rosterCorrectionInput(person,id,p.draft.edited.club,correctionSource.snapshot,crypto.randomUUID())
+   const service=services()
+   setPreview(null);setAccepted(false);setSingleOperator(false);setCorrectionAccepted({})
+   // Save the user's draft before any mutation; failure must not send the request.
+   p.onBeforeRosterCorrection?.(input)
+   let writeError:unknown
+   try{await service.correctPerson(input)}catch(e){writeError=e}
+   const fresh=await service.load(p.draft.edited.people.filter(p=>p.kind==='rider').map(p=>p.jef))
+   p.onRosterCorrected?.(fresh)
+   if(!rosterCorrectionMatches(input,fresh)){
+    // Refresh candidates and diagnostics even after a conflict; never blindly resend.
+    await inspect(createApplicationRegistration(p.draft),{...service,load:async()=>fresh})
+    throw new Error((writeError instanceof Error?writeError.message:'訂正後の保存内容が一致しません')+'。入力は保持しています。最新の名簿と変更内容を確認してから保存してください')
+   }
+   await inspect(createApplicationRegistration(p.draft),{...service,load:async()=>fresh})
+   p.onChanged?.()
+   setMessage('既存名簿の訂正と申込団体への所属を保存し、Winterの保存結果を読み直しました。人馬ID・既存の出番・料金は保持しています。残りの確認後に取り込みへ進めます。')
+  })),
   onStop:()=>{stop.current=true;setMessage('停止を受け付けました。処理中の1件の結果確認後に停止します。')},
   onChoice:(key,id)=>{if(!lock.current)setChoices(old=>({...old,[key]:id}))},
   onResolve:key=>void action(async()=>{

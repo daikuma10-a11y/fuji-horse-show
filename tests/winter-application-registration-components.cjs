@@ -36,6 +36,7 @@ Module._load=function(name,...args){
  if(name==='@/lib/winter-application-services')return {winterApplicationServices:()=>({
   load:async()=>{loads++;if(deny)throw Error('synthetic admin denied');if(gateLoad)await gateLoad;return structuredClone(env.snapshot)},
   saveCredential:input=>env.deps.saveCredential(input),savePerson:input=>env.deps.savePerson(input),saveParticipants:(...args)=>env.deps.saveParticipants(...args),saveEntry:input=>env.deps.saveEntry(input),
+  correctPerson:async input=>{if(deny)throw Error('synthetic admin denied');const journal=[...map.values()].map(s=>JSON.parse(s)).find(r=>r.kind==='winter-roster-correction'&&r.input.requestId===input.requestId);assert(journal,'draft and request saved before sending');return env.deps.correctPerson(input)},
  })}
  if(name==='@/lib/winter-application'){const actual=originalLoad.call(this,name,...args);return {...actual,readWinterApplication:async()=>{const app=structuredClone(env.work.review.original);if(!readOriginal){app.digest='c'.repeat(64);app.people[0].name='訂正版の合成選手'}if(readCredentials){app.people[1].horseGrade='中B';app.people[1].credentialOrigin={sheet:'馬匹名簿',cell:'C7',value:'中Ｂ'}}return app}}}
  return originalLoad.call(this,name,...args)
@@ -141,7 +142,45 @@ async function main(){
  assert.equal(panel(p).hasCorrections,false);assert(panel(p).people.every(r=>!r.correction));const fixed=JSON.stringify(p.edited)
  oldCorrection('r1',{name:'cannot edit frozen registration'});p=render();assert.equal(JSON.stringify(p.edited),fixed,'even an old correction callback honors the frozen checkpoint')
 
- // Missing affiliation has an actionable roster route; a storage failure cannot discard the draft.
+ // The saved master is wrong: correct it here, preserve IDs, and continue the import.
+ p=await start()
+ const misspelled=env.addPerson({kind:'rider',name:'合成誤字選手',reading:'ごうせいせんしゅ',jefNumber:'',clubName:p.edited.club})
+ const oldHorse=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:p.edited.club})
+ const numbered=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'54321',clubName:'別の合成団体'})
+ env.publish(env.snapshot.roster.clubs[0].id,[misspelled],[])
+ const beforeCorrectionBindings=JSON.stringify(env.snapshot.bindings)
+ p.onLoadRoster();p=await settled();p.onChoice('r1',misspelled);p=await settled();p.onChoice('h1',numbered);p=await settled();p.onIntent('addition');p=render();p.onAccountChecked(true);p=render();panel(p).onReview();p=await settled()
+ assert.equal(panel(p).hasCorrections,true);assert.equal(panel(p).people[0].correction.participantCount,1)
+ html=renderToStaticMarkup(React.createElement(MasterApplicationRegistration,panel(p)))
+ assert.match(html,/既存名簿を訂正・所属を保存/);assert.match(html,/変更前：/);assert.match(html,/変更後：/);assert(!html.includes('名簿の所属を確認・訂正する'))
+ panel(p).onSaveRoster('r1');p=await settled();assert.match(panel(p).error,/変更内容を確認/);assert.equal(env.correctionPosts,0)
+ panel(p).onCorrectionAccepted('r1',true);p=render();failStorage=true;panel(p).onSaveRoster('r1');p=await settled();assert.equal(env.correctionPosts,0);assert.match(panel(p).error,/quota/);failStorage=false
+ panel(p).onCorrectionAccepted('r1',true);p=render();const saveCorrection=panel(p).onSaveRoster;saveCorrection('r1');saveCorrection('r1');p=await settled()
+ assert.equal(env.correctionPosts,1);assert.equal(env.snapshot.roster.entities.find(e=>e.id===misspelled).name,'合成選手');assert.equal(env.snapshot.data.riders[0].name,'合成選手');assert.equal(JSON.stringify(env.snapshot.bindings),beforeCorrectionBindings)
+ assert.equal(panel(p).people[0].state,'登録済み');assert.equal(p.choices.r1,misspelled);assert.equal(env.snapshot.roster.entities.length,3)
+ assert.equal(p.original.people[0].name,'合成選手');assert.equal(p.original.people[1].jef,'')
+ // A new number already owned by a second exact ID cannot be assigned to the old duplicate.
+ panel(p).onCorrectChoice('h1',oldHorse);p=await settled();panel(p).onCorrectPerson('h1',{jef:'54321'});p=render();panel(p).onCorrectionAccepted('h1',true);p=render();panel(p).onSaveRoster('h1');p=await settled();assert.equal(env.correctionPosts,1);assert.match(panel(p).error,/別の既存候補/)
+ panel(p).onCorrectChoice('h1',numbered);p=await settled();panel(p).onCorrectionAccepted('h1',true);p=render()
+ panel(p).onCorrectPerson('h1',{reading:'ゴウセイウマ'});p=render();p=render();assert.equal(panel(p).people[1].correction.accepted,false,'editing after confirmation clears consent')
+ panel(p).onCorrectionAccepted('h1',true);p=render();deny=true;panel(p).onSaveRoster('h1');p=await settled();assert.equal(env.correctionPosts,1);assert.match(panel(p).error,/admin denied/);deny=false
+ // Save committed, reply lost: read back the exact selected identity and Winter snapshots.
+ env.deps.correctPerson=async input=>{env.correctPerson(input);throw Error('synthetic lost response')}
+ panel(p).onCorrectionAccepted('h1',true);p=render();panel(p).onSaveRoster('h1');p=await settled()
+ assert.equal(env.correctionPosts,2);assert.match(panel(p).message,/保存結果を読み直しました/);assert.equal(env.snapshot.roster.entities.length,3);assert.equal(env.snapshot.roster.affiliations.filter(a=>a.entity_id===numbered).length,2)
+ assert.equal(panel(p).showAccountConfirmation,true,'account confirmation stays in step ③ after identity issues clear')
+ assert(!panel(p).people.some(r=>r.issues.length));assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ panel(p).onAccountChecked(true);p=render();p=await ready();panel(p).onRun();p=await settled();assert.equal(panel(p).complete,true,panel(p).error);assert.deepEqual(env.posts,{person:0,participants:1,entry:1});assert.equal(env.snapshot.roster.entities.length,3)
+ for(const raw of map.values()){assert(!raw.includes('synthetic-secret'));assert(!raw.includes('synthetic-refresh'))}
+
+ // A concurrent master edit is not overwritten: refresh before values, keep the desired input.
+ p=await start()
+ const conflict=env.addPerson({kind:'rider',name:'合成選手誤字',reading:'ごうせいせんしゅ',jefNumber:'',clubName:p.edited.club})
+ p.onLoadRoster();p=await settled();p.onChoice('r1',conflict);p=await settled();p.onAccountChecked(true);p=render();panel(p).onReview();p=await settled()
+ env.snapshot.roster.entities[0].name='別操作で訂正済み';env.snapshot.roster.entities[0].updated_at='2026-10-24T01:00:00Z'
+ panel(p).onCorrectionAccepted('r1',true);p=render();panel(p).onSaveRoster('r1');p=await settled();assert.equal(env.correctionPosts,0);assert.match(panel(p).error,/別の操作で変わりました/);assert.equal(p.edited.people[0].name,'合成選手');assert.equal(panel(p).people[0].correction.candidates.find(c=>c.id===conflict).name,'別操作で訂正済み');assert.equal(panel(p).people[0].correction.accepted,false)
+
+ // Navigation still retains a draft; it is no longer the required correction flow.
  p=await start()
  const outsider=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:'別の合成団体'})
  p.onLoadRoster();p=await settled();p.onChoice('h1',outsider);p=await settled();p.onAccountChecked(true);p=render();panel(p).onReview();p=await settled()

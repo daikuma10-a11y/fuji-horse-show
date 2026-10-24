@@ -1,3 +1,4 @@
+import type {RosterCorrectionInput} from './winter-roster-correction'
 import {credentialValue,credentialLabel,credentialRequestId,credentialHash,validCredential,type WinterCredential,type CredentialExpectation,type CredentialSave} from './winter-application-credentials'
 import {readApplicationDraft,type ApplicationDraft} from './winter-application-draft'
 import {applicationReview,applicationSource,normalizeApplicationName,rosterCandidates} from './winter-application'
@@ -19,6 +20,7 @@ export type ApplicationRegistrationServices={
  savePerson:(input:Parameters<typeof saveRosterEntity>[0])=>ReturnType<typeof saveRosterEntity>
  saveParticipants:(...args:Parameters<typeof saveWinterParticipants> extends [...infer A,string]?A:never)=>ReturnType<typeof saveWinterParticipants>
  saveCredential:(input:CredentialSave)=>Promise<string>
+ correctPerson:(input:RosterCorrectionInput)=>Promise<string>
  saveEntry:(input:Parameters<typeof saveWinterInitialEntry>[0])=>ReturnType<typeof saveWinterInitialEntry>
 }
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
@@ -95,8 +97,8 @@ function validateSnapshot(s:ApplicationSnapshot){
 function identityIssues(p:ApplicationPerson,id:string,clubId:string|undefined,s:ApplicationSnapshot,requireReading=false){
  const e=s.roster.entities.find(e=>e.id===id),issues:string[]=[]
  if(!e||e.archived_at||e.kind!==p.kind)return [`${p.name}：選択した人馬が不存在・削除済み・別種別です`]
- if(e.name!==p.name.trim()||(e.jef_number??'')!==p.jef.trim()||requireReading&&e.reading!==p.reading.trim())issues.push(`${p.name}：既存名簿との差分があります（既存名 ${e.name}／日馬連 ${e.jef_number??'空欄'}／読み ${e.reading}）。既存値は上書きしません`)
- if(!clubId||!s.roster.affiliations.some(a=>a.entity_id===id&&a.club_id===clubId&&!a.ended_at))issues.push(`${p.name}：申込団体への所属が確認できません。既存の人馬登録欄で所属を確認してください`)
+ if(e.name!==p.name.trim()||(e.jef_number??'')!==p.jef.trim()||requireReading&&e.reading!==p.reading.trim())issues.push(`${p.name}：既存名簿との差分があります（既存名 ${e.name}／日馬連 ${e.jef_number??'なし'}／読み ${e.reading}）。名簿が誤っている場合は、正しい内容を入力して名簿の訂正を保存してください`)
+ if(!clubId||!s.roster.affiliations.some(a=>a.entity_id===id&&a.club_id===clubId&&!a.ended_at))issues.push(`${p.name}：申込団体への所属が確認できません。同じ人馬であることを確認し、名簿の訂正・所属の保存へ進んでください`)
  if(clubId&&s.roster.participants.some(x=>x.entity_id===id&&x.club_id===clubId)){
   const bridge=s.bindings.find(b=>b.entity_id===id&&b.club_id===clubId)
   const actual=p.kind==='rider'?s.data.riders.find(r=>r.id===bridge?.rider_id):s.data.horses.find(h=>h.id===bridge?.horse_id)
@@ -146,7 +148,7 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
    problems.push(...identityIssues(p,result.entityId,clubId,s,chosen==='new'))
   }else if(result.state!=='unregistered')problems.push(`${p.name}：新規登録の結果が不明です。再送せず、既存名簿を照合して保存された人馬を明示選択してください`)
   else if(chosen!=='new')problems.push(`${p.name}：既存人馬か新規登録かを明示選択してください`)
-  else if(rosterCandidates(p,s.roster,app.club).length||s.roster.entities.some(e=>e.kind===p.kind&&e.archived_at&&(normalizeApplicationName(e.name)===normalizeApplicationName(p.name)||p.jef&&e.jef_number===p.jef)))problems.push(`${p.name}：既存または削除済みの候補があります。新規作成せず人馬登録欄で確認してください`)
+  else if(rosterCandidates(p,s.roster,app.club).length||s.roster.entities.some(e=>e.kind===p.kind&&e.archived_at&&(normalizeApplicationName(e.name)===normalizeApplicationName(p.name)||p.jef&&e.jef_number===p.jef)))problems.push(`${p.name}：既存または削除済みの候補があります。同じ人馬の訂正なら既存候補を選び、正しい内容を保存してください`)
   if(p.jef&&!/^\d+$/.test(p.jef.trim()))problems.push(`${p.name}：日馬連番号は数字または空欄です`)
   issues.push(...problems)
   return {key:p.key,name:p.name,entityId:result.entityId,state:result.entityId&&!problems.length?'registered' as const:result.state,issues:problems}

@@ -5,6 +5,7 @@ const {createApplicationDraft}=require('../lib/winter-application-draft.ts')
 const {WINTER_EVENT_ID,winterCompetition}=require('../lib/winter-event.ts')
 const {reviewWinterInitialEntry}=require('../lib/winter-initial-entry.ts')
 const {createApplicationRegistration,parseApplicationRegistration,persistApplicationRegistration}=require('../lib/winter-application-registration.ts')
+const {rosterCorrectionExpectation}=require('../lib/winter-roster-correction.ts')
 const copy=x=>structuredClone(x)
 let serial=0
 const uuid=()=>`00000000-0000-4000-8000-${String(++serial).padStart(12,'0')}`
@@ -46,7 +47,27 @@ function setup(){
   snapshot.data.entries.push({entry_id:input.id,event_id:WINTER_EVENT_ID,competition_id:input.competition.id,competition_no:input.competition.competition_no,rider_id:input.rider.id,horse_id:input.horse.id,is_op:!!input.selection.isOp,status:'active',organization_id:input.rider.organization_id,organization_name:input.organization.name,start_order:snapshot.data.entries.length+1})
  }
  env.credentialPosts=0
+ env.correctionPosts=0;env.correctionAudit=new Map()
+ env.correctPerson=input=>{
+  if(env.correctionAudit.has(input.requestId)){assert.deepEqual(env.correctionAudit.get(input.requestId),input);return input.entityId}
+  assert.deepEqual(rosterCorrectionExpectation(input.entityId,snapshot),input.expected,'名簿またはWinter参加登録が別の操作で変わりました')
+  const e=snapshot.roster.entities.find(e=>e.id===input.entityId)
+  assert(e&&e.kind===input.kind&&input.eventId===WINTER_EVENT_ID)
+  assert(!input.jef||!snapshot.roster.entities.some(x=>x.id!==e.id&&x.kind===e.kind&&x.jef_number===input.jef))
+  Object.assign(e,{name:input.name,reading:input.reading,jef_number:input.jef||null,updated_at:'2026-10-24T00:00:00Z'})
+  let club=snapshot.roster.clubs.find(c=>c.name===input.clubName)
+  if(!club){club={id:uuid(),name:input.clubName};snapshot.roster.clubs.push(club)}
+  if(!snapshot.roster.affiliations.some(a=>a.entity_id===e.id&&a.club_id===club.id&&!a.ended_at))snapshot.roster.affiliations.push({id:uuid(),entity_id:e.id,club_id:club.id,started_at:'2026-10-24T00:00:00Z',ended_at:null})
+  for(const p of snapshot.roster.participants.filter(p=>p.entity_id===e.id)){
+   Object.assign(p,{name_snapshot:e.name,reading_snapshot:e.reading,jef_number_snapshot:e.jef_number})
+   const b=snapshot.bindings.find(b=>b.entity_id===e.id&&b.club_id===p.club_id)
+   if(e.kind==='rider')Object.assign(snapshot.data.riders.find(r=>r.id===b.rider_id),{name:e.name,jef_member_no:e.jef_number})
+   else Object.assign(snapshot.data.horses.find(h=>h.id===b.horse_id),{name:e.name,jef_registration_no:e.jef_number})
+  }
+  env.correctionPosts++;env.correctionAudit.set(input.requestId,copy(input));return input.entityId
+ }
  env.deps={saveCredential:async input=>{env.credentialPosts++;assert(env.stored.credentials);const current=snapshot.credentials.find(c=>c.entity_id===input.entityId&&c.club_id===input.clubId);assert.equal(current?.request_id??null,input.expected);snapshot.credentials=snapshot.credentials.filter(c=>c!==current);snapshot.credentials.push({event_id:input.eventId,entity_id:input.entityId,club_id:input.clubId,target_id:input.targetId,kind:input.kind,value:input.value,request_id:input.requestId,source_reference:input.reference,confirmed_at:'2026-10-22T00:00:00Z'});return input.requestId},load:async()=>copy(snapshot),persist:env.persist,stop:()=>env.stopped,
+  correctPerson:async input=>env.correctPerson(input),
   savePerson:async input=>{assert.equal(env.stored.people[input.kind==='rider'?'r1':'h1'].state,'unknown');assert(!('id' in input));assert(!('replaceAffiliations' in input));env.posts.person++;return env.addPerson(input)},
   saveParticipants:async(clubId,ids,expected)=>{assert.equal(env.stored.participants.state,'unknown');assert(expected.every(id=>ids.includes(id)),'never remove existing participants');env.posts.participants++;env.publish(clubId,ids,expected)},
   saveEntry:async input=>{assert.equal(env.stored.entries.states[input.id],'unknown');env.posts.entry++;env.append(input);return input.id},

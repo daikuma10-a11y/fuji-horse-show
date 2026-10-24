@@ -1,3 +1,4 @@
+import {saveWinterRosterCorrection} from './winter-roster-correction'
 import {loadWinterApplicationCredentials,saveWinterApplicationCredential} from './winter-application-credentials'
 import {verifyAdminSession,type AdminSession} from './supabase-rest'
 import {loadSharedRoster,loadWinterRosterBindings,saveRosterEntity,saveWinterParticipants} from './shared-roster'
@@ -17,6 +18,7 @@ export function winterApplicationServices(session:AdminSession,onSession:(value:
    const [roster,bindings,data,initial,credentials,grades]=await Promise.all([loadSharedRoster(token),loadWinterRosterBindings(token),loadWinterData(),loadWinterInitialCharges(token),loadWinterApplicationCredentials(token),riderNumbers?loadJefRiderQualifications(riderNumbers,token).then(riderGrades=>({riderGrades})).catch(()=>({riderGrades:[],riderGradesError:'日馬連の資格データを取得できません。「既存登録を再確認」で再読込するか、申込書の資格を確認してください。'})):Promise.resolve({})])
    return {roster,bindings,data,initial,credentials,...grades}
   },
+  correctPerson:async input=>saveWinterRosterCorrection(input,await verified()),
   savePerson:async input=>saveRosterEntity(input,await verified()),
   saveParticipants:async(clubId,ids,expected)=>saveWinterParticipants(clubId,ids,expected,await verified()),
   saveCredential:async input=>saveWinterApplicationCredential(input,await verified()),

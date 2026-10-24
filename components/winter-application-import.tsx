@@ -11,7 +11,7 @@ import {applicationDifferences,applicationReview,readWinterApplication,rosterCan
 import {applicationDraftKey,createApplicationDraft,parseApplicationDraft,persistApplicationDraft,readApplicationDraft,serializeApplicationDraft,type ApplicationDraft} from '@/lib/winter-application-draft'
 import {type SharedRoster} from '@/lib/shared-roster'
 import {type AdminSession} from '@/lib/supabase-rest'
-import {WINTER_EVENT_NAME} from '@/lib/winter-event'
+import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {applicationTodos,applicationClubSummary} from '@/lib/winter-application-guide'
 import {winterApplicationServices} from '@/lib/winter-application-services'
 import {applicationRegistrationKey,parseApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
@@ -37,6 +37,13 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onAdopt:value=>{setDraft(value);setFile(null);setRevision(null);setRoster(null);expectedSaved.current=null;setDirty(false)},
   onClear:()=>{setDraft(null);setFile(null);setRevision(null);setRoster(null);setContext(null);expectedSaved.current=null;setDirty(false)},
   onChanged,
+  onBeforeRosterCorrection:input=>{
+   if(!draft)throw new Error('申込内容を確認してください')
+   expectedSaved.current=persistApplicationDraft(localStorage,draft,expectedSaved.current)
+   localStorage.setItem(winterStorageKey('application-roster-correction')+':'+input.requestId,JSON.stringify({kind:'winter-roster-correction',version:1,originalDigest:draft.original.digest,reference:draft.reference,input}))
+   setDirty(false)
+  },
+  onRosterCorrected:snapshot=>{setRoster(snapshot.roster);setContext(snapshot)},
   canImport:()=>{
    if(!draft||!context)return false
    const state=applicationClubSummary(draft,context).state
@@ -150,7 +157,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  })}
  return <MasterApplicationReview
   busy={busy||registration.busy} frozen={registration.frozen} registration={<MasterApplicationRegistration {...registration.panel} onStartlist={onStartlist?()=>saveAndGo(onStartlist):undefined} onSettlement={onSettlement?()=>saveAndGo(onSettlement):undefined} onNext={!registration.frozen?nextApplication:undefined}
-   onCorrectPerson={(key,patch)=>person(key,patch,true)} onCorrectChoice={(key,id)=>choose(key,id,registration.panel.people.find(r=>r.key===key)?.correction?.candidates)} onUseExisting={useExisting}
+   onCorrectPerson={(key,patch)=>person(key,patch,true)} onCorrectChoice={(key,id)=>choose(key,id,registration.panel.people.find(r=>r.key===key)?.correction?.candidates)} onUseExisting={useExisting} onUseOriginal={key=>{const source=draft?.original.people.find(p=>p.key===key);if(source)person(key,{name:source.name,reading:source.reading,jef:source.jef},true)}}
    accountChecked={draft?.accountChecked??false} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
    onRoster={onRoster?()=>saveAndGo(onRoster):undefined} editError={error}
   />}

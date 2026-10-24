@@ -2,12 +2,13 @@
 
 import type {ApplicationPerson,IdentityCandidate} from '@/lib/master/application'
 
-type IdentityCorrection={person:ApplicationPerson;original?:ApplicationPerson;selected:string;club:string;candidates:IdentityCandidate[]}
+type IdentityCorrection={person:ApplicationPerson;accepted?:boolean;participantCount?:number;original?:ApplicationPerson;selected:string;club:string;candidates:IdentityCandidate[]}
 type ResultRow={key:string;label:string;state:string;id?:string;issues:string[]}
 export type ApplicationRegistrationPanelProps={
  busy:boolean;running:boolean;frozen:boolean;hasCheckpoint:boolean;hasPlan:boolean;ready:boolean
  credentials?:{key:string;name:string;kind:string;value:string;previous:string;saved:boolean}[]
- hasCorrections?:boolean;reviewStale?:boolean;editError?:string
+ showAccountConfirmation?:boolean;hasCorrections?:boolean;reviewStale?:boolean;editError?:string
+ onCorrectionAccepted?:(key:string,value:boolean)=>void;onSaveRoster?:(key:string)=>void;onUseOriginal?:(key:string)=>void
  accountChecked?:boolean;onAccountChecked?:(value:boolean)=>void;onRoster?:()=>void
  onCorrectPerson?:(key:string,patch:Partial<ApplicationPerson>)=>void;onCorrectChoice?:(key:string,id:string)=>void;onUseExisting?:(key:string,id:string)=>void
  complete?:boolean;onStartlist?:()=>void;onSettlement?:()=>void;onNext?:()=>void
@@ -38,16 +39,24 @@ function IdentityCorrectionFields({value,p}:{value:IdentityCorrection;p:Applicat
     <option value="">選択してください</option><option value="new">新規登録（既存候補と別の人馬）</option>
     {value.candidates.map(c=><option key={c.id} value={c.id}>{c.name} ／ 日馬連 {c.jef||'なし'} ／ {c.clubs.join('、')||'所属なし'}</option>)}
    </select>
-   {selected&&!selected.clubs.includes(value.club)&&<span className="mt-1 block font-bold">申込団体「{value.club}」への所属がありません。所属付きの候補を選び直すか、下の「名簿の所属を確認・訂正する」へ進んでください。</span>}
+   {selected&&!selected.clubs.includes(value.club)&&<span className="mt-1 block font-bold">申込団体「{value.club}」への所属がありません。下の「既存名簿を訂正・所属を保存」で、この人馬に所属を追加できます。</span>}
   </label>
-  {selected&&<div className="rounded-lg border border-blue-300 bg-blue-50 p-2"><p>選択した名簿：{selected.name} ／ 読み {selected.reading||'記載なし'} ／ 日馬連 {selected.jef||'なし'}</p>
+  {selected&&<details className="rounded-lg border border-blue-300 bg-blue-50 p-2"><summary>保存済み名簿の内容を見る・入力へ戻す</summary><p>選択した名簿：{selected.name} ／ 読み {selected.reading||'記載なし'} ／ 日馬連 {selected.jef||'なし'}</p>
    <button type="button" className={button+' mt-2 !text-base'} onClick={()=>p.onUseExisting?.(person.key,selected.id)}>同じ人馬と確認し、名簿の表記を使う</button>
-   <p className="mt-1 text-sm">今回の申込の名前・フリガナ・日馬連番号に反映します。Excel原本と保存済みの名簿は保持します。</p></div>}
+   <p className="mt-1 text-sm">今回の申込の名前・フリガナ・日馬連番号に反映します。Excel原本と保存済みの名簿は保持します。</p></details>}
   <div className="grid min-w-0 grid-cols-1 gap-2 @min-[900px]:grid-cols-2">{([['name','名前・馬名'],['reading','フリガナ'],['jef','日馬連番号']] as const).map(([key,label])=><label key={key} className={`block min-w-0 rounded-lg p-2 ${changed(key)?'bg-amber-200':'bg-white'}`}>{label}{changed(key)&&<span className="ml-1 text-sm font-bold">（名簿との表記差）</span>}
    <input aria-label={`${person.key} 照合結果の${label}`} className={input} maxLength={100} value={person[key]} placeholder={key==='jef'?'なし':undefined} onChange={e=>p.onCorrectPerson?.(person.key,{[key]:e.target.value})}/>
   </label>)}</div>
   <label className={`flex gap-2 rounded-lg p-2 ${person.jef&&!person.checked?'bg-amber-200':'bg-white'}`}><input type="checkbox" checked={person.checked} onChange={e=>p.onCorrectPerson?.(person.key,{checked:e.target.checked})}/>日馬連番号を確認済み{!person.jef?'（番号なし）':''}</label>
-  <details className="text-sm"><summary>Excel原本の記載</summary><p>{value.original?.name} ／ 読み {value.original?.reading||'記載なし'} ／ 日馬連 {value.original?.jef||'なし'}</p></details>
+  <details className="text-sm"><summary>Excel原本の記載</summary><p>{value.original?.name} ／ 読み {value.original?.reading||'記載なし'} ／ 日馬連 {value.original?.jef||'なし'}</p><button type="button" className={button+' mt-2 !text-base'} onClick={()=>p.onUseOriginal?.(person.key)}>Excel原本の名前・読み・番号を入力へ戻す</button></details>
+  {selected&&p.onSaveRoster&&<div className="space-y-3 rounded-lg border-2 border-blue-800 bg-white p-3">
+   <h5 className="font-bold">既存名簿を正しい内容へ訂正して保存</h5>
+   <dl className="space-y-2">{([['name','名前・馬名'],['reading','フリガナ'],['jef','日馬連番号']] as const).map(([key,label])=><div key={key} className={changed(key)?'rounded bg-amber-100 p-2':'p-2'}><dt className="font-bold">{label}</dt><dd>変更前：{selected[key]||'なし'} → 変更後：{person[key]||'なし'}</dd></div>)}<div className="p-2"><dt className="font-bold">所属</dt><dd>{selected.clubs.join('、')||'所属なし'}{selected.clubs.includes(value.club)?'（現在の所属を保持）':` → 「${value.club}」を追加`}</dd></div></dl>
+   <p>共通名簿と、Winterに登録済みの同じ人馬 {value.participantCount??0}件へ反映します。ほかの所属、出番・料金・入金は保持します。</p>
+   <label className="flex gap-2 font-bold"><input type="checkbox" checked={!!value.accepted} onChange={e=>p.onCorrectionAccepted?.(person.key,e.target.checked)}/>同じ人馬の訂正であることと、変更前・変更後を確認しました</label>
+   <button type="button" className={primaryButton+' w-full !text-base'} disabled={!value.accepted} onClick={()=>p.onSaveRoster?.(person.key)}>既存名簿を訂正・所属を保存</button>
+  </div>}
+  {!selected&&value.candidates.length>0&&<p className="rounded-lg bg-amber-200 p-2 font-bold">以前の名前や番号を直す場合は、新規登録ではなく上の候補から同じ人馬を選び、正しい内容を入力して「既存名簿を訂正・所属を保存」を押してください。</p>}
   <button type="button" className="block text-left underline" onClick={()=>{const target=document.getElementById(`application-person-${encodeURIComponent(person.key)}`);target?.scrollIntoView({block:'center',behavior:'smooth'});target?.focus({preventScroll:true})}}>この人馬の資格・会員区分・グレードも確認する（②へ）</button>
  </fieldset>
 }
@@ -82,13 +91,13 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
      <button type="button" className={button} disabled={p.busy||!row.selected||!p.hasPlan} onClick={()=>p.onResolve(row.key)}>この人馬と照合して再開記録を保存</button>
     </>}</td>
    </tr>)}</tbody></table></div>
-   {p.hasCorrections&&<div className="space-y-3 rounded-lg border-2 border-blue-800 bg-blue-50 p-4">
+   {(p.hasCorrections||p.showAccountConfirmation)&&<div className="space-y-3 rounded-lg border-2 border-blue-800 bg-blue-50 p-4">
     <p>原本請求総額：{p.originalTotal||'未確認'}円 ／ 別途確認した入金額：{p.paid||'未確認'}円</p>
     <label className="flex gap-2"><input type="checkbox" checked={!!p.accountChecked} disabled={p.busy} onChange={e=>p.onAccountChecked?.(e.target.checked)}/>訂正後の原本請求額と、別途確認した入金額を確認しました</label>
     <button type="button" className={primaryButton} disabled={p.busy||!p.canReview} onClick={p.onReview}>訂正内容を再照合する</button>
     <p>資格・競技・料金にも確認事項がある場合は、②の黄色い欄を確認してください。</p>
    </div>}
-   {p.onRoster&&p.people.some(r=>r.issues.length>0)&&<div className="rounded-lg border p-3"><p>選択した名簿自体の名前・番号・所属が違う場合はこちら。訂正後は「Excel申込書の取り込み」へ戻り、③で再照合してください。</p><button type="button" className={button+' mt-2'} disabled={p.busy} onClick={p.onRoster}>名簿の所属を確認・訂正する</button><p className="text-sm">現在の申込内容をこの端末に保存して移動します。</p></div>}
+   {p.frozen&&p.onRoster&&p.people.some(r=>r.issues.length>0)&&<div className="rounded-lg border p-3"><p>選択した名簿自体の名前・番号・所属が違う場合はこちら。訂正後は「Excel申込書の取り込み」へ戻り、③で再照合してください。</p><button type="button" className={button+' mt-2'} disabled={p.busy} onClick={p.onRoster}>名簿の所属を確認・訂正する</button><p className="text-sm">現在の申込内容をこの端末に保存して移動します。</p></div>}
    {p.credentials&&<div className="rounded-lg border border-slate-300 p-3"><h4 className="text-lg font-bold">団体別一覧に保存する資格・グレード</h4><ul className="mt-2 space-y-2">{p.credentials.map(c=><li key={c.key}>{c.name} ／ {c.kind==='rider'?'所有資格級':'グレード宣言'}：{c.value?(c.saved?`${c.value}（保存済み）`:c.previous?`保存済み ${c.previous} → 今回 ${c.value}`:`今回 ${c.value} を保存`):c.previous?`${c.previous}（今回の原本は空欄・保存済みを保持）`:'記載なし・未確認'}</li>)}</ul><p className="mt-2 text-sm">申込書で確認した値を保存します。日馬連マスターの登録内容を変更する操作ではありません。</p></div>}
    {!p.reviewStale&&<><p>Winter参加登録：{p.participantState}</p>
    <div className="@container min-w-0"><table className={table}><caption className="mb-2 text-left text-xl font-bold">エントリーの登録確認</caption><colgroup><col style={{width:'54%'}}/><col style={{width:'18%'}}/><col style={{width:'28%'}}/></colgroup><thead className="@max-[760px]:hidden"><tr>{['競技・人馬','計算料金','状態・差分'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.entries.map(row=><tr key={row.key} className={resultRow}>
