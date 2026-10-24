@@ -25,7 +25,7 @@ function download(draft:ApplicationDraft){
  setTimeout(()=>URL.revokeObjectURL(url),1000)
 }
 /** Winter source and service adapter; all presentation remains in the common master. */
-export function WinterApplicationImport({session,onSession,onStartlist,onSettlement,onChanges,onChanged}:{session:AdminSession;onSession:(session:AdminSession)=>void;onStartlist?:()=>void;onSettlement?:()=>void;onChanges?:()=>void;onChanged?:()=>void}){
+export function WinterApplicationImport({session,onSession,onStartlist,onSettlement,onChanges,onRoster,onChanged}:{session:AdminSession;onSession:(session:AdminSession)=>void;onStartlist?:()=>void;onSettlement?:()=>void;onChanges?:()=>void;onRoster?:()=>void;onChanged?:()=>void}){
  const [file,setFile]=useState<File|null>(null),[draft,setDraft]=useState<ApplicationDraft|null>(null)
  const [revision,setRevision]=useState<Application|null>(null),[roster,setRoster]=useState<SharedRoster|null>(null)
  const [context,setContext]=useState<ApplicationSnapshot|null>(null)
@@ -54,8 +54,8 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   finally{lock.current=false;setBusy(false)}
  }
  function edit(fn:(d:ApplicationDraft)=>ApplicationDraft){if(lock.current||registration.isBusy()||registration.isFrozen())return;setDraft(d=>d?fn(d):d);setDirty(true);setMessage('')}
- function person(key:string,patch:Partial<ApplicationPerson>){edit(d=>{
-  const choices={...d.choices};if('name' in patch||'reading' in patch||'jef' in patch)delete choices[key]
+ function person(key:string,patch:Partial<ApplicationPerson>,keepChoice=false){edit(d=>{
+  const choices={...d.choices};if(!keepChoice&&('name' in patch||'reading' in patch||'jef' in patch))delete choices[key]
   return {...d,choices,accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>{
    if(p.key!==key)return p
    const next={...p,...patch}
@@ -97,11 +97,11 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
    if(filled!==target){setDirty(true);setDraft(current=>current?.original.digest===target.original.digest?filled:current)}
   }
  }
- function choose(key:string,value:string){void action(async()=>{
+ function choose(key:string,value:string,options=candidates[key]){void action(async()=>{
   if(!draft||registration.isFrozen())return
   const current=draft.edited.people.find(p=>p.key===key)
   if(!current)throw new Error('選択する人馬を確認できません')
-  const selected=candidates[key]?.find(c=>c.id===value)
+  const selected=options?.find(c=>c.id===value)
   if(value&&value!=='new'&&!selected)throw new Error('候補を確認できません。「既存登録を再確認」を押してください。')
   const person=applyApplicationCandidate(current,selected,context?.riderGrades??[])
   const next={...draft,choices:{...draft.choices,[key]:value},accountChecked:false,
@@ -109,6 +109,18 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   setDraft(next);setDirty(true);registration.invalidate()
   // A previously blank workbook number could not have been included in the first lookup.
   if(selected&&person.kind==='rider'&&person.jef&&person.jef!==current.jef)await loadContext(next)
+ })}
+ function useExisting(key:string,id:string){void action(async()=>{
+  if(!draft||registration.isFrozen())return
+  const row=registration.panel.people.find(r=>r.key===key)?.correction
+  const selected=row?.candidates.find(c=>c.id===id)
+  const current=draft.edited.people.find(p=>p.key===key)
+  if(!current||!selected||row?.selected!==id)throw new Error('同じ人馬であることを確認し、候補を選び直してください。')
+  const {readingAutofill:_,...base}=current
+  const person=applyApplicationCandidate({...base,name:selected.name,reading:selected.reading},selected,context?.riderGrades??[])
+  const next={...draft,choices:{...draft.choices,[key]:id},accountChecked:false,edited:{...draft.edited,people:draft.edited.people.map(p=>p.key===key?person:p)}}
+  setDraft(next);setDirty(true);registration.invalidate()
+  if(person.kind==='rider'&&person.jef&&person.jef!==current.jef)await loadContext(next)
  })}
  async function begin(app:Application){
   setIntent('')
@@ -137,9 +149,14 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   setMessage('確認途中をこの端末に保存しました。次の申込書を選んでください。')
  })}
  return <MasterApplicationReview
-  busy={busy||registration.busy} frozen={registration.frozen} registration={<MasterApplicationRegistration {...registration.panel} onStartlist={onStartlist?()=>saveAndGo(onStartlist):undefined} onSettlement={onSettlement?()=>saveAndGo(onSettlement):undefined} onNext={!registration.frozen?nextApplication:undefined}/>}
+  busy={busy||registration.busy} frozen={registration.frozen} registration={<MasterApplicationRegistration {...registration.panel} onStartlist={onStartlist?()=>saveAndGo(onStartlist):undefined} onSettlement={onSettlement?()=>saveAndGo(onSettlement):undefined} onNext={!registration.frozen?nextApplication:undefined}
+   onCorrectPerson={(key,patch)=>person(key,patch,true)} onCorrectChoice={(key,id)=>choose(key,id,registration.panel.people.find(r=>r.key===key)?.correction?.candidates)} onUseExisting={useExisting}
+   accountChecked={draft?.accountChecked??false} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
+   onRoster={onRoster?()=>saveAndGo(onRoster):undefined} editError={error}
+  />}
   todos={todos} clubSummary={clubSummary} intent={intent} onIntent={value=>{if(lock.current||registration.isBusy())return;setIntent(value);registration.invalidate()}}
-  stage={registration.panel.complete?4:registration.panel.ready&&!todos.some(t=>t.blocking)?3:draft?2:1} onReview={registration.panel.onReview}
+  registrationNeedsCorrection={registration.panel.hasCorrections}
+  stage={registration.panel.complete?4:registration.panel.hasCorrections||registration.panel.ready&&!todos.some(t=>t.blocking)?3:draft?2:1} onReview={registration.panel.onReview}
   onChanges={onChanges?()=>saveAndGo(onChanges):undefined} onUseRevision={()=>void action(async()=>{
    if(!revision||registration.isFrozen())return
    if(draft)expectedSaved.current=persistApplicationDraft(localStorage,draft,expectedSaved.current)

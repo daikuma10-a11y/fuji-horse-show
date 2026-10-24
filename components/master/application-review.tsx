@@ -38,7 +38,7 @@ export type ApplicationReviewModel={amounts:AmountRow[];issues:string[];entryPri
 export function MasterApplicationReview(p:{
  busy:boolean;message:string;error:string;fileName:string;eventName:string;formatDescription:string
  frozen?:boolean;registration?:ReactNode;stage?:number;todos?:ApplicationTodo[];clubSummary?:ApplicationClubSummary|null
- onReview?:()=>void;onChanges?:()=>void;onUseRevision?:()=>void
+ registrationNeedsCorrection?:boolean;onReview?:()=>void;onChanges?:()=>void;onUseRevision?:()=>void
  intent?:'addition'|'';onIntent?:(value:'addition'|'')=>void
  original:Application|null;edited:Application|null;reference:string;paid:string;accountChecked:boolean
  review:ApplicationReviewModel|null;candidates:Record<string,IdentityCandidate[]>;choices:Record<string,string>;rosterLoaded:boolean
@@ -63,7 +63,7 @@ export function MasterApplicationReview(p:{
   <h3 className="text-2xl font-bold">Excel申込書の取り込み</h3>
   <p>{p.eventName}</p>
   <ol aria-label="取り込みの進み具合" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{['① 申込書を読む','② 内容を確認・訂正','③ 取り込む','④ 反映結果'].map((label,i)=><li key={label} aria-current={stage===i+1?'step':undefined} className={`rounded-lg border-2 p-3 font-bold ${stage===i+1?'border-blue-800 bg-blue-800 text-white':stage>i+1?'border-emerald-700 bg-emerald-50':'border-slate-200 bg-slate-50'}`}>{label}{stage>i+1?' ✓':''}</li>)}</ol>
-  <div className="rounded-xl border-l-4 border-blue-800 bg-blue-50 p-4" role="status"><strong>次にすること</strong><p>{p.busy?'処理中です。この画面でお待ちください。':stage===4?'取り込み結果を確認し、出番表・精算を開けます。':p.frozen?'③で登録結果を再確認してください。確定時の入力は保存されています。':stage===3?'③の登録対象と確認欄を確認して「取り込む」を押してください。':app?blocking.length?`②に確認が必要な項目が${blocking.length}件あります。下の一覧から移動できます。`:'②の内容を確認できたら「取込内容を確認する」を押してください。':'Excelを選び「申込書を読み込む」を押してください。'}</p>
+  <div className="rounded-xl border-l-4 border-blue-800 bg-blue-50 p-4" role="status"><strong>次にすること</strong><p>{p.busy?'処理中です。この画面でお待ちください。':stage===4?'取り込み結果を確認し、出番表・精算を開けます。':p.frozen?'③で登録結果を再確認してください。確定時の入力は保存されています。':stage===3?p.registrationNeedsCorrection?'③の黄色い訂正欄を確認し、「訂正内容を再照合する」を押してください。':'③の登録対象と確認欄を確認して「取り込む」を押してください。':app?blocking.length?`②に確認が必要な項目が${blocking.length}件あります。下の一覧から移動できます。`:'②の内容を確認できたら「取込内容を確認する」を押してください。':'Excelを選び「申込書を読み込む」を押してください。'}</p>
    {!p.busy&&app&&!p.frozen&&stage===2&&<button className={primaryButton+' mt-3'} type="button" onClick={()=>blocking.length?go(blocking[0].target):p.onReview?.()}>{blocking.length?'最初の確認箇所へ':'取込内容を確認する'}</button>}
   </div>
   <div id="application-source" tabIndex={-1} className="space-y-3 rounded-xl border-2 border-dashed border-blue-700 p-4" onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='copy'}} onDrop={e=>{e.preventDefault();if(!p.busy)p.onFiles(e.dataTransfer.files)}}>

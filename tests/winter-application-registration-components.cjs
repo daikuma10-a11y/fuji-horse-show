@@ -17,7 +17,7 @@ function hooks(){
   close(){cells.forEach(c=>c?.cleanup?.())},
  }
 }
-let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,readCredentials=false,changeNavigation=0
+let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,readCredentials=false,changeNavigation=0,rosterNavigation=0
 const lockNames=[]
 global.fetch=()=>{network++;throw Error('Real network forbidden')}
 global.window={confirm:()=>true,addEventListener(){},removeEventListener(){}}
@@ -43,7 +43,7 @@ Module._load=function(name,...args){
 const {WinterApplicationImport}=require('../components/winter-application-import.tsx')
 const {MasterApplicationReview}=require('../components/master/application-review.tsx')
 const {MasterApplicationRegistration}=require('../components/master/application-registration.tsx')
-const props={session:{accessToken:'synthetic-secret-not-for-export',refreshToken:'synthetic-refresh',expiresAt:9999999999999,email:'synthetic@example.test'},onSession(){},onChanges(){changeNavigation++}}
+const props={session:{accessToken:'synthetic-secret-not-for-export',refreshToken:'synthetic-refresh',expiresAt:9999999999999,email:'synthetic@example.test'},onSession(){},onChanges(){changeNavigation++},onRoster(){rosterNavigation++}}
 const render=()=>h.render(()=>WinterApplicationImport(props)).props
 const panel=p=>p.registration.props
 function importCheckbox(p){
@@ -51,11 +51,16 @@ function importCheckbox(p){
  function visit(node){if(Array.isArray(node))return node.forEach(visit);if(!React.isValidElement(node))return;if(node.type==='input'&&node.props.name==='application-intent')matches.push(node);visit(node.props.children)}
  visit(MasterApplicationReview(p));assert.equal(matches.length,1,'one import confirmation, no competing change-mode selector');assert.equal(matches[0].props.type,'checkbox');return matches[0].props
 }
+function controls(p){
+ const out=[]
+ function visit(node){if(Array.isArray(node))return node.forEach(visit);if(!React.isValidElement(node))return;if(typeof node.type==='function')return visit(node.type(node.props));out.push(node);visit(node.props.children)}
+ visit(MasterApplicationRegistration(panel(p)));return out
+}
 const tick=()=>new Promise(resolve=>setImmediate(resolve))
 async function settled(){const deadline=Date.now()+3000;while(Date.now()<deadline){await new Promise(resolve=>setTimeout(resolve,1));const p=render();if(!p.busy)return p}throw Error('Synthetic action did not finish')}
 const file=value=>{const bytes=new TextEncoder().encode(typeof value==='string'?value:JSON.stringify(value));return {name:'synthetic.json',size:bytes.length,arrayBuffer:async()=>bytes.buffer}}
 async function start(){
- h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;readCredentials=false;changeNavigation=0
+ h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;readCredentials=false;changeNavigation=0;rosterNavigation=0
  let p=render();p.onRestoreFile(file(env.work.review));return settled()
 }
 async function ready(){let p=render();panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true,panel(p).error);panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);return render()}
@@ -106,6 +111,45 @@ async function main(){
  p.onChanges();p=await settled();assert.equal(changeNavigation,1);assert.equal(downloads,0);assert.deepEqual(env.posts,{person:0,participants:0,entry:0});assert.equal(env.credentialPosts,0)
  const {applicationDraftKey,parseApplicationDraft}=require('../lib/winter-application-draft.ts')
  assert.equal(parseApplicationDraft(map.get(applicationDraftKey(p.original.digest))).choices.r1,riderId,'navigation retains review locally')
+
+ // Stage ③ is an editable reconciliation view. Resolve spelling and affiliation by
+ // explicit identity selection, retain source evidence, then perform a new authoritative review.
+ p=await start()
+ const existingRider=env.addPerson({kind:'rider',name:'合成 選手',reading:'ゴウセイセンシュ',jefNumber:'12345',clubName:p.edited.club})
+ const wrongHorse=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'54321',clubName:'別の合成団体'})
+ const correctHorse=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'54321',clubName:p.edited.club})
+ p.onLoadRoster();p=await settled();p.onChoice('r1',existingRider);p=await settled();p.onChoice('h1',wrongHorse);p=await settled();p.onAccountChecked(true);p=render()
+ panel(p).onReview();p=await settled();assert.equal(panel(p).ready,false);assert.equal(panel(p).hasCorrections,true);assert.equal(p.stage,3)
+ assert.match(panel(p).people[0].issues.join(),/既存名簿との差分/);assert.match(panel(p).people[1].issues.join(),/所属が確認できません/)
+ const evidence=JSON.stringify(p.original),rosterBefore=JSON.stringify(env.snapshot.roster)
+ let html=renderToStaticMarkup(React.createElement(MasterApplicationRegistration,panel(p)))
+ assert.match(html,/この場で訂正/);assert.match(html,/bg-amber-200/);assert(!html.includes('min-w-[650px]'))
+ const oldCorrection=panel(p).onCorrectPerson
+ controls(p).find(c=>c.type==='button'&&c.props.children==='同じ人馬と確認し、名簿の表記を使う').props.onClick();p=await settled()
+ assert.equal(p.edited.people[0].name,'合成 選手');assert.equal(p.edited.people[0].reading,'ゴウセイセンシュ');assert.equal(p.edited.people[0].jef,'12345');assert.equal(p.edited.people[0].checked,false)
+ assert.equal(p.choices.r1,existingRider);assert.equal(p.accountChecked,false);assert.equal(panel(p).hasPlan,false);assert.equal(panel(p).reviewStale,true);assert.equal(panel(p).ready,false)
+ assert.equal(panel(p).people.length,2,'editing one row does not remove correction controls for another')
+ controls(p).find(c=>c.type==='input'&&c.props['aria-label']==='r1 照合結果のフリガナ').props.onChange({target:{value:'ごうせいせんしゅ'}});p=render()
+ assert.equal(p.edited.people[0].reading,'ごうせいせんしゅ');assert.equal(p.choices.r1,existingRider,'editing the explicitly selected identity still requires exact-name and number revalidation')
+ html=renderToStaticMarkup(React.createElement(MasterApplicationRegistration,panel(p)));assert.match(html,/前回の確認事項/);assert(!html.includes('エントリーの登録確認'),'stale entry results cannot look current')
+ panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);p=render();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0},'old approval cannot register edited data')
+ controls(p).find(c=>c.type==='select'&&c.props['aria-label']==='h1 照合結果の人馬選択').props.onChange({target:{value:correctHorse}});p=await settled()
+ assert.equal(p.choices.h1,correctHorse);assert.equal(p.edited.people[1].jef,'54321');assert.equal(panel(p).people[1].correction.selected,correctHorse)
+ panel(p).onAccountChecked(true);p=render();panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true,panel(p).error);assert.equal(panel(p).hasCorrections,false);assert.equal(panel(p).reviewStale,false)
+ assert.equal(JSON.stringify(p.original),evidence);assert.equal(JSON.stringify(env.snapshot.roster),rosterBefore);assert.deepEqual(env.posts,{person:0,participants:0,entry:0});assert.equal(env.credentialPosts,0)
+ p=await ready();panel(p).onRun();p=await settled();assert.equal(panel(p).complete,true);assert.deepEqual(env.posts,{person:0,participants:1,entry:1})
+ assert.equal(panel(p).hasCorrections,false);assert(panel(p).people.every(r=>!r.correction));const fixed=JSON.stringify(p.edited)
+ oldCorrection('r1',{name:'cannot edit frozen registration'});p=render();assert.equal(JSON.stringify(p.edited),fixed,'even an old correction callback honors the frozen checkpoint')
+
+ // Missing affiliation has an actionable roster route; a storage failure cannot discard the draft.
+ p=await start()
+ const outsider=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:'別の合成団体'})
+ p.onLoadRoster();p=await settled();p.onChoice('h1',outsider);p=await settled();p.onAccountChecked(true);p=render();panel(p).onReview();p=await settled()
+ assert.equal(panel(p).hasCorrections,true);assert.match(panel(p).people[1].issues.join(),/所属/)
+ failStorage=true;panel(p).onRoster();p=await settled();assert.equal(rosterNavigation,0);assert.match(panel(p).editError,/quota/)
+ failStorage=false;panel(p).onRoster();p=await settled();assert.equal(rosterNavigation,1);assert.equal(downloads,0)
+ assert.equal(parseApplicationDraft(map.get(applicationDraftKey(p.original.digest))).choices.h1,outsider);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ p.onReset();p=await settled();assert.equal(panel(p).hasCorrections,false);assert.equal(panel(p).people.length,0)
 
  // Same Excel automatically finds its checkpoint; next-file workflow requires no export download.
  p=await start();h.close();h=hooks();map.clear();readOriginal=true;p=render()

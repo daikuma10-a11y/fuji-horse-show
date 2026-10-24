@@ -28,6 +28,8 @@ async function exclusive(task:()=>Promise<void>){
 /** Winter operations only; presentation and controls stay in the shared master. */
 export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;session:AdminSession;onSession:(s:AdminSession)=>void;isReviewBusy:()=>boolean;canReplaceReview:()=>boolean;onAdopt:(draft:ApplicationDraft)=>void;onClear:()=>void;onChanged?:()=>void;canImport?:()=>boolean}){
  const [work,setWork]=useState<ApplicationRegistration|null>(null),[preview,setPreview]=useState<{work:ApplicationRegistration;plan:Plan}|null>(null)
+ // Keep editable diagnostics after a draft change, never its authorization to register.
+ const [lastInspection,setLastInspection]=useState<{work:ApplicationRegistration;plan:Plan;snapshot:ApplicationSnapshot}|null>(null)
  const [snapshot,setSnapshot]=useState<ApplicationSnapshot|null>(null),[busy,setBusy]=useState(false),[running,setRunning]=useState(false)
  const [accepted,setAccepted]=useState(false),[singleOperator,setSingleOperator]=useState(false),[choices,setChoices]=useState<Record<string,string>>({})
  const [message,setMessage]=useState(''),[error,setError]=useState('')
@@ -36,7 +38,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const services=()=>winterApplicationServices(p.session,p.onSession)
  const activeReview=work?.review??p.draft
  const shown=preview&&activeReview&&signature(preview.work.review)===signature(activeReview)?preview:null
- useEffect(()=>{if(!current.current){setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
+ useEffect(()=>{if(!p.draft)setLastInspection(null);if(!current.current){setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;stop.current=true}},[])
  function remember(value:ApplicationRegistration){const clean=readApplicationRegistration(value);current.current=clean;setWork(clean);return clean}
  function persist(value:ApplicationRegistration){
@@ -71,7 +73,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  }
  async function inspect(value:ApplicationRegistration,service=services()){
   const s=await service.load(),plan=await reviewApplicationRegistration(value,s)
-  setSnapshot(s);setPreview({work:copy(value),plan});setChoices({})
+  setSnapshot(s);setPreview({work:copy(value),plan});setLastInspection({work:copy(value),plan,snapshot:s});setChoices({})
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{const el=document.getElementById('application-registration');el?.scrollIntoView({block:'start',behavior:'smooth'});el?.focus({preventScroll:true})})
   return plan
  }
@@ -85,17 +87,28 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   expected.current=raw;remember(clean);p.onAdopt(clean.review);setPreview(null);setSnapshot(null);setChoices({});setAccepted(false);setSingleOperator(false)
   setMessage('登録再開記録を開きました。「登録結果を再確認」で現在の結果を確認してください。開いただけでは登録は行いません。')
  }
+ const correctionSource=!work&&p.draft&&lastInspection&&lastInspection.work.review.original.digest===p.draft.original.digest&&lastInspection.work.review.reference===p.draft.reference&&lastInspection.work.review.edited.club===p.draft.edited.club&&lastInspection.plan.people.some(r=>r.issues.length)?lastInspection:null
  const model=shown?.work??work,plan=shown?.plan??null,review=model?.review??p.draft
- const people=(model?.review.edited.people??[]).map(person=>{
-  const recorded=model!.people[person.key],row=plan?.people.find(r=>r.key===person.key)
-  const options=snapshot?rosterCandidates(person,snapshot.roster,model!.review.edited.club).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs})):[]
-  return {key:person.key,label:`${person.kind==='rider'?'選手':'馬'} ${person.name}`,id:row?.entityId??recorded.entityId,state:row?.issues.length?'要確認':row?status(row.state):`端末記録：${status(recorded.state)}（未再照合）`,issues:row?.issues??[],resolve:!!work&&recorded.state==='unknown'&&!recorded.entityId,candidates:options,selected:choices[person.key]??''}
+ const people=(review?.edited.people??[]).filter(()=>!!model||!!correctionSource).map(person=>{
+  const recorded=model?.people[person.key],row=plan?.people.find(r=>r.key===person.key)
+  const options=snapshot?rosterCandidates(person,snapshot.roster,review!.edited.club).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs})):[]
+  const previous=correctionSource?.plan.people.find(r=>r.key===person.key)
+  const before=correctionSource?.work.review.edited.people.find(r=>r.key===person.key)
+  const roster=correctionSource?.snapshot.roster,selected=p.draft?.choices[person.key]??''
+  // Retain inspected candidates while typing, including an explicitly selected identity.
+  const ids=new Set(previous?.issues.length&&roster&&before?[...rosterCandidates(before,roster,review!.edited.club),...rosterCandidates(person,roster,review!.edited.club)].map(c=>c.entity.id):[])
+  ids.add(selected)
+  const correction=correctionSource&&previous?.issues.length&&roster?{
+   person,selected,original:review!.original.people.find(r=>r.key===person.key),club:review!.edited.club,
+   candidates:roster.entities.filter(e=>ids.has(e.id)&&!e.archived_at&&e.kind===person.kind).map(e=>({id:e.id,name:e.name,reading:e.reading,jef:e.jef_number??'',reason:'照合時の候補',clubs:roster.affiliations.filter(a=>a.entity_id===e.id&&!a.ended_at).map(a=>roster.clubs.find(c=>c.id===a.club_id)?.name??'所属名不明')})),
+  }:undefined
+  return {key:person.key,label:`${person.kind==='rider'?'選手':'馬'} ${person.name}`,id:row?.entityId??recorded?.entityId,state:row?.issues.length?'要確認':row?status(row.state):work?`端末記録：${status(recorded?.state??'unregistered')}（未再照合）`:'訂正中・再照合が必要',issues:row?.issues??previous?.issues??[],resolve:!!work&&recorded?.state==='unknown'&&!recorded.entityId,candidates:options,selected:choices[person.key]??'',correction}
  })
  const appReview=review?applicationReview(review.edited,review.paid,review.accountChecked):null
  const savedStates=Object.values(work?.entries?.states??{}),registered=savedStates.filter(s=>s==='registered').length,unknown=savedStates.filter(s=>s==='unknown').length
  const panel:ApplicationRegistrationPanelProps={
   complete:!!plan?.ready&&plan.credentialsComplete&&plan.participating&&!!plan.entries?.rows.length&&plan.entries.rows.length===review?.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered'),
-  credentials:plan?.credentials,
+  credentials:plan?.credentials,hasCorrections:!!correctionSource,reviewStale:!!correctionSource&&!plan,
   busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview&&(!!work||!p.canImport||p.canImport()),canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
   reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
   entries:(model?.review.edited.entries??[]).map((entry,i)=>{const row=plan?.entries?.rows.find(r=>r.index===i);return {key:entry.key,label:`第${entry.competition}競技 ／ ${review!.edited.people.find(p=>p.key===entry.rider)?.name??'選手未対応'} ／ ${review!.edited.people.find(p=>p.key===entry.horse)?.name??'馬未対応'}${entry.op?' ／ OP':''}`,fee:row?.fee??appReview?.report.entries[i]?.price??null,id:row?.registeredId??row?.id,state:row?.differences.length?'要確認':row?status(row.state):work?.entries?'未再照合（端末の途中記録あり）':'参加登録後に出番を照合',issues:row?.differences??[]}}),
@@ -141,7 +154,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   onClose:()=>void action(()=>{
    if(!current.current)return
    if(local(current.current)!==expected.current)throw new Error('別の画面で記録が変わっています。現在の入力を保持して照合してください。')
-   persist(current.current);current.current=null;expected.current=null;setWork(null);setPreview(null);setSnapshot(null);setChoices({});setAccepted(false);setSingleOperator(false);p.onClear()
+   persist(current.current);current.current=null;expected.current=null;setWork(null);setPreview(null);setSnapshot(null);setLastInspection(null);setChoices({});setAccepted(false);setSingleOperator(false);p.onClear()
    setMessage('取り込み記録をこの端末に保存しました。次の申込書を選んでください。')
   }),
  }

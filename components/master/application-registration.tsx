@@ -1,15 +1,19 @@
 'use client'
 
-import type {IdentityCandidate} from '@/lib/master/application'
+import type {ApplicationPerson,IdentityCandidate} from '@/lib/master/application'
 
+type IdentityCorrection={person:ApplicationPerson;original?:ApplicationPerson;selected:string;club:string;candidates:IdentityCandidate[]}
 type ResultRow={key:string;label:string;state:string;id?:string;issues:string[]}
 export type ApplicationRegistrationPanelProps={
  busy:boolean;running:boolean;frozen:boolean;hasCheckpoint:boolean;hasPlan:boolean;ready:boolean
  credentials?:{key:string;name:string;kind:string;value:string;previous:string;saved:boolean}[]
+ hasCorrections?:boolean;reviewStale?:boolean;editError?:string
+ accountChecked?:boolean;onAccountChecked?:(value:boolean)=>void;onRoster?:()=>void
+ onCorrectPerson?:(key:string,patch:Partial<ApplicationPerson>)=>void;onCorrectChoice?:(key:string,id:string)=>void;onUseExisting?:(key:string,id:string)=>void
  complete?:boolean;onStartlist?:()=>void;onSettlement?:()=>void;onNext?:()=>void
  canReview:boolean;canOpenSaved:boolean;accepted:boolean;singleOperator:boolean
  reference:string;originalTotal:string;paid:string;participantState:string;savedSummary:string;message:string;error:string
- people:(ResultRow&{resolve:boolean;candidates:IdentityCandidate[];selected:string})[]
+ people:(ResultRow&{resolve:boolean;candidates:IdentityCandidate[];selected:string;correction?:IdentityCorrection})[]
  entries:(ResultRow&{fee:number|null})[]
  onReview:()=>void;onRun:()=>void;onStop:()=>void;onAccepted:(v:boolean)=>void;onSingleOperator:(v:boolean)=>void
  onChoice:(key:string,id:string)=>void;onResolve:(key:string)=>void
@@ -18,14 +22,42 @@ export type ApplicationRegistrationPanelProps={
 const buttonBase='min-h-14 rounded-xl border-2 border-blue-800 px-4 py-3 text-lg font-bold disabled:opacity-40'
 const button=buttonBase+' bg-white text-blue-900'
 const primaryButton=buttonBase+' bg-blue-800 text-white'
-const cell='border border-slate-300 p-3 align-top'
+const cell='min-w-0 break-words border border-slate-300 p-3 align-top'
+const table='w-full table-fixed border-collapse'
+const resultRow='@max-[760px]:grid @max-[760px]:grid-cols-2'
+const issueCell=cell+' @max-[760px]:col-span-2'
+const input='mt-1 min-h-11 w-full min-w-0 max-w-full rounded-lg border-2 border-slate-400 bg-white p-2 text-base text-slate-950'
+
+function IdentityCorrectionFields({value,p}:{value:IdentityCorrection;p:ApplicationRegistrationPanelProps}){
+ const person=value.person,selected=value.candidates.find(c=>c.id===value.selected)
+ const changed=(key:'name'|'reading'|'jef')=>!!selected&&person[key].trim()!==selected[key].trim()
+ return <fieldset disabled={p.busy||p.frozen} className="mt-3 min-w-0 space-y-3 rounded-lg border-2 border-amber-500 bg-amber-50 p-3">
+  <legend className="px-1 font-bold">この場で訂正</legend>
+  <label className={`block rounded-lg p-2 ${!selected||!selected.clubs.includes(value.club)?'bg-amber-200':'bg-white'}`}>対応する登録済みの人馬・所属
+   <select aria-label={`${person.key} 照合結果の人馬選択`} className={input} value={value.selected} onChange={e=>p.onCorrectChoice?.(person.key,e.target.value)}>
+    <option value="">選択してください</option><option value="new">新規登録（既存候補と別の人馬）</option>
+    {value.candidates.map(c=><option key={c.id} value={c.id}>{c.name} ／ 日馬連 {c.jef||'なし'} ／ {c.clubs.join('、')||'所属なし'}</option>)}
+   </select>
+   {selected&&!selected.clubs.includes(value.club)&&<span className="mt-1 block font-bold">申込団体「{value.club}」への所属がありません。所属付きの候補を選び直すか、下の「名簿の所属を確認・訂正する」へ進んでください。</span>}
+  </label>
+  {selected&&<div className="rounded-lg border border-blue-300 bg-blue-50 p-2"><p>選択した名簿：{selected.name} ／ 読み {selected.reading||'記載なし'} ／ 日馬連 {selected.jef||'なし'}</p>
+   <button type="button" className={button+' mt-2 !text-base'} onClick={()=>p.onUseExisting?.(person.key,selected.id)}>同じ人馬と確認し、名簿の表記を使う</button>
+   <p className="mt-1 text-sm">今回の申込の名前・フリガナ・日馬連番号に反映します。Excel原本と保存済みの名簿は保持します。</p></div>}
+  <div className="grid min-w-0 grid-cols-1 gap-2 @min-[900px]:grid-cols-2">{([['name','名前・馬名'],['reading','フリガナ'],['jef','日馬連番号']] as const).map(([key,label])=><label key={key} className={`block min-w-0 rounded-lg p-2 ${changed(key)?'bg-amber-200':'bg-white'}`}>{label}{changed(key)&&<span className="ml-1 text-sm font-bold">（名簿との表記差）</span>}
+   <input aria-label={`${person.key} 照合結果の${label}`} className={input} maxLength={100} value={person[key]} placeholder={key==='jef'?'なし':undefined} onChange={e=>p.onCorrectPerson?.(person.key,{[key]:e.target.value})}/>
+  </label>)}</div>
+  <label className={`flex gap-2 rounded-lg p-2 ${person.jef&&!person.checked?'bg-amber-200':'bg-white'}`}><input type="checkbox" checked={person.checked} onChange={e=>p.onCorrectPerson?.(person.key,{checked:e.target.checked})}/>日馬連番号を確認済み{!person.jef?'（番号なし）':''}</label>
+  <details className="text-sm"><summary>Excel原本の記載</summary><p>{value.original?.name} ／ 読み {value.original?.reading||'記載なし'} ／ 日馬連 {value.original?.jef||'なし'}</p></details>
+  <button type="button" className="block text-left underline" onClick={()=>{const target=document.getElementById(`application-person-${encodeURIComponent(person.key)}`);target?.scrollIntoView({block:'center',behavior:'smooth'});target?.focus({preventScroll:true})}}>この人馬の資格・会員区分・グレードも確認する（②へ）</button>
+ </fieldset>
+}
 export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProps){
  const existing=p.entries.filter(r=>r.state==='登録済み').length,remaining=p.entries.length-existing
  const extra=p.entries.filter(r=>r.state!=='登録済み').reduce((sum,r)=>sum+(r.fee??0),0)
  return <section id="application-registration" tabIndex={-1} aria-label="申込書の確定登録と再開" className="space-y-4 rounded-xl border-2 border-blue-800 p-5">
   <h3 className="text-2xl font-bold">{p.complete?'④ 取り込み結果':'③ 確認した内容を取り込む'}</h3>
   <p>{p.complete?'今回のExcelの出番はすべて登録済みです。重複して取り込む必要はありません。':'②で内容を確認した後、ここで取込対象を確認します。取り込むボタンを押すと出番表と精算の請求に反映します。'}</p>
-  {!p.hasPlan&&!p.frozen&&<p className="rounded-lg bg-blue-50 p-3">まず②の確認箇所を直して「取込内容を確認する」を押してください。</p>}
+  {!p.hasPlan&&!p.frozen&&!p.hasCorrections&&<p className="rounded-lg bg-blue-50 p-3">まず②の確認箇所を直して「取込内容を確認する」を押してください。</p>}
   <details className="rounded-lg border p-3"><summary className="cursor-pointer font-bold">以前の取り込みを再開する</summary>
   <div className="flex flex-wrap gap-3">
    <button type="button" className={button} disabled={p.busy||!p.canOpenSaved} onClick={p.onOpenSaved}>この資料番号の登録途中を開く</button>
@@ -33,26 +65,36 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
   </div>
   <p className="mt-3">同じ端末では資料番号から再開できます。別の端末では最新の登録再開JSONを開いてください。</p></details>
   {p.frozen&&<p className="rounded-lg bg-amber-50 p-3 font-semibold">登録再開記録を開いています。確定時の入力は固定しています。訂正版は上のExcel読込から差分だけを確認し、既存登録を変更・削除しません。</p>}
-  <button type="button" className={button} disabled={p.busy||!p.canReview} onClick={p.onReview}>{p.frozen||p.hasPlan?'登録結果を再確認':'既存登録との照合（内容確認後）'}</button>
+  <button type="button" className={button} disabled={p.busy||!p.canReview} onClick={p.onReview}>{p.hasCorrections?'訂正内容を再照合する':p.frozen||p.hasPlan?'登録結果を再確認':'既存登録との照合（内容確認後）'}</button>
   {p.error&&<p role="alert" className="whitespace-pre-wrap rounded-lg bg-red-100 p-4">{p.error}</p>}
   {p.message&&<p role="status" className="whitespace-pre-wrap rounded-lg bg-blue-50 p-4">{p.message}</p>}
-  {(p.hasPlan||p.hasCheckpoint)&&<>
-   <p className="text-sm break-all">資料番号：{p.reference} ／ {p.hasPlan?'最新の照合結果':'この端末の保存記録・未再照合'}</p>
+  {p.editError&&p.hasCorrections&&<p role="alert" className="rounded-lg bg-red-100 p-3">{p.editError}</p>}
+  {p.reviewStale&&<p role="status" className="rounded-lg bg-amber-100 p-3 font-bold">入力を変更しました。表の黄色い欄で訂正を続け、下の「訂正内容を再照合する」を押してください。前回の確認事項は再照合まで残しています。</p>}
+  {(p.hasPlan||p.hasCheckpoint||p.hasCorrections)&&<>
+   <p className="text-sm break-all">資料番号：{p.reference} ／ {p.hasPlan?'最新の照合結果':p.reviewStale?'訂正中・未再照合':'この端末の保存記録・未再照合'}</p>
    {p.hasPlan&&<div className={`rounded-xl border-2 p-4 ${p.complete?'border-emerald-700 bg-emerald-50':'border-blue-700 bg-blue-50'}`}><p className="text-xl font-bold">登録済み {existing}件 ／ {p.ready?'今回取り込む':'要確認・未登録'} {remaining}件</p><p>登録済みの同じ出番は追加請求しません。{p.ready&&remaining>0?`今回追加するエントリー料金：${extra.toLocaleString('ja-JP')}円。`:''}</p>{p.ready&&remaining>0&&<p>この金額はエントリー料金だけです。馬匹登録料と団体全体の請求は取り込み後に精算画面で確認してください。</p>}</div>}
-   <div className="overflow-x-auto"><table className="w-full min-w-[650px] border-collapse"><caption className="mb-2 text-left text-xl font-bold">人馬の登録確認</caption><thead><tr>{['人馬','状態・登録番号','差分・結果不明の照合'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.people.map(row=><tr key={row.key}>
+   <div className="@container min-w-0"><table className={table}><caption className="mb-2 text-left text-xl font-bold">人馬の登録確認・訂正</caption><colgroup><col style={{width:'18%'}}/><col style={{width:'18%'}}/><col style={{width:'64%'}}/></colgroup><thead className="@max-[760px]:hidden"><tr>{['人馬','状態・登録番号','差分・結果不明の照合'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.people.map(row=><tr key={row.key} className={resultRow}>
     <td className={cell}>{row.label}</td><td className={cell}>{row.state}{row.id&&<details className="text-sm"><summary>登録番号</summary><p className="break-all">{row.id}</p></details>}</td>
-    <td className={cell}>{row.issues.map((issue,i)=><p key={i}>{issue}</p>)}{row.resolve&&<>
+    <td className={issueCell}>{p.reviewStale&&row.issues.length>0&&<p className="font-bold">前回の確認事項</p>}{row.issues.map((issue,i)=><p key={i} className="mb-2 rounded-lg bg-amber-100 p-2">{issue}</p>)}{row.correction&&!p.frozen&&<IdentityCorrectionFields value={row.correction} p={p}/>}
+    {row.resolve&&<>
      <p>自動再送はしません。名簿で保存結果を確認して、該当する人馬を選択してください。見つからない場合は既存の人馬登録欄で確認してください。</p>
      <label className="block">保存された人馬<select aria-label={`${row.key} 結果不明の対応`} className="my-2 min-h-12 w-full rounded-lg border-2 p-2" value={row.selected} disabled={p.busy||!p.hasPlan} onChange={e=>p.onChoice(row.key,e.target.value)}><option value="">確認して明示選択</option>{row.candidates.map(c=><option key={c.id} value={c.id}>{c.name} ／ {c.reading} ／ 日馬連 {c.jef.trim()||'なし'} ／ {c.clubs.join('、')||'所属なし'} ／ {c.id}</option>)}</select></label>
      <button type="button" className={button} disabled={p.busy||!row.selected||!p.hasPlan} onClick={()=>p.onResolve(row.key)}>この人馬と照合して再開記録を保存</button>
     </>}</td>
    </tr>)}</tbody></table></div>
+   {p.hasCorrections&&<div className="space-y-3 rounded-lg border-2 border-blue-800 bg-blue-50 p-4">
+    <p>原本請求総額：{p.originalTotal||'未確認'}円 ／ 別途確認した入金額：{p.paid||'未確認'}円</p>
+    <label className="flex gap-2"><input type="checkbox" checked={!!p.accountChecked} disabled={p.busy} onChange={e=>p.onAccountChecked?.(e.target.checked)}/>訂正後の原本請求額と、別途確認した入金額を確認しました</label>
+    <button type="button" className={primaryButton} disabled={p.busy||!p.canReview} onClick={p.onReview}>訂正内容を再照合する</button>
+    <p>資格・競技・料金にも確認事項がある場合は、②の黄色い欄を確認してください。</p>
+   </div>}
+   {p.onRoster&&p.people.some(r=>r.issues.length>0)&&<div className="rounded-lg border p-3"><p>選択した名簿自体の名前・番号・所属が違う場合はこちら。訂正後は「Excel申込書の取り込み」へ戻り、③で再照合してください。</p><button type="button" className={button+' mt-2'} disabled={p.busy} onClick={p.onRoster}>名簿の所属を確認・訂正する</button><p className="text-sm">現在の申込内容をこの端末に保存して移動します。</p></div>}
    {p.credentials&&<div className="rounded-lg border border-slate-300 p-3"><h4 className="text-lg font-bold">団体別一覧に保存する資格・グレード</h4><ul className="mt-2 space-y-2">{p.credentials.map(c=><li key={c.key}>{c.name} ／ {c.kind==='rider'?'所有資格級':'グレード宣言'}：{c.value?(c.saved?`${c.value}（保存済み）`:c.previous?`保存済み ${c.previous} → 今回 ${c.value}`:`今回 ${c.value} を保存`):c.previous?`${c.previous}（今回の原本は空欄・保存済みを保持）`:'記載なし・未確認'}</li>)}</ul><p className="mt-2 text-sm">申込書で確認した値を保存します。日馬連マスターの登録内容を変更する操作ではありません。</p></div>}
-   <p>Winter参加登録：{p.participantState}</p>
-   <div className="overflow-x-auto"><table className="w-full min-w-[650px] border-collapse"><caption className="mb-2 text-left text-xl font-bold">エントリーの登録確認</caption><thead><tr>{['競技・人馬','計算料金','状態・差分'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.entries.map(row=><tr key={row.key}>
-    <td className={cell}>{row.label}</td><td className={cell}>{row.fee===null?'未照合':`${row.fee.toLocaleString('ja-JP')}円`}</td><td className={cell}>{row.state}{row.id&&<details className="text-sm"><summary>登録番号</summary><p className="break-all">{row.id}</p></details>}{row.issues.map((issue,i)=><p key={i}>{issue}</p>)}</td>
+   {!p.reviewStale&&<><p>Winter参加登録：{p.participantState}</p>
+   <div className="@container min-w-0"><table className={table}><caption className="mb-2 text-left text-xl font-bold">エントリーの登録確認</caption><colgroup><col style={{width:'54%'}}/><col style={{width:'18%'}}/><col style={{width:'28%'}}/></colgroup><thead className="@max-[760px]:hidden"><tr>{['競技・人馬','計算料金','状態・差分'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.entries.map(row=><tr key={row.key} className={resultRow}>
+    <td className={cell}>{row.label}</td><td className={cell}>{row.fee===null?'未照合':`${row.fee.toLocaleString('ja-JP')}円`}</td><td className={issueCell}>{row.state}{row.id&&<details className="text-sm"><summary>登録番号</summary><p className="break-all">{row.id}</p></details>}{row.issues.map((issue,i)=><p key={i}>{issue}</p>)}</td>
    </tr>)}</tbody></table></div>
-   <p>確認した原本請求総額：{p.originalTotal||'未確認'}円 ／ 別途確認した入金額：{p.paid||'未確認'}円。出番の計算額と分けて再開記録に保持します。入金処理は行いません。</p>
+   <p>確認した原本請求総額：{p.originalTotal||'未確認'}円 ／ 別途確認した入金額：{p.paid||'未確認'}円。出番の計算額と分けて再開記録に保持します。入金処理は行いません。</p></>}
    {p.hasPlan&&!p.complete&&<>
     <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・所属・資格・グレード宣言・料金と照合結果を確認しました。</label>
     <label className="flex gap-3"><input type="checkbox" checked={p.singleOperator} disabled={p.busy||!p.ready} onChange={e=>p.onSingleOperator(e.target.checked)}/>この申込はこの画面だけで登録し、人馬登録など別の画面・端末・管理者と同時に登録しません。</label>
