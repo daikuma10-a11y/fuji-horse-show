@@ -16,6 +16,7 @@ import {applicationTodos,applicationClubSummary} from '@/lib/winter-application-
 import {winterApplicationServices} from '@/lib/winter-application-services'
 import {applicationRegistrationKey,parseApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
 import {credentialReviewUpgrade} from '@/lib/winter-credential-review-upgrade'
+import {WINTER_HORSE_REGISTRATION_FEE} from '@/lib/winter-horse-registration'
 import preparation from '@/config/winter-2026-preparation.json'
 
 function download(draft:ApplicationDraft){
@@ -147,7 +148,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   message={message} error={error} fileName={file?.name??''} eventName={WINTER_EVENT_NAME}
   formatDescription="対応：2026 Winterの指定様式（選手30人・馬20頭、障害・馬場の追加入力欄とコピーシート）。"
   original={draft?.original??null} edited={draft?.edited??null} reference={draft?.reference??''} paid={draft?.paid??''} accountChecked={draft?.accountChecked??false}
-  review={review?{amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),issues:[...draft!.edited.issues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
+  review={review?{amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),entryFeeTotal:review.report.entryFeeTotal,horseRegistration:{count:draft!.edited.people.filter(p=>p.kind==='horse').length,unit:WINTER_HORSE_REGISTRATION_FEE},issues:[...draft!.edited.issues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
   candidates={candidates} choices={draft?.choices??{}} qualificationNotes={qualificationNotes} rosterLoaded={roster!==null} differences={differences} revisionName={revision?.fileName??''} competitions={preparation.competitions}
   onFiles={files=>{if(lock.current||registration.isBusy())return;if(!files||files.length!==1){setError('Excelファイルを1つ選択してください');return}setFile(files[0]);setError('')}}
   onRead={()=>void action(async()=>{
