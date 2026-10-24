@@ -180,6 +180,38 @@ async function main(){
  env.snapshot.roster.entities[0].name='別操作で訂正済み';env.snapshot.roster.entities[0].updated_at='2026-10-24T01:00:00Z'
  panel(p).onCorrectionAccepted('r1',true);p=render();panel(p).onSaveRoster('r1');p=await settled();assert.equal(env.correctionPosts,0);assert.match(panel(p).error,/別の操作で変わりました/);assert.equal(p.edited.people[0].name,'合成選手');assert.equal(panel(p).people[0].correction.candidates.find(c=>c.id===conflict).name,'別操作で訂正済み');assert.equal(panel(p).people[0].correction.accepted,false)
 
+ // A valid existing person can change clubs here even without an identity error.
+ p=await start()
+ const moving=env.addPerson({kind:'rider',name:'合成選手',reading:'ごうせいせんしゅ',jefNumber:'',clubName:p.edited.club})
+ const importClub=env.snapshot.roster.clubs[0]
+ env.addPerson({kind:'horse',name:'対象外の合成馬',reading:'タイショウガイ',jefNumber:'',clubName:'選択先の合成クラブ'})
+ const destinationClub=env.snapshot.roster.clubs[1]
+ env.publish(importClub.id,[moving],[])
+ p.onLoadRoster();p=await settled();p.onChoice('r1',moving);p=await settled();p.onIntent('addition');p=render();p.onAccountChecked(true);p=render();panel(p).onReview();p=await settled()
+ assert.equal(panel(p).hasCorrections,false);assert.equal(panel(p).ready,true)
+ let affiliationControl=controls(p).find(c=>c.type==='select'&&c.props['aria-label']==='r1 所属先の指定方法')
+ assert.equal(affiliationControl.props.value,'application');assert.equal(React.Children.toArray(affiliationControl.props.children)[0].props.value,'application')
+ affiliationControl.props.onChange({target:{value:'existing'}});p=render();p=render();assert.equal(panel(p).reviewStale,true);assert(controls(p).some(c=>c.props['aria-label']==='r1 登録済みの所属先クラブ'),'editing a formerly valid row remains visible')
+ controls(p).find(c=>c.props['aria-label']==='r1 登録済みの所属先クラブ').props.onChange({target:{value:destinationClub.id}});p=render()
+ controls(p).find(c=>c.props['aria-label']===`r1 ${importClub.name}への所属を終了`).props.onChange({target:{checked:true}});p=render();p=render()
+ html=renderToStaticMarkup(React.createElement(MasterApplicationRegistration,panel(p)));assert.match(html,/保存後の所属：/);assert.match(html,/終了する所属：/)
+ const eventMembership=JSON.stringify([env.snapshot.roster.participants,env.snapshot.bindings,env.snapshot.data.riders])
+ panel(p).onCorrectionAccepted('r1',true);p=render();panel(p).onSaveRoster('r1');p=await settled();assert.equal(env.correctionPosts,1,panel(p).error)
+ assert.equal(JSON.stringify([env.snapshot.roster.participants,env.snapshot.bindings,env.snapshot.data.riders]),eventMembership)
+ assert(env.snapshot.roster.affiliations.find(a=>a.entity_id===moving&&a.club_id===importClub.id).ended_at)
+ assert(env.snapshot.roster.affiliations.some(a=>a.entity_id===moving&&a.club_id===destinationClub.id&&!a.ended_at))
+ let transferDraft=parseApplicationDraft(map.get(applicationDraftKey(p.original.digest)));assert.equal(transferDraft.rosterEdits.r1.clubId,destinationClub.id);assert.deepEqual(transferDraft.rosterEdits.r1.endClubIds,[importClub.id])
+ assert.equal(panel(p).people[0].state,'登録済み','the old event participation remains valid after a current-club transfer')
+ // Manual entry can create a destination, with other memberships retained unless checked.
+ controls(p).find(c=>c.props['aria-label']==='r1 所属先の指定方法').props.onChange({target:{value:'manual'}});p=render()
+ controls(p).find(c=>c.props['aria-label']==='r1 所属先のクラブ名').props.onChange({target:{value:'手入力の合成クラブ'}});p=render();p=render()
+ panel(p).onCorrectionAccepted('r1',true);p=render();panel(p).onSaveRoster('r1');p=await settled();assert.equal(env.correctionPosts,2,panel(p).error)
+ assert.equal(env.snapshot.roster.affiliations.filter(a=>a.entity_id===moving&&!a.ended_at).length,2)
+ assert.equal(env.snapshot.roster.clubs.filter(c=>c.name==='手入力の合成クラブ').length,1)
+ panel(p).onAccountChecked(true);p=render();p=await ready();panel(p).onRun();p=await settled();assert.equal(panel(p).complete,true,panel(p).error)
+ assert.equal(env.snapshot.data.entries[0].organization_id,env.snapshot.data.riders[0].organization_id)
+ assert.equal(env.snapshot.data.organizations.find(o=>o.id===env.snapshot.data.riders[0].organization_id).name,importClub.name)
+
  // Navigation still retains a draft; it is no longer the required correction flow.
  p=await start()
  const outsider=env.addPerson({kind:'horse',name:'合成馬',reading:'ごうせいうま',jefNumber:'',clubName:'別の合成団体'})

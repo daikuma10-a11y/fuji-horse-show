@@ -31,6 +31,23 @@ async function main(){
  assert.equal(calls.length,1);assert.equal(calls[0][0],'correct_fhs_winter_roster_identity');assert.deepEqual(calls[0][1],{p_input:input});assert.equal(calls[0][2],'synthetic-token');assert(calls[0][3] instanceof AbortSignal)
  reception.winterRpc=async()=>uuid();await assert.rejects(()=>saveWinterRosterCorrection(input,'synthetic-token'),/保存結果/)
  assert.equal(before.data.horses[0].jef_registration_no,null)
+ // A transfer ends only explicitly selected memberships; all event club snapshots stay fixed.
+ const oldClub=s.roster.clubs[0],newClub=s.roster.clubs.find(c=>c.name==='合成新所属')
+ const edit={entityId:id,source:'existing',clubId:newClub.id,clubName:'',endClubIds:[oldClub.id]}
+ const transfer=rosterCorrectionInput({...p,name:input.name,reading:input.reading,jef:input.jef},id,'申込クラブ',s,uuid(),edit)
+ assert.equal(transfer.clubName,newClub.name);assert.equal(transfer.destinationClubId,newClub.id);assert.deepEqual(transfer.endClubIds,[oldClub.id])
+ const eventBefore=JSON.stringify([s.roster.participants,s.bindings,s.data.horses]);env.correctPerson(transfer)
+ assert.equal(rosterCorrectionMatches(transfer,s),true);assert.equal(JSON.stringify([s.roster.participants,s.bindings,s.data.horses]),eventBefore)
+ assert(s.roster.affiliations.find(a=>a.entity_id===id&&a.club_id===oldClub.id).ended_at)
+ assert.throws(()=>rosterCorrectionInput(p,id,'申込',s,uuid(),{...edit,endClubIds:[newClub.id]}),/移動先/)
+ assert.throws(()=>rosterCorrectionInput(p,id,'申込',s,uuid(),{...edit,clubId:uuid()}),/所属先クラブ/)
+ assert.throws(()=>rosterCorrectionInput(p,id,'申込',s,uuid(),{...edit,endClubIds:[uuid()]}),/終了する所属/)
+ assert.throws(()=>rosterCorrectionInput(p,id,'申込',s,uuid(),{...edit,entityId:uuid()}),/選び直し/)
+ const manual=rosterCorrectionInput(p,id,'申込',s,uuid(),{...edit,source:'manual',clubId:'',clubName:' 手入力クラブ ',endClubIds:[]})
+ assert.equal(manual.clubName,'手入力クラブ');assert.equal(manual.destinationClubId,null)
+ const same=rosterCorrectionInput(p,id,'申込',s,uuid(),{...edit,source:'manual',clubName:newClub.name,endClubIds:[]})
+ assert.equal(same.destinationClubId,newClub.id,'manual exact match reuses an existing club')
+ const savedEdit=rosterCorrectionInput(p,id,'申込',s,uuid(),edit);assert.deepEqual(savedEdit.endClubIds,[],'an already-ended membership from the saved draft is not ended again')
  console.log('PASS: exact identity correction, absent-to-present JEF, affiliation preservation, immutable IDs, read-back mismatches, duplicate/archived-number rejection, scoped RPC and result verification')
 }
 main().catch(e=>{console.error(e);process.exitCode=1})

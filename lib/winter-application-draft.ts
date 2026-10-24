@@ -1,4 +1,4 @@
-import type {Application,ApplicationPerson,ApplicationEntry,Origin} from './master/application'
+import type {Application,ApplicationPerson,ApplicationEntry,Origin,RosterAffiliationEdit} from './master/application'
 import {WINTER_EVENT_ID,winterStorageKey} from './winter-event'
 import {autofillApplicationPerson,type JefRiderRecord} from './master/application-autofill'
 
@@ -7,6 +7,7 @@ export type ApplicationDraft = {
  kind:'winter-application-review';version:1;eventId:string
  original:Application;edited:Application;reference:string;paid:string;accountChecked:boolean
  choices:Record<string,string>
+ rosterEdits?:Record<string,RosterAffiliationEdit>
 }
 const failure=()=>new Error('WinterのExcel確認再開ファイルを確認できません。元のファイルを保持してください')
 function object(v:unknown):Record<string,unknown>{if(!v||typeof v!=='object'||Array.isArray(v))throw failure();return v as Record<string,unknown>}
@@ -64,7 +65,14 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
   if(choice!==''&&choice!=='new'&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(choice))throw failure()
   choices[key]=choice
  }
- return {kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original,edited,reference:string(d.reference,100),paid:string(d.paid,100),accountChecked:flag(d.accountChecked),choices}
+ const rosterEdits:Record<string,RosterAffiliationEdit>={}
+ if(d.rosterEdits!==undefined)for(const [key,value] of Object.entries(object(d.rosterEdits))){
+  const e=object(value),entityId=string(e.entityId,36),clubId=string(e.clubId,36),endClubIds=list(e.endClubIds,200).map(x=>string(x,36))
+  const uuid=(s:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+  if(!edited.people.some(p=>p.key===key)||!uuid(entityId)||choices[key]!==entityId||clubId&&!uuid(clubId)||endClubIds.some(id=>!uuid(id))||new Set(endClubIds).size!==endClubIds.length||!['application','existing','manual'].includes(String(e.source)))throw failure()
+  rosterEdits[key]={entityId,source:e.source as RosterAffiliationEdit['source'],clubId,clubName:string(e.clubName,100),endClubIds}
+ }
+ return {kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original,edited,reference:string(d.reference,100),paid:string(d.paid,100),accountChecked:flag(d.accountChecked),choices,...(d.rosterEdits===undefined?{}:{rosterEdits})}
 }
 export function parseApplicationDraft(text:string){if(text.length>8_000_000)throw failure();return readApplicationDraft(JSON.parse(text))}
 export function serializeApplicationDraft(draft:ApplicationDraft){

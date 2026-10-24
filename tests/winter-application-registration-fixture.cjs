@@ -54,10 +54,13 @@ function setup(){
   const e=snapshot.roster.entities.find(e=>e.id===input.entityId)
   assert(e&&e.kind===input.kind&&input.eventId===WINTER_EVENT_ID)
   assert(!input.jef||!snapshot.roster.entities.some(x=>x.id!==e.id&&x.kind===e.kind&&x.jef_number===input.jef))
+  if(input.destinationClubId)assert(snapshot.roster.clubs.some(c=>c.id===input.destinationClubId&&c.name===input.clubName))
+  for(const id of input.endClubIds??[])assert(snapshot.roster.affiliations.some(a=>a.entity_id===e.id&&a.club_id===id&&!a.ended_at)&&!snapshot.roster.clubs.some(c=>c.id===id&&c.name===input.clubName))
   Object.assign(e,{name:input.name,reading:input.reading,jef_number:input.jef||null,updated_at:'2026-10-24T00:00:00Z'})
   let club=snapshot.roster.clubs.find(c=>c.name===input.clubName)
   if(!club){club={id:uuid(),name:input.clubName};snapshot.roster.clubs.push(club)}
   if(!snapshot.roster.affiliations.some(a=>a.entity_id===e.id&&a.club_id===club.id&&!a.ended_at))snapshot.roster.affiliations.push({id:uuid(),entity_id:e.id,club_id:club.id,started_at:'2026-10-24T00:00:00Z',ended_at:null})
+  for(const a of snapshot.roster.affiliations.filter(a=>a.entity_id===e.id&&input.endClubIds?.includes(a.club_id)&&!a.ended_at))a.ended_at='2026-10-24T00:00:00Z'
   for(const p of snapshot.roster.participants.filter(p=>p.entity_id===e.id)){
    Object.assign(p,{name_snapshot:e.name,reading_snapshot:e.reading,jef_number_snapshot:e.jef_number})
    const b=snapshot.bindings.find(b=>b.entity_id===e.id&&b.club_id===p.club_id)

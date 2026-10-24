@@ -98,7 +98,8 @@ function identityIssues(p:ApplicationPerson,id:string,clubId:string|undefined,s:
  const e=s.roster.entities.find(e=>e.id===id),issues:string[]=[]
  if(!e||e.archived_at||e.kind!==p.kind)return [`${p.name}：選択した人馬が不存在・削除済み・別種別です`]
  if(e.name!==p.name.trim()||(e.jef_number??'')!==p.jef.trim()||requireReading&&e.reading!==p.reading.trim())issues.push(`${p.name}：既存名簿との差分があります（既存名 ${e.name}／日馬連 ${e.jef_number??'なし'}／読み ${e.reading}）。名簿が誤っている場合は、正しい内容を入力して名簿の訂正を保存してください`)
- if(!clubId||!s.roster.affiliations.some(a=>a.entity_id===id&&a.club_id===clubId&&!a.ended_at))issues.push(`${p.name}：申込団体への所属が確認できません。同じ人馬であることを確認し、名簿の訂正・所属の保存へ進んでください`)
+ // A later club transfer does not erase this event's already recorded participation.
+ if(!clubId||!s.roster.affiliations.some(a=>a.entity_id===id&&a.club_id===clubId&&!a.ended_at)&&!s.roster.participants.some(p=>p.entity_id===id&&p.club_id===clubId))issues.push(`${p.name}：申込団体への所属が確認できません（この団体の保存済み参加登録もありません）。同じ人馬であることと、この申込で登録する団体を確認してください`)
  if(clubId&&s.roster.participants.some(x=>x.entity_id===id&&x.club_id===clubId)){
   const bridge=s.bindings.find(b=>b.entity_id===id&&b.club_id===clubId)
   const actual=p.kind==='rider'?s.data.riders.find(r=>r.id===bridge?.rider_id):s.data.horses.find(h=>h.id===bridge?.horse_id)

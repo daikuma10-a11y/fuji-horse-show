@@ -63,7 +63,8 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  function edit(fn:(d:ApplicationDraft)=>ApplicationDraft){if(lock.current||registration.isBusy()||registration.isFrozen())return;setDraft(d=>d?fn(d):d);setDirty(true);setMessage('')}
  function person(key:string,patch:Partial<ApplicationPerson>,keepChoice=false){edit(d=>{
   const choices={...d.choices};if(!keepChoice&&('name' in patch||'reading' in patch||'jef' in patch))delete choices[key]
-  return {...d,choices,accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>{
+  const rosterEdits=d.rosterEdits?{...d.rosterEdits}:undefined;if(rosterEdits&&!choices[key])delete rosterEdits[key]
+  return {...d,choices,...(rosterEdits?{rosterEdits}:{}),accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>{
    if(p.key!==key)return p
    const next={...p,...patch}
    if('name' in patch||'jef' in patch)next.checked=false
@@ -111,7 +112,8 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   const selected=options?.find(c=>c.id===value)
   if(value&&value!=='new'&&!selected)throw new Error('候補を確認できません。「既存登録を再確認」を押してください。')
   const person=applyApplicationCandidate(current,selected,context?.riderGrades??[])
-  const next={...draft,choices:{...draft.choices,[key]:value},accountChecked:false,
+  const rosterEdits=draft.rosterEdits?{...draft.rosterEdits}:undefined;if(rosterEdits&&draft.choices[key]!==value)delete rosterEdits[key]
+  const next={...draft,choices:{...draft.choices,[key]:value},...(rosterEdits?{rosterEdits}:{}),accountChecked:false,
    edited:{...draft.edited,people:draft.edited.people.map(p=>p.key===key?person:p)}}
   setDraft(next);setDirty(true);registration.invalidate()
   // A previously blank workbook number could not have been included in the first lookup.
@@ -158,6 +160,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  return <MasterApplicationReview
   busy={busy||registration.busy} frozen={registration.frozen} registration={<MasterApplicationRegistration {...registration.panel} onStartlist={onStartlist?()=>saveAndGo(onStartlist):undefined} onSettlement={onSettlement?()=>saveAndGo(onSettlement):undefined} onNext={!registration.frozen?nextApplication:undefined}
    onCorrectPerson={(key,patch)=>person(key,patch,true)} onCorrectChoice={(key,id)=>choose(key,id,registration.panel.people.find(r=>r.key===key)?.correction?.candidates)} onUseExisting={useExisting} onUseOriginal={key=>{const source=draft?.original.people.find(p=>p.key===key);if(source)person(key,{name:source.name,reading:source.reading,jef:source.jef},true)}}
+   onCorrectAffiliation={(key,value)=>edit(d=>({...d,accountChecked:false,rosterEdits:{...d.rosterEdits,[key]:value}}))}
    accountChecked={draft?.accountChecked??false} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
    onRoster={onRoster?()=>saveAndGo(onRoster):undefined} editError={error}
   />}
