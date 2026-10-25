@@ -1,6 +1,6 @@
 import type {WinterSettlementOnlyRow} from './winter-settlement-only'
 import {winterHorseRegistration} from './winter-horse-registration'
-import {WINTER_EVENT_ID,assertWinterEvent} from './winter-event'
+import {WINTER_EVENT_ID,WINTER_BANK_DETAILS,assertWinterEvent} from './winter-event'
 import {loadWinterRequests,type WinterRequestRow} from './winter-reception'
 import type {loadWinterData} from './winter-data'
 import {compareWinterCompetitions,winterCompetitionLabel} from './winter-display-order'
@@ -102,7 +102,7 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  const covered=new Set([...ledger.initial.map(x=>x.id),...ledger.requests.filter(x=>x.status==='reflected').map(x=>x.entry_id).filter(Boolean)])
  const cancelledAdditions=new Set(ledger.requests.filter(x=>x.status==='cancelled'&&(x.request_type==='add'||x.request_type==='change'&&x.payload?.treatedAsWithdrawAdd)).map(x=>x.entry_id).filter(Boolean))
  if(data.entries.some(x=>data.riders.find(r=>r.id===x.rider_id)?.organization_id===orgId&&!covered.has(x.entry_id)&&!(['wd','withdrawn'].includes((x.status??'').toLowerCase())&&cancelledAdditions.has(x.entry_id))))warnings.push('料金履歴を確認できない出番があります。請求総額として使用しないでください。')
- return {organization:org,instruction,onsite,onsiteReversed,adjustments,adjustmentTotal,latestAdjustmentId:previousId,horseRegistration,initialTotal,total,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
+ return {organization:org,bankDetails:instruction?.bank_details?.trim()||WINTER_BANK_DETAILS,instruction,onsite,onsiteReversed,adjustments,adjustmentTotal,latestAdjustmentId:previousId,horseRegistration,initialTotal,total,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
 }
 /** Absolute advance amount, with optimistic locking and read-back. This is not a receipt. */
 export async function saveWinterAdvance(session:AdminSession,orgId:string,paid:number,note:string,expected:WinterAdvance|null){
