@@ -8,13 +8,13 @@ export type WinterAddInput = {
 }
 
 /** The fee shown for review uses the same explicit category rules as the server RPC. */
-export function reviewWinterAdd(input: WinterAddInput) {
+export function reviewWinterAdd(input: WinterAddInput, options: { requireVisitor?: boolean } = {}) {
   if(input.masterForm!==undefined&&typeof input.masterForm!=='boolean')throw new Error('受付フォームの保存形式を確認してください')
   for (const row of [input.organization, input.competition, input.rider, input.horse]) assertWinterEvent(row.event_id)
   if (input.masterForm ? ![input.rider.organization_id,input.horse.organization_id].includes(input.organization.id) : input.rider.organization_id !== input.organization.id || input.horse.organization_id !== input.organization.id) throw new Error("人馬の所属団体を確認してください")
   if ((input.rider.roster_source==='shared_roster'&&input.rider.is_participant!==true)||(input.horse.roster_source==='shared_roster'&&input.horse.is_participant!==true))throw new Error('参加チェックが外れた人馬です。選び直してください')
   if(input.masterForm && (typeof (input.note??'')!=='string'||(input.note??'').trim().length>4000))throw new Error('要望は4,000文字以内で入力してください')
-  if (!input.visitorName.trim() || input.visitorName.trim().length > 100) throw new Error("受付担当者名を入力してください")
+  if (typeof input.visitorName !== 'string' || (options.requireVisitor !== false && !input.visitorName.trim()) || input.visitorName.trim().length > 100) throw new Error("受付担当者名を入力してください")
   if (input.competition.official && (!input.rider.jef_member_no?.trim() || !input.horse.jef_registration_no?.trim())) throw new Error("公認競技は日馬連登録済みの選手と馬を選択してください")
   const source = winterCompetition(input.competition.competition_no)
   const entry = winterEntryPrice({ ...source, official: input.competition.official, fee: input.competition.fee, opFee: input.competition.op_fee, memberFee: input.competition.member_fee, nonmemberFee: input.competition.nonmember_fee }, input.selection)

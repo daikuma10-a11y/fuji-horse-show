@@ -20,6 +20,8 @@ Deno.serve(async(req:Request)=>{
   const hash=await sha(body.token)
   const devices=await rest(`fhs_winter_settlement_devices?token_hash=eq.${hash}&revoked=eq.false&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=token_hash`)
   if(devices.length!==1)return json({error:'有効期限が切れました。精算画面を開き直してください'},401)
+  if(body.action==='reception-ready')return json({ready:true})
+  if(body.action==='reception-confirm')return json(await rest('rpc/submit_winter_public_reception_batch',{method:'POST',body:JSON.stringify({p_items:body.items,p_expected_total:body.total,p_visitor_name:body.name,p_token_hash:hash})}))
   if(body.action==='organizations'){
    const rows=[]
    for(let offset=0;;offset+=500){const page=await rest(`organizations?event_id=eq.${EVENT}&select=id,event_id,name&order=id.asc&limit=500&offset=${offset}`);rows.push(...page);if(page.length<500)return json({organizations:rows})}

@@ -1,0 +1,54 @@
+begin;
+do $$declare
+ ev constant uuid:='b571f05e-ed23-4e07-929e-be2b73e601a5'; org uuid:=gen_random_uuid(); rider uuid:=gen_random_uuid(); rider2 uuid:=gen_random_uuid(); horse uuid:=gen_random_uuid();
+ comp uuid; price integer; original1 uuid:=gen_random_uuid(); original2 uuid:=gen_random_uuid(); q1 uuid:=gen_random_uuid();q2 uuid:=gen_random_uuid();q3 uuid:=gen_random_uuid();q4 uuid:=gen_random_uuid();
+ device text:=md5(gen_random_uuid()::text)||md5(gen_random_uuid()::text); items jsonb; args jsonb; result jsonb; denied boolean; admin_id uuid;
+begin
+ select id into admin_id from auth.users where raw_app_meta_data->>'role'='admin' order by id limit 1;
+ if admin_id is null then raise exception 'Missing test admin';end if;
+ if has_function_privilege('anon','public.submit_winter_public_reception_batch(jsonb,integer,text,text)','execute') or has_function_privilege('authenticated','public.submit_winter_public_reception_batch(jsonb,integer,text,text)','execute') then raise exception 'Public RPC grant leak';end if;
+ insert into public.organizations(id,event_id,name)values(org,ev,'ROLLBACK受付試験クラブ');
+ insert into public.riders(id,event_id,organization_id,name,jef_member_no)values(rider,ev,org,'合成選手1','TEST'),(rider2,ev,org,'合成選手2','TEST');
+ insert into public.horses(id,event_id,organization_id,name,jef_registration_no)values(horse,ev,org,'合成馬','TEST');
+ select id,fee into comp,price from public.competitions where event_id=ev and competition_no='1';
+ insert into public.entries(id,event_id,competition_id,rider_id,horse_id,organization_id,start_order,status,is_op)values(original1,ev,comp,rider,horse,org,999001,'active',false),(original2,ev,comp,rider,horse,org,999002,'active',false);
+ insert into public.fhs_winter_settlement_devices(token_hash,expires_at)values(device,now()+interval '1 hour');
+ args:=jsonb_build_object('p_id',q1,'p_organization_id',org,'p_competition_id',comp,'p_rider_id',rider,'p_horse_id',horse,'p_visitor_name','来訪者','p_membership',null,'p_is_op',false,'p_instructor_confirmed',false,'p_note','合成テスト','p_expected_total',3000+price,'p_master_form',true);
+ items:=jsonb_build_array(jsonb_build_object('type','add','args',args),jsonb_build_object('type','change','args',jsonb_build_object('p_id',q2,'p_entry_id',original1,'p_before',jsonb_build_object('competitionId',comp,'riderId',rider,'horseId',horse,'isOp',false),'p_before_organization_id',org,'p_competition_id',comp,'p_rider_id',rider2,'p_horse_id',horse,'p_organization_id',org,'p_visitor_name','来訪者','p_from_membership',null,'p_membership',null,'p_is_op',false,'p_from_instructor',false,'p_instructor',false,'p_expected_total',2000,'p_master_form',true)),jsonb_build_object('type','withdraw','args',jsonb_build_object('p_id',q3,'p_entry_id',original2,'p_visitor_name','来訪者')));
+ -- No login is needed by the visitor; only the server's scoped service call can submit.
+ perform set_config('request.jwt.claims','{}',true);
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,'来訪者',device);exception when others then denied:=true;end;if not denied then raise exception 'Anonymous caller allowed';end if;
+ perform set_config('request.jwt.claims','{"role":"authenticated","user_metadata":{"role":"admin"}}',true);
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,'来訪者',device);exception when others then denied:=true;end;if not denied then raise exception 'User metadata authority allowed';end if;
+ perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+ execute 'set local role service_role';
+ denied:=false;begin perform public.submit_winter_reception_batch(items,5000+price);exception when others then denied:=true;end;if not denied then raise exception 'Unscoped service allowed';end if;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,'来訪者',repeat('0',64));exception when others then denied:=true;end;if not denied then raise exception 'Missing device allowed';end if;
+ update public.fhs_winter_settlement_devices set expires_at=now()-interval '1 second' where token_hash=device;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,'来訪者',device);exception when others then denied:=true;end;if not denied then raise exception 'Expired device allowed';end if;
+ update public.fhs_winter_settlement_devices set expires_at=now()+interval '1 hour',revoked=true where token_hash=device;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,'来訪者',device);exception when others then denied:=true;end;if not denied then raise exception 'Revoked device allowed';end if;
+ update public.fhs_winter_settlement_devices set revoked=false where token_hash=device;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,'別名',device);exception when others then denied:=true;end;if not denied then raise exception 'Mixed names allowed';end if;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5000+price,null,device);exception when others then denied:=true;end;if not denied then raise exception 'Missing visitor on new requests allowed';end if;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(items,5001+price,'来訪者',device);exception when others then denied:=true;end;
+ if not denied or exists(select 1 from public.reception_requests where id in(q1,q2,q3)) then raise exception 'Wrong fees or partial writes';end if;
+ result:=public.submit_winter_public_reception_batch(items,5000+price,'来訪者',device);
+ if result->'ids'<>jsonb_build_array(q1,q2,q3) or (result->>'total')::int<>5000+price then raise exception 'Receipt mismatch';end if;
+ if (select count(*) from public.reception_requests where id in(q1,q2,q3) and status='pending' and payload->>'visitorName'='来訪者')<>3 then raise exception 'Names/status mismatch';end if;
+ if (select count(*) from public.entries where organization_id=org)<>2 or exists(select 1 from public.entries where id in(original1,original2) and (status<>'active' or rider_id<>rider)) then raise exception 'Reception reflected entries';end if;
+ if nullif(current_setting('fhs.winter_reception_device',true),'') is not null then raise exception 'Device scope leaked';end if;
+ perform public.submit_winter_public_reception_batch(items,5000+price,'来訪者',device);
+ perform public.submit_winter_public_reception_batch(items,5000+price,null,device);
+ if (select count(*) from public.reception_requests where id in(q1,q2,q3))<>3 then raise exception 'Duplicate requests';end if;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(jsonb_set(items,'{0,args,p_note}','"different"'),5000+price,'来訪者',device);exception when others then denied:=true;end;if not denied then raise exception 'Mismatched retry allowed';end if;
+ denied:=false;begin perform public.reflect_winter_reception_request(q1);exception when others then denied:=true;end;if not denied then raise exception 'Public caller reflected';end if;
+ denied:=false;begin perform public.confirm_winter_meeting_batch(items,5000+price);exception when others then denied:=true;end;if not denied then raise exception 'Public caller confirmed meeting';end if;
+ denied:=false;begin perform public.submit_winter_public_reception_batch(jsonb_build_array(jsonb_build_object('type','add','args',args||jsonb_build_object('p_id',q4,'p_competition_id',(select id from public.competitions where event_id<>ev order by id limit 1)))),3000+price,'来訪者',device);exception when others then denied:=true;end;
+ if not denied or exists(select 1 from public.reception_requests where id=q4) then raise exception 'Foreign event accepted';end if;
+ -- Legacy queue still works for a logged-in headquarters user.
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',admin_id,'role','authenticated','app_metadata',jsonb_build_object('role','admin'))::text,true);
+ perform public.submit_winter_reception_batch(items,5000+price);
+end $$;
+rollback;
+select 'PASS: public add/change/withdraw pending batch, one visitor, exact retries, rollback, device expiry/revocation, scope reset, private RPC/admin reflection/meeting protections, event isolation and existing admin compatibility; all fixtures rolled back' as verification;
