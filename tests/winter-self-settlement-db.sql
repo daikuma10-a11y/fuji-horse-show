@@ -29,7 +29,8 @@ begin
  if public.confirm_winter_settlement(id1,org,before->>'version',saved->>'payment_method','検証者',token) is distinct from saved then raise exception 'Retry did not preserve old saved snapshot';end if;
  begin perform public.confirm_winter_settlement(gen_random_uuid(),org,repeat('0',64),'cash_at_venue','検証者',token);raise exception 'Stale version accepted';exception when others then if sqlerrm not like '%更新されています%' then raise;end if;end;
  begin perform public.confirm_winter_settlement(gen_random_uuid(),org,after->>'version','cash_at_venue','検証者',repeat('2',64));raise exception 'Invalid token accepted';exception when others then if sqlerrm not like '%有効期限%' then raise;end if;end;
- begin perform public.confirm_winter_settlement(gen_random_uuid(),org,after->>'version','bank_transfer','検証者',token);raise exception 'Missing bank accepted';exception when others then if sqlerrm not like '%振込先%' then raise;end if;end;
+ if after->'account'->>'bankDetails' is distinct from '静岡銀行 御殿場西支店 普通 0110546 フジホースショー事務局 川口 雅美' then raise exception 'Official bank missing';end if;
+ if public.confirm_winter_settlement(gen_random_uuid(),org,after->>'version','bank_transfer','検証者',token)->'account'->>'bankDetails' is distinct from after->'account'->>'bankDetails' then raise exception 'Bank snapshot mismatch';end if;
  if (select account from public.fhs_winter_settlement_confirmations where id=id1) is distinct from saved->'account' then raise exception 'Saved snapshot was mutated';end if;
 end;$$;
 set local role anon;
@@ -38,5 +39,5 @@ reset role;
 set local role authenticated;
 do $$begin perform public.confirm_winter_settlement(gen_random_uuid(),gen_random_uuid(),'v','cash_at_venue','x',repeat('1',64));raise exception 'Direct browser confirmation allowed';exception when insufficient_privilege then null;end;$$;
 reset role;
-select 'PASS: server-calculated totals, immutable snapshots, idempotent and version-unique saves, correction invalidation, no implicit payment, stale/token/bank/anon rejection; ROLLBACK' as result;
+select 'PASS: server-calculated totals, immutable snapshots, idempotent and version-unique saves, correction invalidation, no implicit payment, official bank snapshot, stale/token/anon rejection; ROLLBACK' as result;
 rollback;

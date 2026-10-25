@@ -54,6 +54,7 @@
     "32"
   ],
   "bankDetails": "静岡銀行 御殿場西支店 普通 0110546 フジホースショー事務局 川口 雅美",
+  "bankDetailsSource": {"title": "2026 Fuji Horse Show Winter Grand Prix 大会要綱", "url": "https://www.fujifarm.jp/data_files/view/516/mode:inline/26winter%E8%A6%81%E9%A0%85.pdf", "page": 2, "verifiedOn": "2026-10-25"},
   "activate": false,
   "source": {
     "libraryFileId": "libfile_b4977377840881919977263c88fa6621",
