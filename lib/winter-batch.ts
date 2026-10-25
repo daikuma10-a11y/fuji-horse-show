@@ -6,7 +6,7 @@ import type { WinterEntryRow } from './winter-data'
 export type WinterDraft = { type: 'add'; input: WinterAddInput } | { type: 'change'; input: WinterChangeInput } | {
   type: 'withdraw'; id: string; entry: WinterEntryRow; organizationId: string; organizationName: string; riderName: string; horseName: string; visitorName: string
 }
-export type WinterQueue = { version: 1; eventId: string; attempted: boolean; items: WinterDraft[] }
+export type WinterQueue = { version: 1; eventId: string; attempted: boolean; items: WinterDraft[]; visitorName?: string }
 export type WinterQueueScope='reception'|'meeting'
 export const WINTER_MEETING_QUEUE_KEY=`fhs:winter:${WINTER_EVENT_ID}:meeting-drafts:v1`
 const queueKey=(scope:WinterQueueScope)=>scope==='meeting'?WINTER_MEETING_QUEUE_KEY:WINTER_QUEUE_KEY
@@ -16,20 +16,20 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function winterDraftSummary(draft: WinterDraft) {
   if (draft.type === 'add') {
-    const i = draft.input, review = reviewWinterAdd(i)
+    const i = draft.input, review = reviewWinterAdd(i,{requireVisitor:false})
     return { id: i.id, organizationId: i.organization.id, organizationName: i.organization.name, type: '追加',
       label: `第${i.competition.competition_no}競技 ${i.competition.name}　${i.rider.name} ／ ${i.horse.name}${i.selection.isOp ? '（OP）' : ''}`, visitorName: i.visitorName, total: review.total, originalId: null,
       category: i.selection.membership === 'member' ? '会員' : i.selection.membership === 'nonmember' ? '非会員' : '通常料金' }
   }
   if (draft.type === 'change') {
-    const i = draft.input, review = reviewWinterChange(i)
+    const i = draft.input, review = reviewWinterChange(i,{requireVisitor:false})
     return { id: i.target.id, organizationId: i.target.organization.id, organizationName: i.target.organization.name, type: '変更',
       label: `第${i.from.competition_no}競技 → 第${i.target.competition.competition_no}競技　${i.target.rider.name} ／ ${i.target.horse.name}${i.target.selection.isOp ? '（OP）' : ''}`, visitorName: i.target.visitorName, total: review.fee.total, originalId: i.original.entry_id,
       category: `${i.target.selection.membership === 'member' ? '会員' : i.target.selection.membership === 'nonmember' ? '非会員' : '通常料金'}${review.treatedAsWithdrawAdd ? '・棄権＋追加扱い' : ''}` }
   }
   if (draft.type !== 'withdraw') throw new Error('未確定一覧の形式が不正です')
   assertWinterEvent(draft.entry.event_id)
-  if (['wd','withdrawn'].includes(draft.entry.status.toLowerCase()) || !draft.visitorName.trim() || draft.visitorName.trim().length > 100) throw new Error('棄権の対象と担当者を確認してください')
+  if (['wd','withdrawn'].includes(draft.entry.status.toLowerCase()) || typeof draft.visitorName !== 'string' || draft.visitorName.trim().length > 100) throw new Error('棄権の対象と担当者を確認してください')
   return { id: draft.id, organizationId: draft.organizationId, organizationName: draft.organizationName, type: '棄権',
     label: `第${draft.entry.competition_no}競技 ${draft.entry.start_order}番　${draft.riderName} ／ ${draft.horseName}${draft.entry.is_op ? '（OP）' : ''}`, visitorName: draft.visitorName, total: 0, originalId: draft.entry.entry_id, category: '0円' }
 }
@@ -39,12 +39,14 @@ export function validateWinterQueue(queue: WinterQueue,scope:WinterQueueScope='r
   const ids = new Set<string>(), originals = new Set<string>(), organizations = new Set<string>()
   for (const item of queue.items) {
     const summary = winterDraftSummary(item)
+    if ((scope==='meeting'||queue.attempted)&&!summary.visitorName.trim()) throw new Error('受付に来た方のお名前を入力してください')
     if (!uuid.test(summary.id) || !uuid.test(summary.organizationId) || ids.has(summary.id)) throw new Error('受付番号を確認してください')
     if (summary.originalId && originals.has(summary.originalId)) throw new Error('同じ出番の変更・棄権は一度に1件ずつ確定してください')
     ids.add(summary.id); organizations.add(summary.organizationId)
     if (summary.originalId) originals.add(summary.originalId)
   }
   if (scope==='reception'&&organizations.size > 1) throw new Error('団体ごとにまとめて確定してください。先の団体の未確定一覧を確認してください')
+  if (queue.visitorName!==undefined && (typeof queue.visitorName!=='string'||!queue.visitorName.trim()||queue.visitorName.trim().length>100||queue.items.some(item=>winterDraftSummary(item).visitorName!==queue.visitorName))) throw new Error('受付に来た方のお名前が一致しません')
   return queue
 }
 
@@ -62,7 +64,7 @@ export function writeWinterQueue(storage: Pick<Storage, 'setItem'>, queue: Winte
 export function stageWinterDraft(draft: WinterDraft,scope:WinterQueueScope='reception') {
   const queue = readWinterQueue(window.localStorage,scope)
   if (queue.attempted) throw new Error('前の確定結果を確認してから次の申請を入力してください')
-  const next = validateWinterQueue({ ...queue, items: [...queue.items, JSON.parse(JSON.stringify(draft))] },scope)
+  const next = validateWinterQueue({ ...queue, visitorName: undefined, items: [...queue.items, JSON.parse(JSON.stringify(draft))] },scope)
   writeWinterQueue(window.localStorage, next,scope)
   window.dispatchEvent(new Event('winter-queue-changed'))
 }
@@ -70,6 +72,7 @@ export function stageWinterDraft(draft: WinterDraft,scope:WinterQueueScope='rece
 export function winterBatchPayload(queue: WinterQueue,scope:WinterQueueScope='reception') {
   validateWinterQueue(queue,scope)
   if (!queue.items.length) throw new Error('未確定の申請はありません')
+  if(queue.items.some(item=>!winterDraftSummary(item).visitorName.trim())) throw new Error('受付に来た方のお名前を入力してください')
   return { p_items: queue.items.map(draft => {
     if (draft.type === 'add') {
       const i = draft.input
@@ -99,4 +102,34 @@ export async function submitWinterBatch(queue: WinterQueue, token: string,scope:
   const ids = queue.items.map(item => winterDraftSummary(item).id)
   if (result?.total !== payload.p_expected_total || !Array.isArray(result?.ids) || JSON.stringify(result.ids) !== JSON.stringify(ids)) throw new Error('確定結果を確認できません。同じ受付番号で再試行してください')
   return { ids, total: payload.p_expected_total }
+}
+
+/** Freeze the visitor and original request IDs together before the first network write. */
+export function freezeWinterReception(queue: WinterQueue, visitorName: string): WinterQueue {
+  validateWinterQueue(queue)
+  if(queue.attempted)return queue
+  const name=visitorName.trim()
+  if(!name||name.length>100)throw new Error('受付に来た方のお名前を入力してください（100文字以内）')
+  return validateWinterQueue({...queue,attempted:true,visitorName:name,items:queue.items.map(item=>
+    item.type==='add'?{...item,input:{...item.input,visitorName:name}}:
+    item.type==='change'?{...item,input:{...item.input,target:{...item.input.target,visitorName:name}}}:{...item,visitorName:name})})
+}
+
+/** Public reception sends only pending requests; headquarters operations retain their admin RPCs. */
+export async function submitWinterPublicReception(queue: WinterQueue) {
+  if(!queue.attempted)throw new WinterBatchRejected('確定内容を確認してください')
+  const payload=winterBatchPayload(queue)
+  const setup=await fetch('/api/winter-reception',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(30000)})
+  const ready=await setup.json().catch(()=>null)
+  if(!setup.ok||ready?.ready!==true)throw new Error(ready?.error||'受付に接続できません。同じ内容で再試行してください')
+  const response=await fetch('/api/winter-reception',{method:'POST',cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(30000),headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,visitorName:queue.visitorName??null})})
+  const result=await response.json().catch(()=>null)
+  if(!response.ok){
+    const message=result?.error||'確定結果を確認できません。同じ内容で再試行してください'
+    if(response.status>=400&&response.status<500&&result?.uncertain===false)throw new WinterBatchRejected(message)
+    throw new Error(message)
+  }
+  const ids=queue.items.map(item=>winterDraftSummary(item).id)
+  if(result?.total!==payload.p_expected_total||JSON.stringify(result?.ids)!==JSON.stringify(ids))throw new Error('確定結果を確認できません。同じ受付番号で再試行してください')
+  return {ids,total:payload.p_expected_total}
 }
