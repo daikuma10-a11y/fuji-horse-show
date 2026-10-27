@@ -94,7 +94,7 @@ export async function reviewImportRegistration(checkpoint:ImportCheckpoint,snaps
  return {rows,issues,ready:!issues.length&&rows.length===report.entries.length&&!rows.some(x=>x.differences.length),report}
 }
 /** Persist unknown BEFORE each POST. Never trust a downloaded/local "registered" flag. */
-export async function runImportRegistration(checkpoint:ImportCheckpoint,deps:{load:()=>Promise<ImportSnapshot>;save:(input:WinterInitialEntryInput)=>Promise<string>;persist:(value:ImportCheckpoint)=>void;stop:()=>boolean}){
+export async function runImportRegistration(checkpoint:ImportCheckpoint,deps:{load:()=>Promise<ImportSnapshot>;save:(input:WinterInitialEntryInput)=>Promise<string>;persist:(value:ImportCheckpoint)=>void;stop:()=>boolean;onProgress?:(value:{confirmed:number;total:number;index:number;verifying:boolean})=>void}){
  const work:ImportCheckpoint={...checkpoint,states:{...checkpoint.states}}
  let plan=await reviewImportRegistration(work,await deps.load())
  if(!plan.ready)throw new Error([...plan.issues,...plan.rows.flatMap(x=>x.differences)].join('\n'))
@@ -103,11 +103,14 @@ export async function runImportRegistration(checkpoint:ImportCheckpoint,deps:{lo
   plan=await reviewImportRegistration(work,await deps.load())
   if(!plan.ready)throw new Error('確認後に名簿・料金・出番が変わりました。照合し直してください')
   const row=plan.rows.find(x=>x.id===original.id)!
+  deps.onProgress?.({confirmed:plan.rows.filter(r=>r.state==='registered').length,total:plan.rows.length,index:row.index+1,verifying:false})
   if(row.state==='registered'){work.states[row.id]='registered';deps.persist({...work,states:{...work.states}});continue}
   work.states[row.id]='unknown';deps.persist({...work,states:{...work.states}})
   await deps.save(row.input)
+  deps.onProgress?.({confirmed:plan.rows.filter(r=>r.state==='registered').length,total:plan.rows.length,index:row.index+1,verifying:true})
   const after=await reviewImportRegistration(work,await deps.load())
   if(after.rows.find(x=>x.id===row.id)?.state!=='registered')throw new Error('登録後の読戻し結果が一致しません。同じ再開資料で再確認してください')
+  deps.onProgress?.({confirmed:after.rows.filter(r=>r.state==='registered').length,total:after.rows.length,index:row.index+1,verifying:true})
   work.states[row.id]='registered';deps.persist({...work,states:{...work.states}})
  }
  return work

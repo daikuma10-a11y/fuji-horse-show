@@ -1,3 +1,4 @@
+import type {ApplicationImportProgress} from './master/application-import-status'
 import type {RosterCorrectionInput} from './winter-roster-correction'
 import {projectPreparedRoster,preparedCorrectionSaved} from './winter-application-roster-stage'
 import {credentialValue,credentialLabel,credentialRequestId,credentialHash,validCredential,type WinterCredential,type CredentialExpectation,type CredentialSave} from './winter-application-credentials'
@@ -195,10 +196,16 @@ export async function resolveUnknownApplicationPerson(value:ApplicationRegistrat
  work.people[key]={state:'registered',entityId};return work
 }
 /** Persist uncertainty before each request; only authoritative readback establishes success. */
-export async function runApplicationRegistration(value:ApplicationRegistration,deps:ApplicationRegistrationServices&{persist:(v:ApplicationRegistration)=>void;stop:()=>boolean}){
+export async function runApplicationRegistration(value:ApplicationRegistration,deps:ApplicationRegistrationServices&{persist:(v:ApplicationRegistration)=>void;stop:()=>boolean;onProgress?:(value:ApplicationImportProgress)=>void}){
  const work=readApplicationRegistration(value),persist=()=>deps.persist(copy(work))
+ let progress:ApplicationImportProgress={phase:'checking',detail:'保存前の内容を確認しています',peopleConfirmed:0,peopleTotal:work.review.edited.people.length,entriesConfirmed:0,entriesTotal:work.review.edited.entries.length}
+ function report(phase:ApplicationImportProgress['phase'],detail:string,plan?:Awaited<ReturnType<typeof reviewApplicationRegistration>>){
+  progress={...progress,phase,detail,...(plan?{peopleConfirmed:plan.people.filter(p=>p.state==='registered'&&!plan.pendingRoster.some(r=>r.key===p.key)).length,entriesConfirmed:plan.entries?.rows.filter(r=>r.state==='registered').length??0}:{})}
+  deps.onProgress?.({...progress})
+ }
  async function check(){const s=await deps.load(),plan=await reviewApplicationRegistration(work,s);if(!plan.ready)throw new Error(plan.issues.join('\n'));return {s,plan}}
- const start=await check()
+ report('checking','保存前の内容を確認しています')
+ const start=await check();report('checking','保存前の確認が終わりました',start.plan)
  if(!work.credentials)work.credentials=Object.fromEntries(start.plan.credentials.filter(c=>c.value).map(c=>[c.key,{requestId:c.requestId,expected:c.expected}]))
  persist()
  // The administrator approved these corrections in the roster stage. Preserve their
@@ -208,6 +215,7 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
   const observed=await deps.load(),prepared=projectPreparedRoster(work.review,observed)
   if(prepared.issues.length)throw new Error(prepared.issues.join('\n'))
   if(preparedCorrectionSaved(input,observed))continue
+  report('roster',`${input.kind==='rider'?'選手':'馬'} ${input.name} の名簿を訂正しています`)
   persist()
   let writeError:unknown
   try{await deps.correctPerson(input)}catch(error){writeError=error}
@@ -218,17 +226,19 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
  for(const p of work.review.edited.people){
   if(deps.stop())return work
   const {plan}=await check(),row=plan.people.find(r=>r.key===p.key)!
+  report('people',`${p.kind==='rider'?'選手':'馬'} ${p.name} の保存を確認しています`,plan)
   if(row.state==='registered'&&row.entityId){work.people[p.key]={state:'registered',entityId:row.entityId};persist();continue}
   work.people[p.key]={state:'unknown'};persist()
   const entityId=await deps.savePerson({kind:p.kind,name:p.name.trim(),reading:p.reading.trim(),jefNumber:p.jef.trim(),clubName:work.review.edited.club.trim()})
   if(!uuid(entityId))throw new Error('新規人馬の登録番号を確認できません。再送せず名簿を照合してください')
   work.people[p.key]={state:'unknown',entityId};persist()
   const after=await check();if(after.plan.people.find(r=>r.key===p.key)?.state!=='registered')throw new Error('人馬の保存結果が一致しません')
-  work.people[p.key]={state:'registered',entityId};persist()
+  work.people[p.key]={state:'registered',entityId};persist();report('people',`${p.name} の保存を確認しました`,after.plan)
  }
  if(deps.stop())return work
  let {s,plan}=await check();const clubId=plan.clubId
  if(!clubId)throw new Error('登録先の団体を確認できません')
+ report('participation','人馬を大会の参加名簿へ反映しています',plan)
  if(!plan.participating){
   const expected=s.roster.participants.filter(p=>p.club_id===clubId).map(p=>p.entity_id),ids=[...new Set([...expected,...Object.values(work.people).map(p=>p.entityId!)])]
   work.participants={state:'unknown',clubId};persist()
@@ -242,6 +252,7 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
   if(deps.stop())return work
   const before=await check(),row=before.plan.credentials.find(c=>c.key===p.key)!
   if(!row.value||row.saved)continue
+  report('credentials',`${p.name} の資格・グレードを保存しています`,before.plan)
   const entityId=work.people[p.key].entityId!,bridge=before.s.bindings.find(b=>b.entity_id===entityId&&b.club_id===clubId)
   const targetId=p.kind==='rider'?bridge?.rider_id:bridge?.horse_id
   if(!targetId)throw new Error('資格・グレードの登録先を確認できません')
@@ -255,6 +266,7 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
  const next=entryCheckpoint(work,s,clubId)
  if(work.entries&&importCheckpointDifferences(work.entries,next).length)throw new Error('出番の原本・対応が保存時と異なります')
  work.entries=next;persist()
- work.entries=await runImportRegistration(next,{load:async()=>{const after=await check();return after.s},save:deps.saveEntry,stop:deps.stop,persist:entry=>{work.entries=copy(entry);persist()}})
+ report('entries','出番と請求への反映を開始します',plan)
+ work.entries=await runImportRegistration(next,{onProgress:v=>{progress={...progress,phase:'entries',detail:`${v.total}件中 ${v.index}件目：${v.verifying?'保存結果を確認しています':'出番と請求を反映しています'}`,entriesConfirmed:v.confirmed};deps.onProgress?.({...progress})},load:async()=>{const after=await check();return after.s},save:deps.saveEntry,stop:deps.stop,persist:entry=>{work.entries=copy(entry);persist()}})
  persist();return work
 }
