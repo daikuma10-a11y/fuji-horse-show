@@ -27,10 +27,10 @@ async function main(){
  calls=[];await service.saveCredential(input);assert.deepEqual(calls,[['verify','synthetic-4'],['saveWinterApplicationCredential',input,'synthetic-5']])
  calls=[];const qualified=await service.load(['123']);assert.deepEqual(qualified.riderGrades,[]);assert.deepEqual(calls.find(c=>c[0]==='loadJefRiderQualifications'),['loadJefRiderQualifications',['123'],'synthetic-6'])
  calls=[];await service.correctPerson(input);assert.deepEqual(calls,[['verify','synthetic-6'],['saveWinterRosterCorrection',input,'synthetic-7']])
- assert.equal(sessions.length,7)
+ calls=[];assert.equal((await service.loadRoster()).synthetic,'roster');assert.deepEqual(calls,[['verify','synthetic-7'],['loadSharedRoster','synthetic-8']]);assert.equal(sessions.length,8)
  denied=true
- for(const action of [()=>service.load(),()=>service.savePerson(person),()=>service.saveParticipants('club',ids,expected),()=>service.saveEntry(input),()=>service.saveCredential(input),()=>service.correctPerson(input)]){
-  calls=[];await assert.rejects(action(),/admin denied/);assert.deepEqual(calls,[['verify','synthetic-7']])
+ for(const action of [()=>service.loadRoster(),()=>service.load(),()=>service.savePerson(person),()=>service.saveParticipants('club',ids,expected),()=>service.saveEntry(input),()=>service.saveCredential(input),()=>service.correctPerson(input)]){
+  calls=[];await assert.rejects(action(),/admin denied/);assert.deepEqual(calls,[['verify','synthetic-8']])
  }
  console.log('PASS: existing Winter service arguments preserved, admin verification before every read/write, session refresh propagation, authorization failures stop without fallback')
 }

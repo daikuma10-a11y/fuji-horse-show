@@ -1,6 +1,7 @@
 import type {Application,ApplicationPerson,ApplicationEntry,Origin,RosterAffiliationEdit} from './master/application'
 import {WINTER_EVENT_ID,winterStorageKey} from './winter-event'
 import {autofillApplicationPerson,type JefRiderRecord} from './master/application-autofill'
+import {manualApplicationOrigin} from './master/application-additions'
 
 /** Review-only checkpoint. It must never be interpreted as a database save result. */
 export type ApplicationDraft = {
@@ -13,6 +14,10 @@ const failure=()=>new Error('WinterのExcel確認再開ファイルを確認で�
 function object(v:unknown):Record<string,unknown>{if(!v||typeof v!=='object'||Array.isArray(v))throw failure();return v as Record<string,unknown>}
 function string(v:unknown,max=1000){if(typeof v!=='string'||v.length>max)throw failure();return v}
 function flag(v:unknown){if(typeof v!=='boolean')throw failure();return v}
+function addition(p:Record<string,unknown>){
+ if(p.added!==undefined&&p.added!==true||p.sourceKey!==undefined&&p.added!==true)throw failure()
+ return {...(p.added===true?{added:true as const}:{}),...(p.sourceKey===undefined?{}:{sourceKey:string(p.sourceKey,200)})}
+}
 function list(v:unknown,max:number){if(!Array.isArray(v)||v.length>max)throw failure();return v}
 function source(v:unknown):Origin{
  const o=object(v),cell=string(o.cell,10)
@@ -26,10 +31,10 @@ function application(v:unknown):Application{
   const p=object(v);if(!['rider','horse'].includes(String(p.kind)))throw failure()
   let gradeAutofill:ApplicationPerson['gradeAutofill']
   if(p.gradeAutofill!==undefined){const s=object(p.gradeAutofill);gradeAutofill={memberNo:string(s.memberNo,100),name:string(s.name,100),grade:string(s.grade,1),importDate:string(s.importDate,10)};if(!/^\d+$/.test(gradeAutofill.memberNo)||!['A','B','C'].includes(gradeAutofill.grade)||!/^\d{4}-\d{2}-\d{2}$/.test(gradeAutofill.importDate)||p.kind!=='rider')throw failure()}
-  return {key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),...(p.horseGrade===undefined?{}:{horseGrade:string(p.horseGrade,100)}),...(p.credentialOrigin===undefined?{}:{credentialOrigin:source(p.credentialOrigin)}),...(gradeAutofill?{gradeAutofill}:{}),...(p.gradeManual===undefined?{}:{gradeManual:flag(p.gradeManual)}),...(p.readingAutofill===undefined?{}:{readingAutofill:string(p.readingAutofill,100)}),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
+  return {...addition(p),key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),...(p.horseGrade===undefined?{}:{horseGrade:string(p.horseGrade,100)}),...(p.credentialOrigin===undefined?{}:{credentialOrigin:source(p.credentialOrigin)}),...(gradeAutofill?{gradeAutofill}:{}),...(p.gradeManual===undefined?{}:{gradeManual:flag(p.gradeManual)}),...(p.readingAutofill===undefined?{}:{readingAutofill:string(p.readingAutofill,100)}),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
  })
  const entries:ApplicationEntry[]=list(a.entries,5000).map(v=>{
-  const e=object(v);return {key:string(e.key,200),competition:string(e.competition,20),rider:string(e.rider,100),horse:string(e.horse,100),op:flag(e.op),rawRider:string(e.rawRider,1000),rawHorse:string(e.rawHorse,1000),origin:source(e.origin)}
+  const e=object(v);return {...addition(e),key:string(e.key,200),competition:string(e.competition,20),rider:string(e.rider,100),horse:string(e.horse,100),op:flag(e.op),rawRider:string(e.rawRider,1000),rawHorse:string(e.rawHorse,1000),origin:source(e.origin)}
  })
  if(new Set(people.map(p=>p.key)).size!==people.length||new Set(entries.map(p=>p.key)).size!==entries.length)throw failure()
  const amount=object(a.amounts),origins=object(a.amountOrigins)
@@ -51,13 +56,21 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
  if(d.kind!=='winter-application-review'||d.version!==1||d.eventId!==WINTER_EVENT_ID)throw failure()
  const original=application(d.original),edited=application(d.edited),rawChoices=object(d.choices),choices:Record<string,string>={}
  if(original.digest!==edited.digest||original.fileName!==edited.fileName)throw failure()
- // Editing may change values, not the saved source locations or roster/entry identity.
+ // Source rows remain immutable; clearly marked manual rows may be added between them.
  for(const section of ['people','entries'] as const){
-  if(original[section].length!==edited[section].length)throw failure()
-  original[section].forEach((p,i)=>{if(p.key!==edited[section][i].key||JSON.stringify(p.origin)!==JSON.stringify(edited[section][i].origin))throw failure()})
+  if(original[section].some(p=>p.added||p.sourceKey))throw failure()
+  const retained=edited[section].filter(p=>!p.added)
+  if(original[section].length!==retained.length)throw failure()
+  original[section].forEach((p,i)=>{if(p.key!==retained[i].key||JSON.stringify(p.origin)!==JSON.stringify(retained[i].origin))throw failure()})
+  for(const row of edited[section].filter(p=>p.added)){
+   const prefix=section==='people'?'manual-person-':'manual-entry-'
+   if(!row.key.startsWith(prefix)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.key.slice(prefix.length))||JSON.stringify(row.origin)!==JSON.stringify(manualApplicationOrigin())||original[section].some(p=>p.key===row.key))throw failure()
+   if(row.sourceKey&&(section!=='entries'||row.sourceKey===row.key||!edited.entries.some(e=>e.key===row.sourceKey)))throw failure()
+  }
  }
- original.people.forEach((p,i)=>{if(p.kind!==edited.people[i].kind||JSON.stringify(p.credentialOrigin)!==JSON.stringify(edited.people[i].credentialOrigin))throw failure()})
- original.entries.forEach((p,i)=>{if(p.rawRider!==edited.entries[i].rawRider||p.rawHorse!==edited.entries[i].rawHorse)throw failure()})
+ original.people.forEach(p=>{const e=edited.people.find(e=>e.key===p.key)!;if(p.kind!==e.kind||JSON.stringify(p.credentialOrigin)!==JSON.stringify(e.credentialOrigin))throw failure()})
+ original.entries.forEach(p=>{const e=edited.entries.find(e=>e.key===p.key)!;if(p.rawRider!==e.rawRider||p.rawHorse!==e.rawHorse)throw failure()})
+ for(const e of edited.entries.filter(e=>e.added))if(e.rawRider||e.rawHorse)throw failure()
  for(const key of ['clubOrigin','amountOrigins','issues','sheets'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
  for(const key of Object.keys(rawChoices)){
   if(!edited.people.some(p=>p.key===key))throw failure()

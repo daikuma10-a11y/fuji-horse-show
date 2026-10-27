@@ -34,6 +34,9 @@ const cleared=applyApplicationCandidate({...person,checked:true},noNumber,rows)
 assert.equal(cleared.jef,'');assert.equal(cleared.checked,false);assert.equal(cleared.grade,'');assert.equal(cleared.gradeAutofill,undefined,'a no-number candidate cannot retain a different identity qualification')
 assert.equal(person.jef,'１２３','candidate choice does not mutate the previous review')
 assert.equal(applyApplicationCandidate({...person,grade:'C',gradeManual:true},noNumber,rows).grade,'C')
+const numberOnly=applyApplicationCandidate({...person,name:'',reading:'',jef:'900001'},{...noNumber,name:'合成選手',reading:'ゴウセイセンシュ',jef:'900001'},[])
+assert.equal(numberOnly.name,'合成選手');assert.equal(numberOnly.reading,'ゴウセイセンシュ');assert.equal(numberOnly.jef,'900001');assert.equal(numberOnly.checked,false)
+assert.equal(applyApplicationCandidate({...person,name:'訂正済みの選手'},noNumber,[]).name,'訂正済みの選手','explicit selection never overwrites an entered name')
 let calls=0
 global.fetch=async(url,options)=>{
  calls++;const u=new URL(url);assert.equal(u.pathname,'/rest/v1/jef_rider_master');assert.equal(u.searchParams.get('member_no'),'in.(123)');assert.equal(u.searchParams.get('select'),'member_no,name,rider_grade,import_date');assert.equal(options.method,'GET');assert.equal(options.headers.Authorization,'Bearer synthetic-token');assert.equal(options.body,undefined)

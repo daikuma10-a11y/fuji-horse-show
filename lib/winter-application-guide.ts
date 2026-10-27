@@ -29,6 +29,7 @@ export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):Applic
 /** An existing club is distinct from a confirmed identity or a registered entry. Never name-merge. */
 export function applicationClubSummary(d:ApplicationDraft,s:ApplicationSnapshot):ApplicationClubSummary{
  const name=d.edited.club.trim(),clubs=s.roster.clubs.filter(c=>c.name===name),orgs=s.data.organizations.filter(o=>o.name===name)
+ if(!name)return {state:'new',label:'団体名が未入力です',detail:'人馬候補は名前・フリガナ・日馬連番号で選べます。取り込み前に、この画面で申込団体名を入力してください。',entries:[]}
  if(clubs.length>1||orgs.length>1)return {state:'ambiguous',label:'同名の団体が複数あります',detail:'人馬の登録画面で団体を確認してください。自動では統合しません。',entries:[]}
  const club=clubs[0],org=orgs[0],participants=s.roster.participants.filter(p=>p.club_id===club?.id)
  const entries=org?s.data.entries.filter(e=>e.organization_id===org.id).map(e=>({id:e.entry_id,

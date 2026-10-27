@@ -1,6 +1,8 @@
 'use client'
 
 import {useEffect,useMemo,useRef,useState} from 'react'
+import {addApplicationEntry,addApplicationPerson,removeApplicationAddition} from '@/lib/master/application-additions'
+import {applicationEntryTarget,applicationPersonTarget} from '@/lib/master/application-guide'
 import {MasterApplicationReview} from './master/application-review'
 import {applyApplicationCandidate,autofillApplicationPerson,jefRiderQualification} from '@/lib/master/application-autofill'
 import {autofillApplicationDraft} from '@/lib/winter-application-draft'
@@ -74,6 +76,19 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   })}}
  })}
  function entry(key:string,patch:Partial<ApplicationEntry>){edit(d=>({...d,accountChecked:false,edited:{...d.edited,entries:d.edited.entries.map(e=>e.key===key?{...e,...patch}:e)}}))}
+ function focusAdded(id:string){requestAnimationFrame(()=>requestAnimationFrame(()=>{const row=document.getElementById(id);row?.scrollIntoView({block:'center',behavior:'smooth'});row?.querySelector<HTMLElement>('input,textarea,select')?.focus({preventScroll:true})}))}
+ function addEntry(sourceKey?:string){
+  if(!draft||lock.current||registration.isBusy()||registration.isFrozen())return
+  try{const id=crypto.randomUUID(),edited=addApplicationEntry(draft.edited,id,sourceKey);edit(d=>({...d,edited,accountChecked:false}));registration.invalidate();focusAdded(applicationEntryTarget(`manual-entry-${id}`))}catch(e){setError((e as Error).message)}
+ }
+ function addPerson(kind:ApplicationPerson['kind']){
+  if(!draft||lock.current||registration.isBusy()||registration.isFrozen())return
+  try{const id=crypto.randomUUID(),edited=addApplicationPerson(draft.edited,kind,id);edit(d=>({...d,edited,accountChecked:false}));registration.invalidate();focusAdded(applicationPersonTarget(`manual-person-${id}`))}catch(e){setError((e as Error).message)}
+ }
+ function removeAddition(key:string){edit(d=>{
+  const choices={...d.choices},rosterEdits={...d.rosterEdits};delete choices[key];delete rosterEdits[key]
+  return {...d,choices,rosterEdits,accountChecked:false,edited:removeApplicationAddition(d.edited,key)}
+ });registration.invalidate()}
  function open(value:ApplicationDraft){
   if(registration.isFrozen())throw new Error('登録再開記録の入力は固定しています。③・④の下にある、端末に記録を保持して申込書を閉じるボタンから進んでください。')
   const clean=readApplicationDraft(value),key=applicationDraftKey(clean.original.digest),stored=localStorage.getItem(key)
@@ -98,7 +113,14 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const qualificationNotes=Object.fromEntries((draft?.edited.people??[]).filter(p=>p.kind==='rider'&&p.jef).map(p=>[p.key,context?.riderGrades&&!context.riderGradesError?jefRiderQualification(p,context.riderGrades).message:'']))
  async function loadContext(target:ApplicationDraft|null=draft){
   setRoster(null);setContext(null)
-  const snapshot=await winterApplicationServices(session,onSession).load(target?.edited.people.filter(p=>p.kind==='rider').map(p=>p.jef))
+  const services=winterApplicationServices(session,onSession)
+  let snapshot:ApplicationSnapshot
+  try{snapshot=await services.load(target?.edited.people.filter(p=>p.kind==='rider').map(p=>p.jef))}
+  catch(e){
+   // Candidate lookup must not depend on a club name or an unrelated charge lookup.
+   const available=await services.loadRoster();setRoster(available)
+   throw new Error('人馬候補は選択できます。既存出番・料金の確認を完了できなかったため、③へ進む前に「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))
+  }
   setRoster(snapshot.roster);setContext(snapshot)
   if(target&&!registration.isFrozen()){
    const filled=autofillApplicationDraft(target,snapshot.riderGrades??[])
@@ -192,9 +214,9 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onReset={nextApplication}
   onLoadRoster={()=>void action(async()=>{if(registration.isFrozen())return;await loadContext();setMessage('既存登録を確認しました。候補の所属・番号を確認して選んでください。')})}
   onReference={reference=>edit(d=>({...d,reference}))}
-  onClub={club=>edit(d=>({...d,choices:{},accountChecked:false,edited:{...d.edited,club}}))}
+  onClub={club=>{edit(d=>({...d,rosterEdits:{},accountChecked:false,edited:{...d.edited,club}}));setIntent('');registration.invalidate()}}
   onPaid={paid=>edit(d=>({...d,paid,accountChecked:false}))} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
-  onPerson={person} onEntry={entry}
+  onPerson={person} onEntry={entry} onAddEntry={addEntry} onAddPerson={addPerson} onRemoveAddition={removeAddition}
   onAmount={(key,value)=>edit(d=>({...d,accountChecked:false,edited:{...d.edited,amounts:{...d.edited.amounts,[key]:value}}}))}
   onChoice={choose}
  />

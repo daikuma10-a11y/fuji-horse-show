@@ -5,7 +5,7 @@ const normalized=(s:string)=>s.normalize('NFKC').trim()
 const identity=(s:string)=>normalized(s).replace(/\s/g,'')
 /** An explicit identity choice supplies its number, including absence; it never verifies it. */
 export function applyApplicationCandidate(person:ApplicationPerson,candidate:IdentityCandidate|undefined,rows:JefRiderRecord[]){
- return autofillApplicationPerson({...person,...(candidate?{jef:candidate.jef.trim()}:{}),checked:false},rows)
+ return autofillApplicationPerson({...person,...(candidate?{jef:candidate.jef.trim(),name:person.name.trim()?person.name:candidate.name,reading:person.reading.trim()?person.reading:candidate.reading}:{}),checked:false},rows)
 }
 export function kanaHorseReading(name:string){
  const value=normalized(name)

@@ -1,4 +1,5 @@
 import {horseDeclaration,validHorseDeclaration} from './master/application-credentials'
+import {splitApplicationRiders} from './master/application-entry-input'
 import {readInputXlsx,type InputBook,type InputSheet} from './master/xlsx-input'
 import {IMPORT_HEADERS,reviewWinterImport,type ImportSource} from './winter-import-review'
 import {WINTER_EVENT_ID} from './winter-event'
@@ -44,10 +45,8 @@ export function extractWinterApplication(book:InputBook,fileName:string,digest:s
     for(const col of cols){
      const raw=value(s,col+r);if(!raw){if(s.cells[col+r]?.formula)app.issues.push(`${s.name}!${col+r}：数式の結果が空欄です。原本で確認してください`);continue}
      const rawHorse=value(s,col+start).replace(/\s*号\s*$/,'').trim()
-     // Newlines separate riders. Spaces inside a Japanese name never split a person.
-     for(const [line,part] of raw.split(/\r?\n/).filter(x=>x.trim()).entries()){
-      const n=part.trim().normalize('NFKC'),op=/^\(.*\)$/.test(n),riderName=op?n.slice(1,-1).trim():part.trim()
-      app.entries.push({key:`${s.name}!${col}${r}:${line}`,competition,rider:match('rider',riderName),horse:match('horse',rawHorse),op,rawRider:part.trim(),rawHorse,origin:origin(s,col+r)})
+     for(const [line,part] of splitApplicationRiders(raw,app.people.filter(p=>p.kind==='rider').map(p=>p.name)).entries()){
+      app.entries.push({key:`${s.name}!${col}${r}:${line}`,competition,rider:match('rider',part.name),horse:match('horse',rawHorse),op:part.op,rawRider:part.raw,rawHorse,origin:origin(s,col+r)})
      }
     }
    }
