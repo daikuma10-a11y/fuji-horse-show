@@ -1,21 +1,26 @@
+import type {RosterCorrectionInput} from './winter-roster-correction'
+import {credentialValue,credentialLabel,credentialRequestId,credentialHash,validCredential,type WinterCredential,type CredentialExpectation,type CredentialSave} from './winter-application-credentials'
 import {readApplicationDraft,type ApplicationDraft} from './winter-application-draft'
 import {applicationReview,applicationSource,normalizeApplicationName,rosterCandidates} from './winter-application'
 import {assertWinterEvent,WINTER_EVENT_ID,winterCompetition,winterStorageKey} from './winter-event'
 import {importBindingKey,importCheckpointDifferences,importReference,readImportCheckpoint,reviewImportRegistration,runImportRegistration,type ImportCheckpoint,type ImportSnapshot,type ImportState} from './winter-import-registration'
 import type {ApplicationPerson} from './master/application'
+import type {JefRiderRecord} from './master/application-autofill'
 import type {SharedRoster,WinterRosterBinding,saveRosterEntity,saveWinterParticipants} from './shared-roster'
 import type {saveWinterInitialEntry} from './winter-initial-entry'
 
 type PersonResult={state:ImportState;entityId?:string}
 export type ApplicationRegistration={
  kind:'winter-application-registration';version:1;eventId:string;review:ApplicationDraft
- people:Record<string,PersonResult>;participants:{state:ImportState;clubId?:string};entries:ImportCheckpoint|null
+ people:Record<string,PersonResult>;participants:{state:ImportState;clubId?:string};entries:ImportCheckpoint|null;credentials?:Record<string,CredentialExpectation>
 }
-export type ApplicationSnapshot=ImportSnapshot&{roster:SharedRoster;bindings:WinterRosterBinding[]}
+export type ApplicationSnapshot=ImportSnapshot&{roster:SharedRoster;bindings:WinterRosterBinding[];credentials:WinterCredential[];riderGrades?:JefRiderRecord[];riderGradesError?:string}
 export type ApplicationRegistrationServices={
- load:()=>Promise<ApplicationSnapshot>
+ load:(riderNumbers?:string[])=>Promise<ApplicationSnapshot>
  savePerson:(input:Parameters<typeof saveRosterEntity>[0])=>ReturnType<typeof saveRosterEntity>
  saveParticipants:(...args:Parameters<typeof saveWinterParticipants> extends [...infer A,string]?A:never)=>ReturnType<typeof saveWinterParticipants>
+ saveCredential:(input:CredentialSave)=>Promise<string>
+ correctPerson:(input:RosterCorrectionInput)=>Promise<string>
  saveEntry:(input:Parameters<typeof saveWinterInitialEntry>[0])=>ReturnType<typeof saveWinterInitialEntry>
 }
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
@@ -46,13 +51,22 @@ export function readApplicationRegistration(v:unknown):ApplicationRegistration{
   if(entries.reference!==review.reference||(['roster','entries','accounts'] as const).some(k=>entries.source[k]!==expected[k]))throw new Error('登録再開記録と確認した原本が異なります')
   if(Object.keys(entries.states).length>review.edited.entries.length||Object.keys(entries.states).some(k=>!uuid(k)))throw new Error('出番の登録状態が不正です')
  }
- return {kind:'winter-application-registration',version:1,eventId:WINTER_EVENT_ID,review,people,participants,entries}
+ const credentials:Record<string,CredentialExpectation>={}
+ if(x.credentials!==undefined){
+  for(const [key,v] of Object.entries(object(x.credentials))){const c=object(v)
+   if(!review.edited.people.some(p=>p.key===key&&credentialValue(p))||!credentialHash(c.requestId)||c.expected!==null&&!credentialHash(c.expected))throw new Error('資格・グレードの再開記録を確認できません')
+   credentials[key]={requestId:c.requestId,expected:c.expected as string|null}
+  }
+  if(Object.keys(credentials).length!==review.edited.people.filter(p=>credentialValue(p)).length)throw new Error('資格・グレードの再開記録の件数が一致しません')
+ }
+ return {kind:'winter-application-registration',version:1,eventId:WINTER_EVENT_ID,review,people,participants,entries,...(x.credentials===undefined?{}:{credentials})}
 }
 export function serializeApplicationRegistration(value:ApplicationRegistration){const text=JSON.stringify(readApplicationRegistration(value));if(new TextEncoder().encode(text).byteLength>8_000_000)throw new Error('登録再開記録は8MB以内です');return text}
 export function parseApplicationRegistration(text:string){if(text.length>8_000_000)throw new Error('登録再開記録は8MB以内です');return readApplicationRegistration(JSON.parse(text))}
 export const applicationRegistrationKey=(reference:string)=>winterStorageKey('application-registration')+':'+encodeURIComponent(importReference(reference))
 export function applicationRegistrationDifferences(before:ApplicationRegistration,after:ApplicationRegistration){
  const issues:string[]=[]
+ if(before.credentials&&JSON.stringify(before.credentials)!==JSON.stringify(after.credentials))issues.push('資格・グレードの保存開始時の照合記録を変更できません')
  if(JSON.stringify(before.review)!==JSON.stringify(after.review))issues.push('確定時の原本・訂正・対応・金額が変わっています。既存記録を保持してください')
  for(const [key,p] of Object.entries(before.people)){const n=after.people[key];if(!n||p.entityId&&p.entityId!==n.entityId||p.state!=='unregistered'&&n.state==='unregistered')issues.push(`${key}：保存結果を変更・巻戻しできません`)}
  if(before.participants.clubId&&before.participants.clubId!==after.participants.clubId||before.participants.state!=='unregistered'&&after.participants.state==='unregistered')issues.push('参加登録結果を変更・巻戻しできません')
@@ -72,7 +86,7 @@ export function persistApplicationRegistration(storage:Pick<Storage,'getItem'|'s
 }
 function validateSnapshot(s:ApplicationSnapshot){
  assertWinterEvent(s.data.eventId)
- for(const row of [...s.data.organizations,...s.data.riders,...s.data.horses,...s.data.competitions,...s.data.entries,...s.initial,...s.roster.participants])assertWinterEvent(row.event_id)
+ for(const row of [...s.data.organizations,...s.data.riders,...s.data.horses,...s.data.competitions,...s.data.entries,...s.initial,...s.roster.participants,...s.credentials])assertWinterEvent(row.event_id)
  const keys=new Set<string>(),targets=new Set<string>()
  for(const b of s.bindings){
   const key=JSON.stringify([b.entity_id,b.club_id]),target=b.rider_id??b.horse_id
@@ -83,8 +97,9 @@ function validateSnapshot(s:ApplicationSnapshot){
 function identityIssues(p:ApplicationPerson,id:string,clubId:string|undefined,s:ApplicationSnapshot,requireReading=false){
  const e=s.roster.entities.find(e=>e.id===id),issues:string[]=[]
  if(!e||e.archived_at||e.kind!==p.kind)return [`${p.name}：選択した人馬が不存在・削除済み・別種別です`]
- if(e.name!==p.name.trim()||(e.jef_number??'')!==p.jef.trim()||requireReading&&e.reading!==p.reading.trim())issues.push(`${p.name}：既存名簿との差分があります（既存名 ${e.name}／日馬連 ${e.jef_number??'空欄'}／読み ${e.reading}）。既存値は上書きしません`)
- if(!clubId||!s.roster.affiliations.some(a=>a.entity_id===id&&a.club_id===clubId&&!a.ended_at))issues.push(`${p.name}：申込団体への所属が確認できません。既存の人馬登録欄で所属を確認してください`)
+ if(e.name!==p.name.trim()||(e.jef_number??'')!==p.jef.trim()||requireReading&&e.reading!==p.reading.trim())issues.push(`${p.name}：既存名簿との差分があります（既存名 ${e.name}／日馬連 ${e.jef_number??'なし'}／読み ${e.reading}）。名簿が誤っている場合は、正しい内容を入力して名簿の訂正を保存してください`)
+ // A later club transfer does not erase this event's already recorded participation.
+ if(!clubId||!s.roster.affiliations.some(a=>a.entity_id===id&&a.club_id===clubId&&!a.ended_at)&&!s.roster.participants.some(p=>p.entity_id===id&&p.club_id===clubId))issues.push(`${p.name}：申込団体への所属が確認できません（この団体の保存済み参加登録もありません）。同じ人馬であることと、この申込で登録する団体を確認してください`)
  if(clubId&&s.roster.participants.some(x=>x.entity_id===id&&x.club_id===clubId)){
   const bridge=s.bindings.find(b=>b.entity_id===id&&b.club_id===clubId)
   const actual=p.kind==='rider'?s.data.riders.find(r=>r.id===bridge?.rider_id):s.data.horses.find(h=>h.id===bridge?.horse_id)
@@ -121,7 +136,7 @@ function entryCheckpoint(work:ApplicationRegistration,s:ApplicationSnapshot,club
 export async function reviewApplicationRegistration(value:ApplicationRegistration,s:ApplicationSnapshot){
  const work=readApplicationRegistration(value);validateSnapshot(s)
  const app=work.review.edited,review=applicationReview(app,work.review.paid,work.review.accountChecked)
- const issues=[...app.issues,...review.report.issues.filter(i=>i.severity==='error').map(i=>i.message),...review.amounts.filter(a=>a.reason).map(a=>`${a.label}：${a.reason}`)]
+ const issues=[...app.issues,...review.credentialIssues,...review.report.issues.filter(i=>i.severity==='error').map(i=>i.message),...review.amounts.filter(a=>a.reason).map(a=>`${a.label}：${a.reason}`)]
  if(!review.ready)issues.push('原本・人馬・区分・料金・入金額の確認を完了してください')
  const clubs=s.roster.clubs.filter(c=>c.name===app.club.trim());if(clubs.length>1)issues.push('申込団体を一意に確認できません')
  const clubId=clubs[0]?.id
@@ -134,7 +149,7 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
    problems.push(...identityIssues(p,result.entityId,clubId,s,chosen==='new'))
   }else if(result.state!=='unregistered')problems.push(`${p.name}：新規登録の結果が不明です。再送せず、既存名簿を照合して保存された人馬を明示選択してください`)
   else if(chosen!=='new')problems.push(`${p.name}：既存人馬か新規登録かを明示選択してください`)
-  else if(rosterCandidates(p,s.roster,app.club).length||s.roster.entities.some(e=>e.kind===p.kind&&e.archived_at&&(normalizeApplicationName(e.name)===normalizeApplicationName(p.name)||p.jef&&e.jef_number===p.jef)))problems.push(`${p.name}：既存または削除済みの候補があります。新規作成せず人馬登録欄で確認してください`)
+  else if(rosterCandidates(p,s.roster,app.club).length||s.roster.entities.some(e=>e.kind===p.kind&&e.archived_at&&(normalizeApplicationName(e.name)===normalizeApplicationName(p.name)||p.jef&&e.jef_number===p.jef)))problems.push(`${p.name}：既存または削除済みの候補があります。同じ人馬の訂正なら既存候補を選び、正しい内容を保存してください`)
   if(p.jef&&!/^\d+$/.test(p.jef.trim()))problems.push(`${p.name}：日馬連番号は数字または空欄です`)
   issues.push(...problems)
   return {key:p.key,name:p.name,entityId:result.entityId,state:result.entityId&&!problems.length?'registered' as const:result.state,issues:problems}
@@ -154,7 +169,18 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
   entries=await reviewImportRegistration(next,s);issues.push(...entries.issues,...entries.rows.flatMap(r=>r.differences))
  }catch(error){issues.push(error instanceof Error?error.message:'出番との対応を確認できません')}}
  else if(work.entries)issues.push('保存後に参加名簿が変わっています。再登録せず確認してください')
- return {ready:issues.length===0,issues,people:rows,clubId,participating,entries}
+ const credentials=await Promise.all(app.people.map(async p=>{
+  const value=credentialValue(p),entityId=work.people[p.key].entityId
+  const current=s.credentials.find(c=>c.entity_id===entityId&&c.club_id===clubId)
+  const requestId=await credentialRequestId(work.review,p),saved=!!value&&current?.value===value
+  const expected=work.credentials?.[p.key]?.expected??null
+  const target=s.bindings.find(b=>b.entity_id===entityId&&b.club_id===clubId)
+  if(current&&(current.kind!==p.kind||current.target_id!==(p.kind==='rider'?target?.rider_id:target?.horse_id)))issues.push(`${p.name}：資格・グレードの人馬IDが一致しません`)
+  if(value&&!validCredential(p.kind,value))issues.push(`${p.name}：${credentialLabel(p.kind)}を原本で確認してください`)
+  if(value&&work.credentials&&(work.credentials[p.key]?.requestId!==requestId||!saved&&(current?.request_id??null)!==expected))issues.push(`${p.name}：保存開始後に資格・グレードが変わっています。古い記録で上書きせず、最新の申込書で確認してください`)
+  return {key:p.key,name:p.name,kind:p.kind,value,previous:current?.value??'',saved,requestId,expected:work.credentials?.[p.key]?.expected??current?.request_id??null}
+ }))
+ return {ready:issues.length===0,issues,people:rows,clubId,participating,entries,credentials,credentialsComplete:credentials.every(c=>!c.value||c.saved)}
 }
 export async function resolveUnknownApplicationPerson(value:ApplicationRegistration,key:string,entityId:string,s:ApplicationSnapshot){
  const work=readApplicationRegistration(value);validateSnapshot(s)
@@ -170,7 +196,9 @@ export async function resolveUnknownApplicationPerson(value:ApplicationRegistrat
 export async function runApplicationRegistration(value:ApplicationRegistration,deps:ApplicationRegistrationServices&{persist:(v:ApplicationRegistration)=>void;stop:()=>boolean}){
  const work=readApplicationRegistration(value),persist=()=>deps.persist(copy(work))
  async function check(){const s=await deps.load(),plan=await reviewApplicationRegistration(work,s);if(!plan.ready)throw new Error(plan.issues.join('\n'));return {s,plan}}
- await check();persist()
+ const start=await check()
+ if(!work.credentials)work.credentials=Object.fromEntries(start.plan.credentials.filter(c=>c.value).map(c=>[c.key,{requestId:c.requestId,expected:c.expected}]))
+ persist()
  for(const p of work.review.edited.people){
   if(deps.stop())return work
   const {plan}=await check(),row=plan.people.find(r=>r.key===p.key)!
@@ -193,6 +221,20 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
   if(!plan.participating||expected.some(id=>!s.roster.participants.some(p=>p.club_id===clubId&&p.entity_id===id)))throw new Error('参加登録の保存結果が一致しません。既存の参加履歴を確認してください')
  }
  work.participants={state:'registered',clubId};persist()
+ if(deps.stop())return work
+ for(const p of work.review.edited.people){
+  if(deps.stop())return work
+  const before=await check(),row=before.plan.credentials.find(c=>c.key===p.key)!
+  if(!row.value||row.saved)continue
+  const entityId=work.people[p.key].entityId!,bridge=before.s.bindings.find(b=>b.entity_id===entityId&&b.club_id===clubId)
+  const targetId=p.kind==='rider'?bridge?.rider_id:bridge?.horse_id
+  if(!targetId)throw new Error('資格・グレードの登録先を確認できません')
+  // The immutable expectation was persisted before any request. Lost responses are safe to read back.
+  persist()
+  await deps.saveCredential({eventId:WINTER_EVENT_ID,entityId,clubId,targetId,kind:p.kind,name:p.name.trim(),jef:p.jef.trim(),value:row.value,requestId:row.requestId,expected:work.credentials![p.key].expected,digest:work.review.original.digest,reference:work.review.reference,location:p.gradeAutofill?`日馬連マスター ${p.gradeAutofill.importDate}（会員番号${p.gradeAutofill.memberNo}）`:p.credentialOrigin?`${p.credentialOrigin.sheet}!${p.credentialOrigin.cell}`:`${p.origin.sheet}!${p.origin.cell}（原本確認）`})
+  const after=await check();if(!after.plan.credentials.find(c=>c.key===p.key)?.saved)throw new Error('資格・グレードの保存結果が一致しません。再照合してください')
+  s=after.s;persist()
+ }
  if(deps.stop())return work
  const next=entryCheckpoint(work,s,clubId)
  if(work.entries&&importCheckpointDifferences(work.entries,next).length)throw new Error('出番の原本・対応が保存時と異なります')
