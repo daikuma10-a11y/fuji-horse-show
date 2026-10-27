@@ -1,4 +1,4 @@
-import type {Application,ApplicationPerson,ApplicationEntry,Origin,RosterAffiliationEdit} from './master/application'
+import type {Application,ApplicationPerson,ApplicationEntry,ApplicationEntryCount,Origin,RosterAffiliationEdit} from './master/application'
 import {WINTER_EVENT_ID,winterStorageKey} from './winter-event'
 import {autofillApplicationPerson,type JefRiderRecord} from './master/application-autofill'
 import {manualApplicationOrigin} from './master/application-additions'
@@ -36,11 +36,30 @@ function application(v:unknown):Application{
   return {...addition(p),key:string(p.key,100),kind:p.kind as 'rider'|'horse',name:string(p.name,100),reading:string(p.reading,100),jef:string(p.jef,100),grade:string(p.grade,100),...(p.horseGrade===undefined?{}:{horseGrade:string(p.horseGrade,100)}),...(p.credentialOrigin===undefined?{}:{credentialOrigin:source(p.credentialOrigin)}),...(gradeAutofill?{gradeAutofill}:{}),...(p.gradeManual===undefined?{}:{gradeManual:flag(p.gradeManual)}),...(p.readingAutofill===undefined?{}:{readingAutofill:string(p.readingAutofill,100)}),sportsMember:string(p.sportsMember,100),instructorMember:string(p.instructorMember,100),checked:flag(p.checked),qualified:flag(p.qualified),origin:source(p.origin)}
  })
  const entries:ApplicationEntry[]=list(a.entries,5000).map(v=>{
-  const e=object(v);return {...addition(e),key:string(e.key,200),competition:string(e.competition,20),rider:string(e.rider,100),horse:string(e.horse,100),op:flag(e.op),rawRider:string(e.rawRider,1000),rawHorse:string(e.rawHorse,1000),origin:source(e.origin)}
+  const e=object(v);return {...addition(e),key:string(e.key,200),competition:string(e.competition,20),rider:string(e.rider,100),horse:string(e.horse,100),op:flag(e.op),...(e.countBlock===undefined?{}:{countBlock:string(e.countBlock,200)}),rawRider:string(e.rawRider,1000),rawHorse:string(e.rawHorse,1000),origin:source(e.origin)}
  })
  if(new Set(people.map(p=>p.key)).size!==people.length||new Set(entries.map(p=>p.key)).size!==entries.length)throw failure()
+ let entryCounts:ApplicationEntryCount[]|undefined,entryCountCorrections:Record<string,string>|undefined
+ if(a.entryCounts!==undefined){
+  entryCounts=list(a.entryCounts,6000).map(v=>{
+   const row=object(v),membership=row.membership
+   if(membership!==undefined&&membership!=='sportsMember'&&membership!=='instructorMember')throw failure()
+   const buckets=list(row.buckets,3).map(v=>{const b=object(v);if(!['regular','op','member','nonmember'].includes(String(b.kind)))throw failure();return {kind:b.kind as ApplicationEntryCount['buckets'][number]['kind'],origin:source(b.origin)}})
+   if(!buckets.length||new Set(buckets.map(b=>b.kind)).size!==buckets.length)throw failure()
+   return {key:string(row.key,200),block:string(row.block,200),competition:string(row.competition,20),horseKeys:list(row.horseKeys,20).map(x=>string(x,100)),entryKeys:list(row.entryKeys,5000).map(x=>string(x,200)),...(membership?{membership}:{}),buckets}
+  })
+  if(new Set(entryCounts.map(r=>r.key)).size!==entryCounts.length)throw failure()
+  const keys=entryCounts.flatMap(r=>r.entryKeys)
+  if(new Set(keys).size!==keys.length||keys.some(key=>!entries.some(e=>e.key===key&&!e.added))||entryCounts.some(r=>r.horseKeys.some(key=>!people.some(p=>p.key===key&&p.kind==='horse'))))throw failure()
+ }
+ if(entries.some(e=>e.countBlock&&!entryCounts?.some(row=>row.block===e.countBlock)))throw failure()
+ if(a.entryCountCorrections!==undefined){
+  entryCountCorrections={}
+  const keys=new Set(entryCounts?.flatMap(row=>row.buckets.map(b=>`${row.key}:${b.kind}`)))
+  for(const [key,value] of Object.entries(object(a.entryCountCorrections))){if(!keys.has(key))throw failure();entryCountCorrections[key]=string(value,100)}
+ }
  const amount=object(a.amounts),origins=object(a.amountOrigins)
- return {fileName:string(a.fileName,255),digest,eventId:WINTER_EVENT_ID,club:string(a.club,100),clubOrigin:source(a.clubOrigin),people,entries,
+ return {fileName:string(a.fileName,255),digest,eventId:WINTER_EVENT_ID,club:string(a.club,100),clubOrigin:source(a.clubOrigin),people,entries,...(entryCounts===undefined?{}:{entryCounts}),...(entryCountCorrections===undefined?{}:{entryCountCorrections}),
   amounts:{horse:string(amount.horse,100),jump:string(amount.jump,100),dressage:string(amount.dressage,100),total:string(amount.total,100)},
   amountOrigins:Object.fromEntries(['horse','jump','dressage','total'].map(k=>[k,source(origins[k])])),
   issues:list(a.issues,10000).map(x=>string(x,4000)),sheets:list(a.sheets,32).map(x=>string(x,100))}
@@ -71,15 +90,16 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
   }
  }
  original.people.forEach(p=>{const e=edited.people.find(e=>e.key===p.key)!;if(p.kind!==e.kind||JSON.stringify(p.credentialOrigin)!==JSON.stringify(e.credentialOrigin))throw failure()})
- original.entries.forEach(p=>{const e=edited.entries.find(e=>e.key===p.key)!;if(p.rawRider!==e.rawRider||p.rawHorse!==e.rawHorse)throw failure()})
+ original.entries.forEach(p=>{const e=edited.entries.find(e=>e.key===p.key)!;if(p.countBlock!==undefined||p.rawRider!==e.rawRider||p.rawHorse!==e.rawHorse)throw failure()})
  for(const e of edited.entries.filter(e=>e.added))if(e.rawRider||e.rawHorse)throw failure()
- for(const key of ['clubOrigin','amountOrigins','issues','sheets'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
+ for(const key of ['clubOrigin','amountOrigins','issues','sheets','entryCounts'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
  for(const key of Object.keys(rawChoices)){
   if(!edited.people.some(p=>p.key===key))throw failure()
   const choice=string(rawChoices[key],36)
   if(choice!==''&&choice!=='new'&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(choice))throw failure()
   choices[key]=choice
  }
+ if(original.entryCountCorrections!==undefined)throw failure()
  const rosterEdits:Record<string,RosterAffiliationEdit>={}
  if(d.rosterEdits!==undefined)for(const [key,value] of Object.entries(object(d.rosterEdits))){
   const e=object(value),entityId=string(e.entityId,36),clubId=string(e.clubId,36),endClubIds=list(e.endClubIds,200).map(x=>string(x,36))

@@ -68,6 +68,10 @@ const file={name:'synthetic.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)
  map.clear();p.onRestoreFile({size:stored.length,arrayBuffer:async()=>new TextEncoder().encode(stored).buffer});p=await settle();assert.equal(p.edited.people[0].name,'訂正選手');assert.equal(p.rosterLoaded,true)
  contextFailed=true;p.onLoadRoster();p=await settle();assert.match(p.error,/人馬候補は選択できます/);assert.equal(p.rosterLoaded,true);assert.equal(p.candidates.h1.length,2);contextFailed=false;
  authDenied=true;const previousReads=rosterReads;p.onLoadRoster();p=await settle();assert.match(p.error,/管理者権限/);assert.equal(rosterReads,previousReads);assert.equal(p.rosterLoaded,false);assert.equal(p.edited.people[0].name,'訂正選手')
+ // Supplement a saved older draft by reading the same file, without losing corrected identities.
+ authDenied=false;nextApp=fixture();nextApp.entryCounts=[{key:'障害!C13',block:'障害!4',competition:'5',horseKeys:['h1'],entryKeys:[nextApp.entries[0].key],membership:'sportsMember',buckets:[{kind:'nonmember',origin:{sheet:'障害',cell:'Q14',value:'0'}},{kind:'member',origin:{sheet:'障害',cell:'U14',value:'0'}}]}]
+ p.onFiles([file]);p=render();p.onRead();p=await settle();assert.match(p.message,/競技ごとの集計人数/);assert.equal(p.edited.people[0].name,'訂正選手');assert.equal(p.original.entryCounts.length,1);assert.equal(p.review.entryCounts[0].buckets[1].actual,1)
+ p.onAccountChecked(true);p=render();p.onEntryCount('障害!C13:member','1');p=render();assert.equal(p.accountChecked,false);assert.equal(p.original.entryCounts[0].buckets[1].origin.value,'0');assert.equal(p.edited.entryCountCorrections['障害!C13:member'],'1');assert(p.review.entryCounts[0].buckets.every(b=>!b.reason))
  assert.equal(network,0,'no real auth, database or payment requests')
  Module._load=originalLoad;URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke
  console.log('PASS: file selection/read lock, original/edited review, explicit candidates, confirmation invalidation, saved review reload, revision preservation, conflict/auth-data guards and zero real network (component mocks)')

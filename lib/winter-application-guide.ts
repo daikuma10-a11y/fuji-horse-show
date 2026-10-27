@@ -1,3 +1,4 @@
+import {entryCountTarget} from './master/application-entry-counts'
 import {validHorseDeclaration} from './master/application-credentials'
 import type {ApplicationDraft} from './winter-application-draft'
 import type {ApplicationSnapshot} from './winter-application-registration'
@@ -20,6 +21,11 @@ export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):Applic
   add(person?.name??(entry?`${entry.origin.sheet}!${entry.origin.cell}・第${entry.competition}競技`:issue.section),issue.message,
    person?applicationPersonTarget(person.key):entry?applicationEntryTarget(entry.key):issue.section==='事前精算'?'application-payment':'application-club',issue.severity==='error',issue.fields)
   for(const related of issue.related??[]){const person=app.people.find(p=>p.key===related.personId);if(person)add(person.name,related.message,applicationPersonTarget(person.key),issue.severity==='error',[related.field])}
+ }
+ for(const [key,assignment] of review.countAssignments)if(assignment.reason)add('出番の集計先',assignment.reason,applicationEntryTarget(key),true,['competition'])
+ for(const row of review.entryCounts)for(const bucket of row.buckets)if(bucket.reason){
+  add(`第${row.competition}競技・${bucket.label}の集計人数`,bucket.reason,entryCountTarget(row.key))
+  for(const key of row.entryKeys)add(`第${row.competition}競技`,bucket.reason,applicationEntryTarget(key),true,['fee'])
  }
  for(const row of review.amounts)if(row.reason)add(row.label,row.reason,`application-amount-${row.key}`)
  if(!app.entries.length)add('エントリー','Excelに出場する人馬が入力されているか確認してください。','application-entries')

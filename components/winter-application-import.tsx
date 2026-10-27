@@ -18,6 +18,7 @@ import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {applicationTodos,applicationClubSummary} from '@/lib/winter-application-guide'
 import {winterApplicationServices} from '@/lib/winter-application-services'
 import {applicationRegistrationKey,parseApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
+import {upgradeApplicationCounts} from '@/lib/winter-application-count-upgrade'
 import {credentialReviewUpgrade} from '@/lib/winter-credential-review-upgrade'
 import {WINTER_HORSE_REGISTRATION_FEE} from '@/lib/winter-horse-registration'
 import preparation from '@/config/winter-2026-preparation.json'
@@ -182,7 +183,9 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   if(record&&record.review.original.digest!==app.digest)throw new Error('同じ資料番号の原本が異なります。保存済み記録を確認してください。')
   const upgraded=credentialReviewUpgrade(app,record?.review??next,record)
   if(upgraded){next=upgraded;saved=localStorage.getItem(applicationRegistrationKey(next.reference))}
-  expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded)
+  const countUpgrade=upgradeApplicationCounts(next,app,!!saved)
+  if(countUpgrade)next=countUpgrade
+  expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded||!!countUpgrade)
   if(saved)registration.openRecord(parseApplicationRegistration(saved))
   setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
   try{await loadContext(next)}catch(e){setError('Excelは読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
@@ -220,14 +223,17 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   message={message} error={error} fileName={file?.name??''} eventName={WINTER_EVENT_NAME}
   formatDescription="対応：2026 Winterの指定様式（選手30人・馬20頭、障害・馬場の追加入力欄とコピーシート）。"
   original={draft?.original??null} edited={draft?.edited??null} reference={draft?.reference??''} paid={draft?.paid??''} accountChecked={draft?.accountChecked??false}
-  review={review?{amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),entryFeeTotal:review.report.entryFeeTotal,horseRegistration:{count:draft!.edited.people.filter(p=>p.kind==='horse').length,unit:WINTER_HORSE_REGISTRATION_FEE},issues:[...draft!.edited.issues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
+  review={review?{entryCounts:review.entryCounts,amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),entryFeeTotal:review.report.entryFeeTotal,horseRegistration:{count:draft!.edited.people.filter(p=>p.kind==='horse').length,unit:WINTER_HORSE_REGISTRATION_FEE},issues:[...draft!.edited.issues,...review.countIssues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
   candidates={candidates} choices={draft?.choices??{}} qualificationNotes={qualificationNotes} rosterLoaded={roster!==null} differences={differences} revisionName={revision?.fileName??''} competitions={preparation.competitions}
   onFiles={files=>{if(lock.current||registration.isBusy())return;if(!files||files.length!==1){setError('Excelファイルを1つ選択してください');return}setFile(files[0]);setError('')}}
   onRead={()=>void action(async()=>{
    if(!file)throw new Error('Excelファイルを選択してください')
    if(file.size>8_000_000)throw new Error('Excelは8MB以内で選択してください')
    const app=await readWinterApplication(new Uint8Array(await file.arrayBuffer()),file.name)
-   if(draft){setRevision(app);setMessage(app.digest===draft.original.digest?'同じ原本です。現在の訂正・対応を保持しました。':'訂正版との差分を表示しました。現在の原本・訂正値を保持しています。');return}
+   if(draft){
+    const upgraded=upgradeApplicationCounts(draft,app,registration.isFrozen())
+    if(upgraded){setDraft(upgraded);setDirty(true);setRevision(null);registration.invalidate();setMessage('同じ原本から競技ごとの集計人数を読み込みました。人馬・エントリーの訂正は保持しています。黄色い集計欄を確認してください。');return}
+    setRevision(app);setMessage(app.digest===draft.original.digest?'同じ原本です。現在の訂正・対応を保持しました。':'訂正版との差分を表示しました。現在の原本・訂正値を保持しています。');return}
    await begin(app)
   })}
   onRestoreFile={f=>void action(async()=>{if(f.size>8_000_000)throw new Error('確認再開ファイルは8MB以内です');const opened=open(parseApplicationDraft(new TextDecoder('utf-8',{fatal:true}).decode(await f.arrayBuffer())));if(opened)await loadContext(opened)})}
@@ -240,6 +246,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onClub={club=>{edit(d=>({...d,rosterEdits:{},accountChecked:false,edited:{...d.edited,club}}));setIntent('');registration.invalidate()}}
   onPaid={paid=>edit(d=>({...d,paid,accountChecked:false}))} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
   onPerson={person} onEntry={entry} onAddEntry={addEntry} onAddPerson={addPerson} onRemoveAddition={removeAddition}
+  onEntryCount={(key,value)=>{edit(d=>({...d,accountChecked:false,edited:{...d.edited,entryCountCorrections:{...d.edited.entryCountCorrections,[key]:value}}}));registration.invalidate()}}
   onAmount={(key,value)=>edit(d=>({...d,accountChecked:false,edited:{...d.edited,amounts:{...d.edited.amounts,[key]:value}}}))}
   onChoice={choose}
  />

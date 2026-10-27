@@ -139,7 +139,7 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
  const work=readApplicationRegistration(value);validateSnapshot(observed)
  const prepared=projectPreparedRoster(work.review,observed),s=prepared.snapshot
  const app=work.review.edited,review=applicationReview(app,work.review.paid,work.review.accountChecked)
- const issues=[...prepared.issues,...app.issues,...review.credentialIssues,...review.report.issues.filter(i=>i.severity==='error').map(i=>i.message),...review.amounts.filter(a=>a.reason).map(a=>`${a.label}：${a.reason}`)]
+ const issues=[...prepared.issues,...app.issues,...review.credentialIssues,...review.countIssues,...review.report.issues.filter(i=>i.severity==='error').map(i=>i.message),...review.amounts.filter(a=>a.reason).map(a=>`${a.label}：${a.reason}`)]
  if(!review.ready)issues.push('原本・人馬・区分・料金・入金額の確認を完了してください')
  const clubs=s.roster.clubs.filter(c=>c.name===app.club.trim());if(clubs.length>1)issues.push('申込団体を一意に確認できません')
  const clubId=clubs[0]?.id

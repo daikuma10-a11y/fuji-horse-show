@@ -1,3 +1,5 @@
+import {extractWinterEntryCount} from './winter-application-count-extraction'
+import {reviewApplicationEntryCounts,applicationEntryCountAssignments} from './master/application-entry-counts'
 import {horseDeclaration,validHorseDeclaration} from './master/application-credentials'
 import {splitApplicationRiders} from './master/application-entry-input'
 import {readInputXlsx,type InputBook,type InputSheet} from './master/xlsx-input'
@@ -22,7 +24,7 @@ export function extractWinterApplication(book:InputBook,fileName:string,digest:s
  if(!/2026.*Winter.*Grand Prix/i.test(value(summary,'A1')))throw new Error('2026 Winter以外の申込書は取り込めません')
  const rs=riders[0],hs=horses[0],clubRow=rows(rs).find(r=>norm(value(rs,'C'+r))==='団体名')
  if(!clubRow)throw new Error('団体名の欄を確認できません')
- const app:Application={fileName,digest,eventId:WINTER_EVENT_ID,club:value(rs,'D'+clubRow),clubOrigin:origin(rs,'D'+clubRow),people:[],entries:[],amounts:{horse:value(summary,'F6'),jump:value(summary,'F7'),dressage:value(summary,'F8'),total:value(summary,'F10')},amountOrigins:{horse:origin(summary,'F6'),jump:origin(summary,'F7'),dressage:origin(summary,'F8'),total:origin(summary,'F10')},issues:[],sheets:[]}
+ const app:Application={fileName,digest,eventId:WINTER_EVENT_ID,club:value(rs,'D'+clubRow),clubOrigin:origin(rs,'D'+clubRow),people:[],entries:[],entryCounts:[],amounts:{horse:value(summary,'F6'),jump:value(summary,'F7'),dressage:value(summary,'F8'),total:value(summary,'F10')},amountOrigins:{horse:origin(summary,'F6'),jump:origin(summary,'F7'),dressage:origin(summary,'F8'),total:origin(summary,'F10')},issues:[],sheets:[]}
  for(const [s,kind] of [[rs,'rider'],[hs,'horse']] as const){
   const rosterRows:number[]=rows(s).filter(row=>/^\d+$/.test(value(s,'A'+row))&&row<(s===rs?clubRow:68))
   for(const r of rosterRows){
@@ -42,10 +44,13 @@ export function extractWinterApplication(book:InputBook,fileName:string,digest:s
    for(const r of rows(s).filter(r=>r>start&&r<end)){
     const competition=value(s,'C'+r)
     if(!/^(?:[①②③④]|[1-9]|[12]\d|3[0-6])$/.test(competition))continue
+    const countRow=extractWinterEntryCount(s,start,r,competition,jump,cols.map(col=>match('horse',value(s,col+start).replace(/\s*号\s*$/,''))))
+    if(countRow)app.entryCounts!.push(countRow)
     for(const col of cols){
      const raw=value(s,col+r);if(!raw){if(s.cells[col+r]?.formula)app.issues.push(`${s.name}!${col+r}：数式の結果が空欄です。原本で確認してください`);continue}
      const rawHorse=value(s,col+start).replace(/\s*号\s*$/,'').trim()
      for(const [line,part] of splitApplicationRiders(raw,app.people.filter(p=>p.kind==='rider').map(p=>p.name)).entries()){
+      countRow?.entryKeys.push(`${s.name}!${col}${r}:${line}`)
       app.entries.push({key:`${s.name}!${col}${r}:${line}`,competition,rider:match('rider',part.name),horse:match('horse',rawHorse),op:part.op,rawRider:part.raw,rawHorse,origin:origin(s,col+r)})
      }
     }
@@ -79,7 +84,9 @@ export function applicationReview(app:Application,paid:string,checked:boolean){
  const labels={horse:'馬匹登録料',jump:'障害エントリー料',dressage:'馬場エントリー料',total:'合計'}
  const amounts=(Object.keys(labels) as (keyof typeof labels)[]).map(key=>({key,label:labels[key],original:money(app.amounts[key]),calculated:calculated[key],reason:calculated[key]===null?'人馬・会員区分・資格・OPを確認してください':money(app.amounts[key])===null?'原本に保存された計算結果がありません。Excelで再計算・保存するか原本確認後に入力してください':money(app.amounts[key])!==calculated[key]?(key==='horse'?'名簿の馬数×既存の馬匹登録料と一致しません':'追加シート、人数、OP・会員区分、原本の数式を確認してください'):''}))
  const credentialIssues=app.people.filter(p=>p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??'')).map(p=>`${p.name}：グレード宣言を原本で確認して選択してください`)
- return {report,amounts,credentialIssues,ready:!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
+ const countAssignments=applicationEntryCountAssignments(app),entryCounts=reviewApplicationEntryCounts(app),countIssues=entryCounts.flatMap(row=>row.buckets.filter(b=>b.reason).map(b=>b.reason))
+ countIssues.push(...[...countAssignments.values()].filter(a=>a.reason).map(a=>a.reason))
+ return {report,amounts,credentialIssues,entryCounts,countAssignments,countIssues,ready:!countIssues.length&&!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
 }
 export function rosterCandidates(person:ApplicationPerson,data:SharedRoster,club:string){
  return data.entities.filter(e=>e.kind===person.kind&&!e.archived_at&&(person.jef&&person.jef===e.jef_number||norm(person.name)===norm(e.name)||person.reading&&norm(person.reading)===norm(e.reading))).map(entity=>({entity,reason:person.jef&&person.jef===entity.jef_number?'日馬連番号一致':norm(person.name)===norm(entity.name)?'氏名・馬名一致（空白・全半角を除く）':'読み一致',clubs:data.affiliations.filter(a=>a.entity_id===entity.id&&!a.ended_at).map(a=>data.clubs.find(c=>c.id===a.club_id)?.name??''),sameClub:data.affiliations.some(a=>a.entity_id===entity.id&&!a.ended_at&&data.clubs.some(c=>c.id===a.club_id&&c.name===club))})).sort((a,b)=>Number(b.sameClub)-Number(a.sameClub))
@@ -88,6 +95,9 @@ export function applicationDifferences(before:Application,after:Application){
  const differences:{location:string;before:string;after:string;kind:string}[]=[]
  function compare(label:string,a:unknown,b:unknown){if(JSON.stringify(a)!==JSON.stringify(b))differences.push({location:label,before:a===undefined?'（なし）':JSON.stringify(a),after:b===undefined?'（なし）':JSON.stringify(b),kind:a===undefined?'追加候補':b===undefined?'取消候補':'変更候補'})}
  compare('団体名',before.club,after.club)
+ const counts=(app:Application)=>new Map((app.entryCounts??[]).flatMap(row=>row.buckets.map(bucket=>[`${row.key}:${bucket.kind}`,{location:`${bucket.origin.sheet}!${bucket.origin.cell}・第${row.competition}競技 集計人数`,value:bucket.origin.value}] as const)))
+ const beforeCounts=counts(before),afterCounts=counts(after)
+ for(const key of new Set([...beforeCounts.keys(),...afterCounts.keys()]))compare((afterCounts.get(key)??beforeCounts.get(key))!.location,beforeCounts.get(key)?.value,afterCounts.get(key)?.value)
  for(const section of ['people','entries'] as const){
   const a=new Map(before[section].map(p=>[p.key,p])),b=new Map(after[section].map(p=>[p.key,p]))
   for(const key of new Set([...a.keys(),...b.keys()])){
