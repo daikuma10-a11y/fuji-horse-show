@@ -1,4 +1,5 @@
 import type {RosterCorrectionInput} from './winter-roster-correction'
+import {projectPreparedRoster,preparedCorrectionSaved} from './winter-application-roster-stage'
 import {credentialValue,credentialLabel,credentialRequestId,credentialHash,validCredential,type WinterCredential,type CredentialExpectation,type CredentialSave} from './winter-application-credentials'
 import {readApplicationDraft,type ApplicationDraft} from './winter-application-draft'
 import {applicationReview,applicationSource,normalizeApplicationName,rosterCandidates} from './winter-application'
@@ -133,10 +134,11 @@ function entryCheckpoint(work:ApplicationRegistration,s:ApplicationSnapshot,club
  bindings[importBindingKey('団体','ORG')]=orgId
  return {kind:'winter-import-registration',version:1,eventId:WINTER_EVENT_ID,reference:work.review.reference,source:applicationSource(work.review.edited,work.review.paid,work.review.accountChecked),bindings,states:work.entries?.states??{}}
 }
-export async function reviewApplicationRegistration(value:ApplicationRegistration,s:ApplicationSnapshot){
- const work=readApplicationRegistration(value);validateSnapshot(s)
+export async function reviewApplicationRegistration(value:ApplicationRegistration,observed:ApplicationSnapshot){
+ const work=readApplicationRegistration(value);validateSnapshot(observed)
+ const prepared=projectPreparedRoster(work.review,observed),s=prepared.snapshot
  const app=work.review.edited,review=applicationReview(app,work.review.paid,work.review.accountChecked)
- const issues=[...app.issues,...review.credentialIssues,...review.report.issues.filter(i=>i.severity==='error').map(i=>i.message),...review.amounts.filter(a=>a.reason).map(a=>`${a.label}：${a.reason}`)]
+ const issues=[...prepared.issues,...app.issues,...review.credentialIssues,...review.report.issues.filter(i=>i.severity==='error').map(i=>i.message),...review.amounts.filter(a=>a.reason).map(a=>`${a.label}：${a.reason}`)]
  if(!review.ready)issues.push('原本・人馬・区分・料金・入金額の確認を完了してください')
  const clubs=s.roster.clubs.filter(c=>c.name===app.club.trim());if(clubs.length>1)issues.push('申込団体を一意に確認できません')
  const clubId=clubs[0]?.id
@@ -180,7 +182,7 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
   if(value&&work.credentials&&(work.credentials[p.key]?.requestId!==requestId||!saved&&(current?.request_id??null)!==expected))issues.push(`${p.name}：保存開始後に資格・グレードが変わっています。古い記録で上書きせず、最新の申込書で確認してください`)
   return {key:p.key,name:p.name,kind:p.kind,value,previous:current?.value??'',saved,requestId,expected:work.credentials?.[p.key]?.expected??current?.request_id??null}
  }))
- return {ready:issues.length===0,issues,people:rows,clubId,participating,entries,credentials,credentialsComplete:credentials.every(c=>!c.value||c.saved)}
+ return {ready:issues.length===0,issues,people:rows,clubId,participating,entries,credentials,credentialsComplete:credentials.every(c=>!c.value||c.saved),pendingRoster:prepared.pending}
 }
 export async function resolveUnknownApplicationPerson(value:ApplicationRegistration,key:string,entityId:string,s:ApplicationSnapshot){
  const work=readApplicationRegistration(value);validateSnapshot(s)
@@ -199,6 +201,20 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
  const start=await check()
  if(!work.credentials)work.credentials=Object.fromEntries(start.plan.credentials.filter(c=>c.value).map(c=>[c.key,{requestId:c.requestId,expected:c.expected}]))
  persist()
+ // The administrator approved these corrections in the roster stage. Preserve their
+ // request IDs/expectations and complete authoritative readback before creating entries.
+ for(const input of Object.values(work.review.rosterPreparation?.corrections??{})){
+  if(deps.stop())return work
+  const observed=await deps.load(),prepared=projectPreparedRoster(work.review,observed)
+  if(prepared.issues.length)throw new Error(prepared.issues.join('\n'))
+  if(preparedCorrectionSaved(input,observed))continue
+  persist()
+  let writeError:unknown
+  try{await deps.correctPerson(input)}catch(error){writeError=error}
+  const after=await deps.load()
+  if(!preparedCorrectionSaved(input,after))throw new Error((writeError instanceof Error?writeError.message:'人馬名簿の訂正結果を確認できません')+'。出番の登録前に停止しました。登録結果を再確認してください')
+  persist()
+ }
  for(const p of work.review.edited.people){
   if(deps.stop())return work
   const {plan}=await check(),row=plan.people.find(r=>r.key===p.key)!

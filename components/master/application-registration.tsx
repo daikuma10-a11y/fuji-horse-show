@@ -1,5 +1,6 @@
 'use client'
 
+import {ApplicationAffiliationFields} from './application-affiliation'
 import type {ApplicationPerson,IdentityCandidate,RosterAffiliationEdit} from '@/lib/master/application'
 
 type IdentityCorrection={person:ApplicationPerson;accepted?:boolean;participantCount?:number;original?:ApplicationPerson;selected:string;club:string;candidates:IdentityCandidate[];affiliation:RosterAffiliationEdit;clubs:{id:string;name:string}[];currentClubs:{id:string;name:string}[]}
@@ -12,7 +13,7 @@ export type ApplicationRegistrationPanelProps={
  onCorrectAffiliation?:(key:string,value:RosterAffiliationEdit)=>void
  accountChecked?:boolean;onAccountChecked?:(value:boolean)=>void;onRoster?:()=>void
  onCorrectPerson?:(key:string,patch:Partial<ApplicationPerson>)=>void;onCorrectChoice?:(key:string,id:string)=>void;onUseExisting?:(key:string,id:string)=>void
- complete?:boolean;onStartlist?:()=>void;onSettlement?:()=>void;onNext?:()=>void
+ rosterCorrectionCount?:number;complete?:boolean;onStartlist?:()=>void;onSettlement?:()=>void;onNext?:()=>void
  canReview:boolean;canOpenSaved:boolean;accepted:boolean;singleOperator:boolean
  reference:string;originalTotal:string;paid:string;participantState:string;savedSummary:string;message:string;error:string
  people:(ResultRow&{resolve:boolean;candidates:IdentityCandidate[];selected:string;correction?:IdentityCorrection})[]
@@ -33,8 +34,7 @@ const input='mt-1 min-h-11 w-full min-w-0 max-w-full rounded-lg border-2 border-
 function IdentityCorrectionFields({value,p}:{value:IdentityCorrection;p:ApplicationRegistrationPanelProps}){
  const person=value.person,selected=value.candidates.find(c=>c.id===value.selected)
  const affiliation=value.affiliation,destination=affiliation.source==='application'?value.club:affiliation.source==='existing'?value.clubs.find(c=>c.id===affiliation.clubId)?.name??'':affiliation.clubName.trim()
- const ending=value.currentClubs.filter(c=>affiliation.endClubIds.includes(c.id)),afterClubs=[...new Set([...value.currentClubs.filter(c=>!affiliation.endClubIds.includes(c.id)).map(c=>c.name),...(destination?[destination]:[])])]
- const changeAffiliation=(patch:Partial<RosterAffiliationEdit>)=>p.onCorrectAffiliation?.(person.key,{...affiliation,...patch,entityId:value.selected})
+ const afterClubs=[...new Set([...value.currentClubs.filter(c=>!affiliation.endClubIds.includes(c.id)).map(c=>c.name),...(destination?[destination]:[])])]
  const changed=(key:'name'|'reading'|'jef')=>!!selected&&person[key].trim()!==selected[key].trim()
  return <fieldset disabled={p.busy||p.frozen} className="mt-3 min-w-0 space-y-3 rounded-lg border-2 border-amber-500 bg-amber-50 p-3">
   <legend className="px-1 font-bold">この場で訂正</legend>
@@ -53,18 +53,7 @@ function IdentityCorrectionFields({value,p}:{value:IdentityCorrection;p:Applicat
   </label>)}</div>
   <label className={`flex gap-2 rounded-lg p-2 ${person.jef&&!person.checked?'bg-amber-200':'bg-white'}`}><input type="checkbox" checked={person.checked} onChange={e=>p.onCorrectPerson?.(person.key,{checked:e.target.checked})}/>日馬連番号を確認済み{!person.jef?'（番号なし）':''}</label>
   <details className="text-sm"><summary>Excel原本の記載</summary><p>{value.original?.name} ／ 読み {value.original?.reading||'記載なし'} ／ 日馬連 {value.original?.jef||'なし'}</p><button type="button" className={button+' mt-2 !text-base'} onClick={()=>p.onUseOriginal?.(person.key)}>Excel原本の名前・読み・番号を入力へ戻す</button></details>
-  {selected&&<fieldset className="space-y-3 rounded-lg border-2 border-amber-500 bg-white p-3"><legend className="px-1 font-bold">所属先の訂正・クラブ間の移動</legend>
-   <label className="block">所属先の指定方法<select aria-label={`${person.key} 所属先の指定方法`} className={input} value={affiliation.source} onChange={e=>changeAffiliation({source:e.target.value as RosterAffiliationEdit['source'],clubId:'',clubName:'',endClubIds:[]})}>
-    <option value="application">取り込み中のクラブ：{value.club}（第一候補）</option><option value="existing">登録済みクラブの一覧から選ぶ</option><option value="manual">クラブ名を手入力する</option>
-   </select></label>
-   {affiliation.source==='existing'&&<label className="block">登録済みの所属先クラブ<select aria-label={`${person.key} 登録済みの所属先クラブ`} className={input} value={affiliation.clubId} onChange={e=>changeAffiliation({clubId:e.target.value,endClubIds:affiliation.endClubIds.filter(id=>id!==e.target.value)})}><option value="">クラブを選択してください</option>{value.clubs.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}
-   {affiliation.source==='manual'&&<label className="block">所属先のクラブ名<input aria-label={`${person.key} 所属先のクラブ名`} className={input} value={affiliation.clubName} maxLength={100} onChange={e=>changeAffiliation({clubName:e.target.value,endClubIds:affiliation.endClubIds.filter(id=>value.clubs.find(c=>c.id===id)?.name!==e.target.value.trim())})}/><span className="text-sm">同じ名前のクラブがあれば既存の登録を使います。</span></label>}
-   {value.currentClubs.length>0?<div><p className="font-bold">移動前の所属（終了するクラブにチェック）</p><p className="text-sm">チェックしない所属は兼所属として残します。</p>{value.currentClubs.map(c=><label className="mt-2 flex gap-2" key={c.id}><input aria-label={`${person.key} ${c.name}への所属を終了`} type="checkbox" checked={affiliation.endClubIds.includes(c.id)} disabled={c.name===destination} onChange={e=>changeAffiliation({endClubIds:e.target.checked?[...affiliation.endClubIds,c.id]:affiliation.endClubIds.filter(id=>id!==c.id)})}/>{c.name}{c.name===destination?'（移動先・継続）':'への所属を終了する'}</label>)}</div>:<p>現在の所属：なし</p>}
-   <p className="font-bold">保存後の所属：{afterClubs.join('、')||'所属先を選択してください'}</p>
-   {ending.length>0&&<p className="rounded bg-amber-100 p-2">終了する所属：{ending.map(c=>c.name).join('、')}。移動前の所属は履歴として残します。</p>}
-   <p className="text-sm">登録済みの出番・請求先は変更しません。</p>
-   {destination&&destination!==value.club&&<p className="rounded bg-blue-50 p-2">この申込の団体は「{value.club}」です。名簿の所属だけを「{destination}」へ訂正します。取り込み時は申込団体への所属または保存済みの参加登録を確認します。</p>}
-  </fieldset>}
+  {selected&&<ApplicationAffiliationFields personKey={person.key} applicationClub={value.club} affiliation={affiliation} clubs={value.clubs} currentClubs={value.currentClubs} onChange={v=>p.onCorrectAffiliation?.(person.key,v)}/>}
   {selected&&p.onSaveRoster&&<div className="space-y-3 rounded-lg border-2 border-blue-800 bg-white p-3">
    <h5 className="font-bold">既存名簿を正しい内容へ訂正して保存</h5>
    <dl className="space-y-2">{([['name','名前・馬名'],['reading','フリガナ'],['jef','日馬連番号']] as const).map(([key,label])=><div key={key} className={changed(key)?'rounded bg-amber-100 p-2':'p-2'}><dt className="font-bold">{label}</dt><dd>変更前：{selected[key]||'なし'} → 変更後：{person[key]||'なし'}</dd></div>)}<div className="p-2"><dt className="font-bold">所属</dt><dd>変更前：{selected.clubs.join('、')||'所属なし'} → 変更後：{afterClubs.join('、')||'未選択'}</dd></div></dl>
@@ -98,6 +87,7 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
   {(p.hasPlan||p.hasCheckpoint||p.hasCorrections||p.reviewStale)&&<>
    <p className="text-sm break-all">資料番号：{p.reference} ／ {p.hasPlan?'最新の照合結果':p.reviewStale?'訂正中・未再照合':'この端末の保存記録・未再照合'}</p>
    {p.hasPlan&&<div className={`rounded-xl border-2 p-4 ${p.complete?'border-emerald-700 bg-emerald-50':'border-blue-700 bg-blue-50'}`}><p className="text-xl font-bold">登録済み {existing}件 ／ {p.ready?'今回取り込む':'要確認・未登録'} {remaining}件</p><p>登録済みの同じ出番は追加請求しません。{p.ready&&remaining>0?`今回追加するエントリー料金：${extra.toLocaleString('ja-JP')}円。`:''}</p>{p.ready&&remaining>0&&<p>この金額はエントリー料金だけです。馬匹登録料と団体全体の請求は取り込み後に精算画面で確認してください。</p>}</div>}
+   {!!p.rosterCorrectionCount&&<p className="rounded-lg border-2 border-blue-700 bg-blue-50 p-3 font-bold">人馬の仮確定で確認した名簿の訂正 {p.rosterCorrectionCount}件を先に保存し、保存結果を確認してから出番を取り込みます。</p>}
    <div className="@container min-w-0"><table className={table}><caption className="mb-2 text-left text-xl font-bold">人馬の登録確認・訂正</caption><colgroup><col style={{width:'18%'}}/><col style={{width:'18%'}}/><col style={{width:'64%'}}/></colgroup><thead className="@max-[760px]:hidden"><tr>{['人馬','状態・登録番号','差分・結果不明の照合'].map(t=><th className={cell} key={t}>{t}</th>)}</tr></thead><tbody>{p.people.map(row=><tr key={row.key} className={resultRow}>
     <td className={cell}>{row.label}</td><td className={cell}>{row.state}{row.id&&<details className="text-sm"><summary>登録番号</summary><p className="break-all">{row.id}</p></details>}</td>
     <td className={issueCell}>{p.reviewStale&&row.issues.length>0&&<p className="font-bold">前回の確認事項</p>}{row.issues.map((issue,i)=><p key={i} className="mb-2 rounded-lg bg-amber-100 p-2">{issue}</p>)}{row.correction&&!p.frozen&&<details open={row.issues.length>0||p.reviewStale||undefined}><summary className="cursor-pointer font-bold">名簿の名前・番号・所属を訂正する</summary><IdentityCorrectionFields value={row.correction} p={p}/></details>}
@@ -121,10 +111,10 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
    </tr>)}</tbody></table></div>
    <p>確認した原本請求総額：{p.originalTotal||'未確認'}円 ／ 別途確認した入金額：{p.paid||'未確認'}円。出番の計算額と分けて再開記録に保持します。入金処理は行いません。</p></>}
    {p.hasPlan&&!p.complete&&<>
-    <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・所属・資格・グレード宣言・料金と照合結果を確認しました。</label>
+    <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・名簿の訂正・所属・資格・グレード宣言・料金と照合結果を確認しました。</label>
     <label className="flex gap-3"><input type="checkbox" checked={p.singleOperator} disabled={p.busy||!p.ready} onChange={e=>p.onSingleOperator(e.target.checked)}/>この申込はこの画面だけで登録し、人馬登録など別の画面・端末・管理者と同時に登録しません。</label>
     <p>別画面・別端末・別ブラウザーとの同時操作は自動では防げません。途中再開では保存済みを照合し、未登録の分だけを処理します。</p>
-    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>{p.running?'取り込み中…':remaining?`確認した${remaining}件を取り込む`:'確認した資格・グレードを保存する'}</button>
+    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>{p.running?'取り込み中…':remaining?`確認した${remaining}件を取り込む`:p.rosterCorrectionCount?'仮確定した人馬名簿の訂正を保存する':'確認した資格・グレードを保存する'}</button>
    </>}
   </>}
   {p.complete&&<div className="flex flex-wrap gap-3">{p.onStartlist&&<button type="button" className={primaryButton} onClick={p.onStartlist}>出番表を見る</button>}{p.onSettlement&&<button type="button" className={button} onClick={p.onSettlement}>精算を見る</button>}<p className="w-full">請求への反映を確認できます。ここで確認した入金額は、精算の入金登録には使いません。</p></div>}

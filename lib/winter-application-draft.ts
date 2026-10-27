@@ -2,6 +2,7 @@ import type {Application,ApplicationPerson,ApplicationEntry,Origin,RosterAffilia
 import {WINTER_EVENT_ID,winterStorageKey} from './winter-event'
 import {autofillApplicationPerson,type JefRiderRecord} from './master/application-autofill'
 import {manualApplicationOrigin} from './master/application-additions'
+import {readApplicationRosterPreparation,retainRosterPreparation,type ApplicationRosterPreparation} from './winter-application-roster-stage'
 
 /** Review-only checkpoint. It must never be interpreted as a database save result. */
 export type ApplicationDraft = {
@@ -9,6 +10,7 @@ export type ApplicationDraft = {
  original:Application;edited:Application;reference:string;paid:string;accountChecked:boolean
  choices:Record<string,string>
  rosterEdits?:Record<string,RosterAffiliationEdit>
+ rosterPreparation?:ApplicationRosterPreparation
 }
 const failure=()=>new Error('WinterのExcel確認再開ファイルを確認できません。元のファイルを保持してください')
 function object(v:unknown):Record<string,unknown>{if(!v||typeof v!=='object'||Array.isArray(v))throw failure();return v as Record<string,unknown>}
@@ -49,7 +51,7 @@ export function createApplicationDraft(app:Application):ApplicationDraft{
 export function autofillApplicationDraft(draft:ApplicationDraft,rows:JefRiderRecord[]):ApplicationDraft{
  const people=draft.edited.people.map(p=>autofillApplicationPerson(p,rows))
  if(JSON.stringify(people)===JSON.stringify(draft.edited.people))return draft
- return {...draft,edited:{...draft.edited,people},accountChecked:false}
+ return retainRosterPreparation({...draft,edited:{...draft.edited,people},accountChecked:false})
 }
 export function readApplicationDraft(v:unknown):ApplicationDraft{
  const d=object(v)
@@ -85,7 +87,9 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
   if(!edited.people.some(p=>p.key===key)||!uuid(entityId)||choices[key]!==entityId||clubId&&!uuid(clubId)||endClubIds.some(id=>!uuid(id))||new Set(endClubIds).size!==endClubIds.length||!['application','existing','manual'].includes(String(e.source)))throw failure()
   rosterEdits[key]={entityId,source:e.source as RosterAffiliationEdit['source'],clubId,clubName:string(e.clubName,100),endClubIds}
  }
- return {kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original,edited,reference:string(d.reference,100),paid:string(d.paid,100),accountChecked:flag(d.accountChecked),choices,...(d.rosterEdits===undefined?{}:{rosterEdits})}
+ const result:ApplicationDraft={kind:'winter-application-review',version:1,eventId:WINTER_EVENT_ID,original,edited,reference:string(d.reference,100),paid:string(d.paid,100),accountChecked:flag(d.accountChecked),choices,...(d.rosterEdits===undefined?{}:{rosterEdits})}
+ if(d.rosterPreparation!==undefined)result.rosterPreparation=readApplicationRosterPreparation(d.rosterPreparation,result)
+ return result
 }
 export function parseApplicationDraft(text:string){if(text.length>8_000_000)throw failure();return readApplicationDraft(JSON.parse(text))}
 export function serializeApplicationDraft(draft:ApplicationDraft){

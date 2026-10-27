@@ -1,3 +1,4 @@
+import {retainRosterPreparation} from './winter-application-roster-stage'
 import type {Application} from './master/application'
 import {readApplicationDraft,type ApplicationDraft} from './winter-application-draft'
 import type {ApplicationRegistration} from './winter-application-registration'
@@ -18,5 +19,5 @@ export function credentialReviewUpgrade(app:Application,draft:ApplicationDraft,r
  }
  if(record)next.reference=`WINTER-CREDENTIALS-${app.digest.slice(0,32)}`
  next.accountChecked=false
- return readApplicationDraft(next)
+ return readApplicationDraft(retainRosterPreparation(next))
 }
