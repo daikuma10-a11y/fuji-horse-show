@@ -1,6 +1,8 @@
 'use client'
 
 import {MasterApplicationReviewRow,MasterApplicationReviewField} from './application-review-row'
+import {ApplicationAffiliationFields,type ApplicationAffiliationValue} from './application-affiliation'
+import type {RosterAffiliationEdit} from '@/lib/master/application'
 import {HORSE_DECLARATIONS} from '@/lib/master/application-credentials'
 
 import type {Application,ApplicationPerson,ApplicationEntry,ApplicationDifference,IdentityCandidate} from '@/lib/master/application'
@@ -48,6 +50,9 @@ export function MasterApplicationReview(p:{
  onReference:(s:string)=>void;onClub:(s:string)=>void;onPaid:(s:string)=>void;onAccountChecked:(v:boolean)=>void
  onPerson:(key:string,patch:Partial<ApplicationPerson>)=>void;onEntry:(key:string,patch:Partial<ApplicationEntry>)=>void
  onAddEntry?:(sourceKey?:string)=>void;onAddPerson?:(kind:ApplicationPerson['kind'])=>void;onRemoveAddition?:(key:string)=>void
+ affiliations?:Record<string,ApplicationAffiliationValue>;onAffiliation?:(key:string,value:RosterAffiliationEdit)=>void
+ rosterPrepared?:boolean;onPrepareRoster?:()=>void
+ rosterChanges?:{key:string;name:string;changes:{label:string;before:string;after:string}[]}[]
  onAmount:(key:keyof Application['amounts'],value:string)=>void;onChoice:(key:string,value:string)=>void
  competitions:{number:string;name:string}[]
 }){
@@ -64,7 +69,7 @@ export function MasterApplicationReview(p:{
   <h3 className="text-2xl font-bold">Excel申込書の取り込み</h3>
   <p>{p.eventName}</p>
   <ol aria-label="取り込みの進み具合" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{['① 申込書を読む','② 内容を確認・訂正','③ 取り込む','④ 反映結果'].map((label,i)=><li key={label} aria-current={stage===i+1?'step':undefined} className={`rounded-lg border-2 p-3 font-bold ${stage===i+1?'border-blue-800 bg-blue-800 text-white':stage>i+1?'border-emerald-700 bg-emerald-50':'border-slate-200 bg-slate-50'}`}>{label}{stage>i+1?' ✓':''}</li>)}</ol>
-  <div className="rounded-xl border-l-4 border-blue-800 bg-blue-50 p-4" role="status"><strong>次にすること</strong><p>{p.busy?'処理中です。この画面でお待ちください。':stage===4?'取り込み結果を確認し、出番表・精算を開けます。':p.frozen?'③で登録結果を再確認してください。確定時の入力は保存されています。':stage===3?p.registrationNeedsCorrection?'③の黄色い訂正欄を確認し、「訂正内容を再照合する」を押してください。':'③の登録対象と確認欄を確認して「取り込む」を押してください。':app?blocking.length?`②に確認が必要な項目が${blocking.length}件あります。下の一覧から移動できます。`:'②の内容を確認できたら「取込内容を確認する」を押してください。':'Excelを選び「申込書を読み込む」を押してください。'}</p>
+  <div className="rounded-xl border-l-4 border-blue-800 bg-blue-50 p-4" role="status"><strong>次にすること</strong><p>{p.busy?'処理中です。この画面でお待ちください。':stage===4?'取り込み結果を確認し、出番表・精算を開けます。':p.frozen?'③で登録結果を再確認してください。確定時の入力は保存されています。':stage===3?p.registrationNeedsCorrection?'③の黄色い訂正欄を確認し、「訂正内容を再照合する」を押してください。':'③の登録対象と確認欄を確認して「取り込む」を押してください。':app?p.onPrepareRoster&&!p.rosterPrepared?'先に②-1の人馬と登録先を確認して仮確定します。次に、その人馬でエントリーを確認します。':blocking.length?`②に確認が必要な項目が${blocking.length}件あります。下の一覧から移動できます。`:'②の内容を確認できたら「取込内容を確認する」を押してください。':'Excelを選び「申込書を読み込む」を押してください。'}</p>
    {!p.busy&&app&&!p.frozen&&stage===2&&<button className={primaryButton+' mt-3'} type="button" onClick={()=>blocking.length?go(blocking[0].target):p.onReview?.()}>{blocking.length?'最初の確認箇所へ':'取込内容を確認する'}</button>}
   </div>
   <div id="application-source" tabIndex={-1} className="space-y-3 rounded-xl border-2 border-dashed border-blue-700 p-4" onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='copy'}} onDrop={e=>{e.preventDefault();if(!p.busy)p.onFiles(e.dataTransfer.files)}}>
@@ -105,7 +110,7 @@ export function MasterApplicationReview(p:{
     </div>
     <details id="application-reference" tabIndex={-1} className="rounded-lg border p-3"><summary className="cursor-pointer font-semibold">資料番号（自動発行済み・通常は入力不要）</summary><p className="my-2">同じファイルには同じ番号を使います。追加・訂正版は別番号になり、既存の出番と照合します。</p><label>資料番号<input className={field} maxLength={100} value={p.reference} onChange={e=>p.onReference(e.target.value)}/></label></details>
    </fieldset>
-    <section aria-label="人馬名簿：原本と読取・訂正値" className="min-w-0 space-y-4"><h5 className="text-xl font-bold">選手・馬の確認</h5><p>表の入力欄でそのまま訂正できます。団体名が未入力でも、名前・フリガナ・日馬連番号から候補を選べます。所属は取り込み前に確認します。</p>
+    <section aria-label="人馬名簿：原本と読取・訂正値" className="min-w-0 space-y-4"><h5 className="text-xl font-bold">②-1 選手・馬の確認と仮確定</h5><p>ここは今回の申込の下書きです。「登録済み」は選んだ人馬が既存名簿にあることを示し、この表で直した内容の保存完了を意味しません。団体名が未入力でも、名前・フリガナ・日馬連番号から候補を選べます。</p>
      <p className="flex flex-wrap gap-2 text-sm"><span className="rounded border-2 border-amber-600 bg-amber-100 px-2 py-1">黄色：取り込み前に確認・訂正が必要</span><span className="rounded border-2 border-sky-600 bg-sky-50 px-2 py-1">水色：補足・任意の確認</span></p>
      {(['rider','horse'] as const).map(kind=>{const people=app.people.filter(person=>person.kind===kind),title=kind==='rider'?'選手一覧':'馬一覧',headers=kind==='rider'?['選手名・登録先','フリガナ','日馬連番号','所有資格級','乗馬協会','指導者協会']:['馬名・登録先','フリガナ','日馬連番号','グレード宣言'];return <section key={kind} aria-label={title} className="min-w-0 space-y-2">
       <div className="flex flex-wrap items-center gap-3"><h6 className="text-lg font-bold">{title}（{people.length}{kind==='rider'?'名':'頭'}）</h6>{p.onAddPerson&&!p.frozen&&<button type="button" className={button} disabled={p.busy||app.people.length>=50} onClick={()=>p.onAddPerson?.(kind)}>{kind==='rider'?'選手':'馬'}を追加</button>}</div>
@@ -122,6 +127,7 @@ export function MasterApplicationReview(p:{
         {selected&&<p className="mt-1 text-xs">登録済み：{selected.name} ／ {selected.clubs.join('、')||'所属なし'} ／ 日馬連 {selected.jef.trim()||'なし'}</p>}
         {!p.rosterLoaded&&<div className="rounded bg-amber-100 p-2 text-xs"><p>人馬名簿を読み込めていないため、候補を選択できません。団体名が空欄でも読み込めます。</p><button type="button" className="mt-1 font-bold underline" onClick={p.onLoadRoster}>人馬候補を読み込む</button></div>}
        </>)}
+       {p.affiliations?.[person.key]&&p.onAffiliation&&<details className="mt-2 text-xs"><summary className="cursor-pointer font-bold">所属を確認・変更</summary><ApplicationAffiliationFields personKey={person.key} applicationClub={app.club} {...p.affiliations[person.key]} onChange={v=>p.onAffiliation?.(person.key,v)}/></details>}
        <details className="text-xs"><summary className="cursor-pointer">Excel原本・候補の情報</summary><p>{old.origin.sheet}!{old.origin.cell} ／ {old.name} ／ 読み：{old.reading||'空欄'} ／ 日馬連：{old.jef||'空欄'}{person.kind==='rider'?` ／ 資格：${old.grade||'未選択'}`:` ／ グレード宣言：${old.horseGrade||'記載なし'}`}{old.credentialOrigin&&` ／ ${old.credentialOrigin.sheet}!${old.credentialOrigin.cell}：${old.credentialOrigin.value||'空欄'}`}</p>
         {p.frozen?<p>確定時の対応を保持しています。</p>:p.rosterLoaded&&candidates.length===0?<p>一致候補なし。別の表記で登録されていないか確認してください。</p>:candidates.map(c=><p key={c.id}>既存候補：{c.name} ／ {c.reason} ／ 所属 {c.clubs.join('、')||'なし'}</p>)}
         {selected&&<p>既存の読み：{selected.reading||'空欄'}。候補の番号を入力欄に反映します。名前だけで統合しません。</p>}
@@ -144,6 +150,16 @@ export function MasterApplicationReview(p:{
      })}
       </tbody></table></div></section>})}
     </section>
+    {p.onPrepareRoster&&!p.frozen&&<section id="application-roster-stage" tabIndex={-1} className={`space-y-3 rounded-xl border-2 p-4 ${p.rosterPrepared?'border-emerald-700 bg-emerald-50':'border-blue-700 bg-blue-50'}`}>
+     <h5 className="text-xl font-bold">{p.rosterPrepared?'人馬は仮確定済みです':'先に人馬を仮確定してください'}</h5>
+     <p>名前の空白・全半角や読みのひらがな・カタカナだけの違いは、選択した既存名簿の表記にそろえます。下の訂正内容は最後の「取り込む」で共通名簿とWinterの同じ人馬へ反映します。登録済みの出番・請求先・料金は保持します。</p>
+     {!!p.rosterChanges?.length&&<ul className="space-y-2">{p.rosterChanges.map(row=><li key={row.key} className="rounded-lg bg-amber-100 p-3"><strong>{row.name}</strong>{row.changes.map((c,i)=><p key={i}>{c.label}：{c.before||'なし'} → {c.after||'なし'}</p>)}</li>)}</ul>}
+     <p>仮確定では下書きだけを保存します。確定した人馬を全エントリーへ引き継ぎ、候補が一つに決まらない行だけ確認を残します。</p>
+     <button type="button" className={primaryButton} disabled={p.busy||!p.rosterLoaded} onClick={p.onPrepareRoster}>{p.rosterPrepared?'人馬を再確認してエントリーへ':'確認した人馬を仮確定 → エントリーへ'}</button>
+    </section>}
+    <fieldset disabled={p.busy||!!p.frozen||!!p.onPrepareRoster&&!p.rosterPrepared} className="min-w-0 space-y-5">
+    <legend className="text-xl font-bold">②-2 仮確定した人馬でエントリーを確認</legend>
+    {p.onPrepareRoster&&!p.rosterPrepared&&<p className="rounded-lg bg-blue-50 p-3">上の人馬を仮確定すると、エントリーを追加・訂正できます。</p>}
     <section id="application-entries" tabIndex={-1} aria-label="エントリー確認一覧" className="min-w-0 space-y-3"><h5 className="text-xl font-bold">エントリー確認一覧（全{app.entries.length}件）</h5>
      <div className="flex flex-wrap items-center gap-3">{p.onAddEntry&&!p.frozen&&<button type="button" className={button} disabled={p.busy||app.entries.length>=5000} onClick={()=>p.onAddEntry?.()}>出番を追加</button>}<p className="text-sm">同じ馬に複数の選手が乗る場合は、選手ごとに1行です。各行の「同じ競技・馬に選手を追加」から補えます。</p></div>
      <p>要確認：{app.entries.filter(e=>notes(applicationEntryTarget(e.key)).some(t=>t.blocking)).length}行。競技・選手・馬・OPを表の中で訂正できます。所属は今回の申込団体です。</p>
@@ -177,6 +193,7 @@ export function MasterApplicationReview(p:{
      ]}/>})}</tbody></table></div>
     </section>
     <div id="application-payment" tabIndex={-1} className={panel('application-payment')}><label className="block">別途確認した入金額（未入金と確認できた場合は0）<input aria-label="別途確認した入金額（確認した額を入力。未入金と確認できた場合は0）" className={field} inputMode="numeric" value={p.paid} onChange={e=>p.onPaid(e.target.value)}/></label><p className="mt-2">振込予定日から入金済みとは判断しません。この欄は確認記録です。精算の入金登録は別途行います。</p><label className="mt-3 flex items-center gap-3"><input className="size-5" type="checkbox" checked={p.accountChecked} onChange={e=>p.onAccountChecked(e.target.checked)}/>原本請求額と、別途確認した入金額を確認しました</label>{notices('application-payment')}</div>
+    </fieldset>
    </fieldset>
    {!p.frozen&&<>
     <button type="button" className={primaryButton+' w-full'} disabled={p.busy||!!blocking.length||!p.review?.ready} onClick={p.onReview}>取込内容を確認する → ③へ</button>
