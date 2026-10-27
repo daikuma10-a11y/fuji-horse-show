@@ -1,6 +1,7 @@
 'use client'
 
 import {useEffect,useRef,useState} from 'react'
+import type {ApplicationImportFeedback,ApplicationImportProgress} from '@/lib/master/application-import-status'
 import type {ApplicationRegistrationPanelProps} from './master/application-registration'
 import {rosterCorrectionInput,rosterCorrectionMatches,type RosterCorrectionInput} from '@/lib/winter-roster-correction'
 import {applicationDifferences,applicationReview,rosterCandidates} from '@/lib/winter-application'
@@ -11,6 +12,9 @@ import {winterStorageKey} from '@/lib/winter-event'
 import type {AdminSession} from '@/lib/supabase-rest'
 
 type Plan=Awaited<ReturnType<typeof reviewApplicationRegistration>>
+const completePlan=(plan:Plan,work:ApplicationRegistration)=>plan.ready&&!plan.pendingRoster.length&&plan.credentialsComplete&&plan.participating&&work.review.edited.entries.length>0&&plan.entries?.rows.length===work.review.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered')
+function observedProgress(plan:Plan,work:ApplicationRegistration):ApplicationImportProgress{return {phase:'verifying',detail:'保存結果を確認しました',peopleConfirmed:plan.people.filter(p=>p.state==='registered'&&!plan.pendingRoster.some(r=>r.key===p.key)).length,peopleTotal:work.review.edited.people.length,entriesConfirmed:plan.entries?.rows.filter(r=>r.state==='registered').length??0,entriesTotal:work.review.edited.entries.length}}
+function focusFeedback(){if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{const el=document.getElementById('application-import-status');el?.scrollIntoView({block:'center',behavior:'smooth'});el?.focus({preventScroll:true})})}
 const copy=<T,>(v:T):T=>structuredClone(v)
 // In-progress edits may be invalid; invalidate confirmation without throwing during render.
 function signature(d:ApplicationDraft){try{return JSON.stringify(readApplicationDraft(d))}catch{return null}}
@@ -34,13 +38,14 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const [snapshot,setSnapshot]=useState<ApplicationSnapshot|null>(null),[busy,setBusy]=useState(false),[running,setRunning]=useState(false)
  const [accepted,setAccepted]=useState(false),[singleOperator,setSingleOperator]=useState(false),[choices,setChoices]=useState<Record<string,string>>({})
  const [correctionAccepted,setCorrectionAccepted]=useState<Record<string,boolean>>({})
+ const [feedback,setFeedback]=useState<(ApplicationImportFeedback&{signature:string|null})|null>(null)
  const [message,setMessage]=useState(''),[error,setError]=useState('')
  const current=useRef<ApplicationRegistration|null>(null),expected=useRef<string|null>(null),lock=useRef(false),stop=useRef(false)
  const alive=useRef(true)
  const services=()=>winterApplicationServices(p.session,p.onSession)
  const activeReview=work?.review??p.draft
  const shown=preview&&activeReview&&signature(preview.work.review)===signature(activeReview)?preview:null
- useEffect(()=>{if(!p.draft)setLastInspection(null);if(!current.current){setCorrectionAccepted({});setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
+ useEffect(()=>{if(!p.draft){setLastInspection(null);setFeedback(null)};if(!current.current){setCorrectionAccepted({});setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setChoices({})}},[p.draft])
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;stop.current=true}},[])
  function remember(value:ApplicationRegistration){const clean=readApplicationRegistration(value);current.current=clean;setWork(clean);return clean}
  function persist(value:ApplicationRegistration){
@@ -67,17 +72,31 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   if(raw){const saved=parseApplicationRegistration(raw);frozenMatch(saved,next);expected.current=raw;remember(saved);p.onAdopt(saved.review);return saved}
   expected.current=null;return next
  }
- async function action(task:()=>Promise<void>|void){
+ async function action(task:()=>Promise<void>|void,operation?:'save'|'review'){
   if(lock.current||p.isReviewBusy())return
   lock.current=true;setBusy(true);setError('');setMessage('')
-  try{await task()}catch(e){setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setError((e instanceof Error?e.message:'処理を完了できません')+(current.current?'\n現在の登録再開JSONを保存してください。再送する前に既存登録を照合してください。':''))}
+  if(operation){
+   if(operation==='save')stop.current=false
+   setRunning(operation==='save')
+   setFeedback({signature:activeReview?signature(activeReview):null,operation,state:'running',detail:'',progress:{...(shown?observedProgress(shown.plan,shown.work):{peopleConfirmed:0,peopleTotal:activeReview?.edited.people.length??0,entriesConfirmed:0,entriesTotal:activeReview?.edited.entries.length??0}),phase:'checking',detail:operation==='save'?'保存前の内容を確認しています':'登録結果を読み直しています'}})
+  }
+  try{await task()}catch(e){
+   const reason=(e instanceof Error?e.message:'処理を完了できません')+(current.current?'\n現在の登録再開JSONを保存してください。再送する前に既存登録を照合してください。':'')
+   setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false);setError(reason)
+   if(operation){setFeedback(old=>old?{...old,state:'error',detail:reason,stopRequested:false,checkedAt:undefined}:old);focusFeedback()}
+  }
   finally{lock.current=false;setBusy(false);setRunning(false)}
  }
- async function inspect(value:ApplicationRegistration,service=services()){
+ async function inspect(value:ApplicationRegistration,service=services(),focus=true){
   const s=await service.load(),plan=await reviewApplicationRegistration(value,s)
   setSnapshot(s);setPreview({work:copy(value),plan});setLastInspection({work:copy(value),plan,snapshot:s});setCorrectionAccepted({});setChoices({})
-  if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{const el=document.getElementById('application-registration');el?.scrollIntoView({block:'start',behavior:'smooth'});el?.focus({preventScroll:true})})
+  if(focus&&typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{const el=document.getElementById('application-registration');el?.scrollIntoView({block:'start',behavior:'smooth'});el?.focus({preventScroll:true})})
   return plan
+ }
+ function finishFeedback(plan:Plan,value:ApplicationRegistration,operation:'save'|'review'){
+  const complete=completePlan(plan,value),stopped=operation==='save'&&stop.current&&!complete
+  setFeedback({signature:signature(value.review),operation,state:complete?'success':stopped?'stopped':operation==='review'&&plan.ready?'ready':'attention',progress:observedProgress(plan,value),checkedAt:new Date().toISOString(),detail:complete?'人馬・出番・資格・グレードの保存結果を確認しました。出番表と精算を確認できます。':stopped?'保存できた分を確認しました。残りは再確認してから再開できます。':plan.ready?'内容の確認が終わりました。上の確認欄にチェックし、取り込むボタンを押してください。':plan.issues.join('\n')||'まだ保存が完了していない項目があります。確認してから再開してください。'})
+  focusFeedback()
  }
  function restore(value:ApplicationRegistration){
   const clean=readApplicationRegistration(value),raw=local(clean)
@@ -86,7 +105,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   if(raw&&applicationRegistrationDifferences(parseApplicationRegistration(raw),clean).length)throw new Error('この端末の登録再開記録と原本・対応・保存結果が異なります。上書きせず「この資料番号の登録途中を開く」で確認してください。')
   if(current.current&&applicationRegistrationDifferences(current.current,clean).length)throw new Error('現在の保存結果を置き換えられません。最新の登録再開JSONを保存してから確認してください。')
   if(!p.canReplaceReview())return
-  expected.current=raw;remember(clean);p.onAdopt(clean.review);setPreview(null);setSnapshot(null);setChoices({});setAccepted(false);setSingleOperator(false)
+  setFeedback(null);expected.current=raw;remember(clean);p.onAdopt(clean.review);setPreview(null);setSnapshot(null);setChoices({});setAccepted(false);setSingleOperator(false)
   setMessage('登録再開記録を開きました。「登録結果を再確認」で現在の結果を確認してください。開いただけでは登録は行いません。')
  }
  const correctionSource=!work&&p.draft&&!p.draft.rosterPreparation&&lastInspection&&lastInspection.work.review.original.digest===p.draft.original.digest&&lastInspection.work.review.reference===p.draft.reference&&lastInspection.work.review.edited.club===p.draft.edited.club?lastInspection:null
@@ -113,7 +132,8 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const appReview=review?applicationReview(review.edited,review.paid,review.accountChecked):null
  const savedStates=Object.values(work?.entries?.states??{}),registered=savedStates.filter(s=>s==='registered').length,unknown=savedStates.filter(s=>s==='unknown').length
  const panel:ApplicationRegistrationPanelProps={
-  complete:!!plan?.ready&&!plan.pendingRoster.length&&plan.credentialsComplete&&plan.participating&&!!plan.entries?.rows.length&&plan.entries.rows.length===review?.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered'),
+  complete:!!(plan&&model&&completePlan(plan,model)),
+  feedback:feedback&&activeReview&&feedback.signature===signature(activeReview)?feedback:undefined,
   rosterCorrectionCount:plan?.pendingRoster.length??0,credentials:plan?.credentials,showAccountConfirmation:!!(p.draft&&!work&&!p.draft.accountChecked&&(plan||correctionSource)),hasCorrections,reviewStale:!!correctionSource&&!plan,
   busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview&&(!!work||!p.canImport||p.canImport()),canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
   reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
@@ -122,9 +142,9 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
    setPreview(null);setSnapshot(null);setAccepted(false);setSingleOperator(false)
    const next=candidate()
    if(!current.current&&p.canImport&&!p.canImport())throw new Error('②で人馬を仮確定し、登録済み団体の場合は「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。')
-   const result=await inspect(next)
-   setMessage(result.ready?'照合が終わりました。確認一覧を見て、確定する場合は下の確認欄にチェックしてください。':'差分・未確認の項目があります。登録は行っていません。')
-  }),
+   const result=await inspect(next,services(),false);finishFeedback(result,next,'review')
+   setMessage(completePlan(result,next)?'反映済みです。出番表と精算を確認できます。':result.ready?'照合が終わりました。確認一覧を見て、確定する場合は下の確認欄にチェックしてください。':'差分・未確認の項目があります。登録は行っていません。')
+  },'review'),
   onAccepted:v=>{if(!lock.current)setAccepted(v)},onSingleOperator:v=>{if(!lock.current)setSingleOperator(v)},
   onRun:()=>void action(async()=>{
    if(!current.current&&p.canImport&&!p.canImport())throw new Error('②で人馬を仮確定し、登録済み団体の場合は「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。')
@@ -137,13 +157,15 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
     const service=services(),fresh=await reviewApplicationRegistration(next,await service.load())
     if(!fresh.ready)throw new Error(fresh.issues.join('\n'))
     if(!alive.current)throw new Error('画面が閉じられたため登録を開始しませんでした')
-    persist(next);p.onAdopt(next.review);setPreview(null);stop.current=false;setRunning(true)
-    const result=await runApplicationRegistration(next,{...service,persist,stop:()=>stop.current||!alive.current})
-    await inspect(result,service)
+    if(stop.current){finishFeedback(fresh,next,'save');return}
+    persist(next);p.onAdopt(next.review);setPreview(null)
+    const result=await runApplicationRegistration(next,{...service,persist,stop:()=>stop.current||!alive.current,onProgress:progress=>{if(alive.current)setFeedback(old=>old?{...old,progress}:old)}})
+    setFeedback(old=>old?{...old,progress:{...old.progress,phase:'verifying',detail:'全件の保存結果を読み直しています'}}:old)
+    const finalPlan=await inspect(result,service,false);finishFeedback(finalPlan,result,'save')
     p.onChanged?.()
-    setMessage(stop.current?'停止しました。保存済みは保持しています。照合結果を確認して残りを再開できます。':'保存結果を読み直しました。登録済み・未登録・差分を一覧で確認してください。入金処理は行っていません。')
+    setMessage(completePlan(finalPlan,result)?'反映が完了しました。出番表と精算を確認できます。':stop.current?'停止しました。保存済みは保持しています。照合結果を確認して残りを再開できます。':'保存結果を読み直しました。登録済み・未登録・差分を一覧で確認してください。入金処理は行っていません。')
    })
-  }),
+  },'save'),
   onCorrectionAccepted:(key,value)=>{if(!lock.current)setCorrectionAccepted(old=>({...old,[key]:value}))},
   onSaveRoster:key=>void action(()=>exclusive(async()=>{
    if(current.current||!p.draft||!correctionSource||!correctionAccepted[key])throw new Error('同じ人馬の訂正であることと変更内容を確認してください')
@@ -167,7 +189,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
    p.onChanged?.()
    setMessage(`既存名簿の訂正と所属「${input.clubName}」を保存し、Winterの保存結果を読み直しました。終了を選んだ所属は履歴に残し、既存の出番・請求先・料金は保持しています。`)
   })),
-  onStop:()=>{stop.current=true;setMessage('停止を受け付けました。処理中の1件の結果確認後に停止します。')},
+  onStop:()=>{stop.current=true;setFeedback(old=>old?{...old,stopRequested:true}:old);setMessage('停止を受け付けました。処理中の1件の結果確認後に停止します。')},
   onChoice:(key,id)=>{if(!lock.current)setChoices(old=>({...old,[key]:id}))},
   onResolve:key=>void action(async()=>{
    if(!current.current||!choices[key])throw new Error('保存結果を照合する人馬を選択してください')
@@ -183,9 +205,9 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   onClose:()=>void action(()=>{
    if(!current.current)return
    if(local(current.current)!==expected.current)throw new Error('別の画面で記録が変わっています。現在の入力を保持して照合してください。')
-   persist(current.current);current.current=null;expected.current=null;setWork(null);setPreview(null);setSnapshot(null);setLastInspection(null);setChoices({});setAccepted(false);setSingleOperator(false);p.onClear()
+   persist(current.current);setFeedback(null);current.current=null;expected.current=null;setWork(null);setPreview(null);setSnapshot(null);setLastInspection(null);setChoices({});setAccepted(false);setSingleOperator(false);p.onClear()
    setMessage('取り込み記録をこの端末に保存しました。次の申込書を選んでください。')
   }),
  }
- return {panel,busy,frozen:!!work,isBusy:()=>lock.current,isFrozen:()=>current.current!==null,openRecord:restore,invalidate:(clearInspection=false)=>{if(!lock.current){if(clearInspection)setLastInspection(null);setPreview(null);setAccepted(false);setSingleOperator(false);setMessage('');setError('')}}}
+ return {panel,busy,frozen:!!work,isBusy:()=>lock.current,isFrozen:()=>current.current!==null,openRecord:restore,invalidate:(clearInspection=false)=>{if(!lock.current){if(clearInspection)setLastInspection(null);setFeedback(null);setPreview(null);setAccepted(false);setSingleOperator(false);setMessage('');setError('')}}}
 }

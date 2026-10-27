@@ -17,7 +17,7 @@ function hooks(){
   close(){cells.forEach(c=>c?.cleanup?.())},
  }
 }
-let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,readCredentials=false,changeNavigation=0,rosterNavigation=0
+let h=hooks(),env=setup(),map=new Map(),downloadBlob=null,downloads=0,network=0,loads=0,deny=false,lockHeld=false,missingLocks=false,failStorage=false,failKnownId=false,gateLoad=null,readOriginal=false,readCredentials=false,changeNavigation=0,rosterNavigation=0,holdFinal=false,releaseFinal=null
 const lockNames=[]
 global.fetch=()=>{network++;throw Error('Real network forbidden')}
 global.window={confirm:()=>true,addEventListener(){},removeEventListener(){}}
@@ -35,7 +35,7 @@ URL.createObjectURL=blob=>{downloadBlob=blob;return 'blob:synthetic-only'};URL.r
 Module._load=function(name,...args){
  if(name==='react')return {...React,...Object.fromEntries(['useState','useRef','useMemo','useEffect'].map(k=>[k,(...args)=>h[k](...args)]))}
  if(name==='@/lib/winter-application-services')return {winterApplicationServices:()=>({
-  load:async()=>{loads++;if(deny)throw Error('synthetic admin denied');if(gateLoad)await gateLoad;return structuredClone(env.snapshot)},
+  load:async()=>{loads++;if(deny)throw Error('synthetic admin denied');if(gateLoad)await gateLoad;if(holdFinal&&env.posts.entry>0&&env.stored?.entries&&Object.values(env.stored.entries.states).every(s=>s==='registered')){holdFinal=false;await new Promise(resolve=>releaseFinal=resolve)}return structuredClone(env.snapshot)},
   saveCredential:input=>env.deps.saveCredential(input),savePerson:input=>env.deps.savePerson(input),saveParticipants:(...args)=>env.deps.saveParticipants(...args),saveEntry:input=>env.deps.saveEntry(input),
   correctPerson:async input=>{if(deny)throw Error('synthetic admin denied');const journal=[...map.values()].map(s=>JSON.parse(s)).find(r=>r.kind==='winter-roster-correction'&&r.input.requestId===input.requestId||r.kind==='winter-application-registration'&&Object.values(r.review.rosterPreparation?.corrections??{}).some(c=>c.requestId===input.requestId));assert(journal,'draft and request saved before sending');return env.deps.correctPerson(input)},
  })}
@@ -62,7 +62,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve))
 async function settled(){const deadline=Date.now()+3000;while(Date.now()<deadline){await new Promise(resolve=>setTimeout(resolve,1));const p=render();if(!p.busy)return p}throw Error('Synthetic action did not finish')}
 const file=value=>{const bytes=new TextEncoder().encode(typeof value==='string'?value:JSON.stringify(value));return {name:'synthetic.json',size:bytes.length,arrayBuffer:async()=>bytes.buffer}}
 async function start(){
- h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;readCredentials=false;changeNavigation=0;rosterNavigation=0
+ h.close();h=hooks();env=setup();map.clear();downloadBlob=null;downloads=0;loads=0;deny=false;failStorage=false;failKnownId=false;missingLocks=false;lockHeld=false;gateLoad=null;readOriginal=false;readCredentials=false;changeNavigation=0;rosterNavigation=0;holdFinal=false;releaseFinal=null
  let p=render();p.onRestoreFile(file(env.work.review));return settled()
 }
 async function ready(){let p=render();if(!p.frozen&&!p.rosterPrepared){p.onPrepareRoster();p=await settled();assert.equal(p.rosterPrepared,true,p.error)}panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true,panel(p).error);panel(p).onAccepted(true);p=render();panel(p).onSingleOperator(true);return render()}
@@ -71,11 +71,11 @@ async function main(){
  const entryStage=p=>controls(p,true).find(n=>n.type==='fieldset'&&React.Children.toArray(n.props.children).some(c=>c.type==='legend'&&c.props.children==='②-2 仮確定した人馬でエントリーを確認'))
  assert.equal(entryStage(p).props.disabled,true,'entry controls are disabled until preparation')
  assert.equal(p.rosterPrepared,false);p.onPrepareRoster();p=await settled();assert.equal(p.rosterPrepared,true,p.error);assert.equal(entryStage(p).props.disabled,false)
- panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true);assert.equal(panel(p).people.length,2);assert.equal(panel(p).entries.length,1);assert.equal(panel(p).originalTotal,'19000');assert.equal(panel(p).paid,'0')
+ panel(p).onReview();p=await settled();assert.equal(panel(p).ready,true);assert.equal(panel(p).people.length,2);assert.equal(panel(p).entries.length,1);assert.equal(panel(p).originalTotal,'19000');assert.equal(panel(p).paid,'0');assert.equal(panel(p).feedback.state,'ready')
  assert.deepEqual(env.posts,{person:0,participants:0,entry:0},'read/restore/review do not register')
  panel(p).onRun();p=await settled();assert.match(panel(p).error,/確認/);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
  p=await ready();const action=panel(p).onRun;action();action();p=await settled()
- assert.deepEqual(env.posts,{person:2,participants:1,entry:1});assert.equal(p.frozen,true);assert.equal(panel(p).people[0].state,'登録済み');assert.equal(panel(p).entries[0].state,'登録済み');assert.equal(panel(p).participantState,'登録済み')
+ assert.deepEqual(env.posts,{person:2,participants:1,entry:1});assert.equal(p.frozen,true);assert.equal(panel(p).people[0].state,'登録済み');assert.equal(panel(p).entries[0].state,'登録済み');assert.equal(panel(p).participantState,'登録済み');assert.equal(panel(p).feedback.state,'success');assert.equal(panel(p).feedback.progress.entriesConfirmed,1);assert(panel(p).feedback.checkedAt)
  assert.equal(env.stored.review.paid,'0');assert.equal(env.stored.review.original.amounts.total,'19000')
  const frozen=JSON.stringify(p.edited);p.onPerson('r1',{name:'unauthorized overwrite'});p.onReference('CHANGED');p.onPaid('999');p=render();assert.equal(JSON.stringify(p.edited),frozen);assert.equal(p.reference,env.work.review.reference);assert.equal(p.paid,'0')
  const markup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.match(markup,/fieldset disabled/);assert(!markup.includes('確認再開JSONを保存して別の申込書へ'));assert(markup.includes('④ 取り込み結果'))
@@ -84,7 +84,7 @@ async function main(){
  p.onFiles([{name:'synthetic-revision.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)}]);p=render();p.onRead();p=await settled();assert(p.differences.length);assert.equal(JSON.stringify(p.edited),frozen);assert.deepEqual(env.posts,{person:2,participants:1,entry:1})
  p=await ready();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:2,participants:1,entry:1},'reimport/recheck never rebills the same entry')
  // Reopen from exported file, without assuming a remembered browser session or trusting flags.
- h.close();h=hooks();p=render();panel(p).onRestoreFile(file(raw));p=await settled();assert.equal(p.frozen,true);assert.equal(panel(p).hasPlan,false);assert.match(panel(p).people[0].state,/未再照合/)
+ h.close();h=hooks();p=render();panel(p).onRestoreFile(file(raw));p=await settled();assert.equal(p.frozen,true);assert.equal(panel(p).hasPlan,false);assert.equal(panel(p).feedback,undefined,'local saved flags never show success before a fresh read');assert.match(panel(p).people[0].state,/未再照合/)
  panel(p).onReview();p=await settled();assert.equal(panel(p).entries[0].state,'登録済み')
  panel(p).onClose();p=await settled();assert.equal(p.edited,null);assert.equal(panel(p).hasCheckpoint,false);assert(map.has(applicationRegistrationKey(saved.review.reference)))
  // Same original/review reaches the existing record, not a new-person create.
@@ -192,9 +192,9 @@ async function main(){
  // Stop after one person; the input cannot be edited while a save is active.
  p=await start();p=await ready();const savePerson=env.deps.savePerson;let release
  env.deps.savePerson=async input=>{const id=await savePerson(input);await new Promise(resolve=>release=resolve);return id}
- panel(p).onRun();for(let i=0;i<100&&!release;i++)await tick();assert(release,'save boundary reached');p=render();assert.equal(panel(p).running,true);assert.equal(p.busy,true)
+ panel(p).onRun();for(let i=0;i<100&&!release;i++)await tick();assert(release,'save boundary reached');p=render();assert.equal(panel(p).running,true);assert.equal(p.busy,true);assert.equal(panel(p).feedback.state,'running');assert.equal(panel(p).feedback.progress.phase,'people');assert.equal(panel(p).feedback.progress.peopleConfirmed,0,'a returned POST without readback is not counted')
  p.onPerson('r1',{name:'edited while saving'});p=render();assert.equal(p.edited.people[0].name,'合成選手')
- panel(p).onStop();release();p=await settled();assert.deepEqual(env.posts,{person:1,participants:0,entry:0});assert.equal(env.stored.people.r1.state,'registered');assert.equal(env.stored.people.h1.state,'unregistered')
+ panel(p).onStop();p=render();assert.equal(panel(p).feedback.stopRequested,true);assert.equal(panel(p).feedback.state,'running');release();p=await settled();assert.equal(panel(p).feedback.state,'stopped');assert.equal(panel(p).feedback.progress.peopleConfirmed,1);assert.deepEqual(env.posts,{person:1,participants:0,entry:0});assert.equal(env.stored.people.r1.state,'registered');assert.equal(env.stored.people.h1.state,'unregistered')
  env.deps.savePerson=savePerson;p=await ready();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:2,participants:1,entry:1})
 
  // Lost new-person response never triggers a second create; resolve only by an explicit ID.
@@ -209,8 +209,8 @@ async function main(){
  // Lost entry response has its stable ID checkpoint; re-read establishes success without rebilling.
  p=await start();p=await ready();const saveEntry=env.deps.saveEntry
  env.deps.saveEntry=async input=>{await saveEntry(input);throw Error('lost synthetic entry response')}
- panel(p).onRun();p=await settled();assert.equal(Object.values(env.stored.entries.states)[0],'unknown');assert.equal(env.posts.entry,1)
- env.deps.saveEntry=saveEntry;p=await ready();assert.equal(panel(p).entries[0].state,'登録済み');panel(p).onRun();p=await settled();assert.equal(env.posts.entry,1)
+ panel(p).onRun();p=await settled();assert.equal(Object.values(env.stored.entries.states)[0],'unknown');assert.equal(env.posts.entry,1);assert.equal(panel(p).feedback.state,'error');assert.equal(panel(p).feedback.progress.entriesConfirmed,0,'lost reply cannot be reported as a success')
+ env.deps.saveEntry=saveEntry;p=await ready();assert.equal(panel(p).entries[0].state,'登録済み');assert.equal(panel(p).feedback.state,'success');panel(p).onRun();p=await settled();assert.equal(env.posts.entry,1)
 
  // Local write failure after an ID was returned must not discard that recoverable ID.
  p=await start();p=await ready();failKnownId=true;panel(p).onRun();p=await settled();assert.equal(env.posts.person,1);assert.match(panel(p).error,/quota/);assert(panel(p).people[0].id)
@@ -220,12 +220,23 @@ async function main(){
  panel(p).onRestoreFile(file(rescue));p=await settled();assert.equal(panel(p).people[0].id,rescue.people.r1.entityId);assert.equal(map.get(applicationRegistrationKey(rescue.review.reference)),oldLocal,'opening a newer file does not overwrite local history')
  p=await ready();panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:2,participants:1,entry:1})
 
+ // Feedback appears during preflight, and stop before the first mutation actually stops.
+ p=await start();p=await ready();gateLoad=new Promise(resolve=>release=resolve)
+ panel(p).onRun();await tick();p=render();assert.equal(panel(p).feedback.state,'running');assert.equal(panel(p).feedback.progress.phase,'checking');assert.equal(panel(p).running,true);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ panel(p).onStop();p=render();assert.equal(panel(p).feedback.stopRequested,true);release();gateLoad=null;p=await settled();assert.equal(panel(p).feedback.state,'stopped');assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ // 100% of entry readbacks is still not success until the final authoritative review completes.
+ p=await start();p=await ready();holdFinal=true;panel(p).onRun()
+ for(let i=0;i<500&&!releaseFinal;i++)await tick();assert(releaseFinal,'final verification boundary reached');p=render()
+ assert.equal(panel(p).feedback.state,'running');assert.equal(panel(p).feedback.progress.phase,'verifying');assert.equal(panel(p).feedback.progress.entriesConfirmed,1);assert.equal(panel(p).complete,false)
+ releaseFinal();p=await settled();assert.equal(panel(p).feedback.state,'success');assert.equal(panel(p).complete,true)
+ const successMarkup=renderToStaticMarkup(React.createElement(MasterApplicationRegistration,panel(p)));assert.match(successMarkup,/反映完了/);assert.match(successMarkup,/border-emerald-700/);assert.match(successMarkup,/保存結果の確認時刻/)
+
  // Every blocking condition is tested against the controller's real save action.
  for(const condition of ['lock-held','unsupported-lock','auth','storage','price-change']){
   p=await start();p=await ready();if(condition==='lock-held')lockHeld=true;if(condition==='unsupported-lock')missingLocks=true;if(condition==='auth')deny=true;if(condition==='storage')failStorage=true;if(condition==='price-change')env.snapshot.data.competitions[0].member_fee++
-  panel(p).onRun();p=await settled();assert(panel(p).error,condition);assert.deepEqual(env.posts,{person:0,participants:0,entry:0},condition)
+  panel(p).onRun();p=await settled();assert(panel(p).error,condition);assert.equal(panel(p).feedback.state,'error',condition);assert.deepEqual(env.posts,{person:0,participants:0,entry:0},condition)
  }
- p=await start();p=await ready();p.onPaid('1');p=render();assert.equal(panel(p).hasPlan,false,'edited input invalidates old confirmation');panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
+ p=await start();p=await ready();p.onPaid('1');p=render();assert.equal(panel(p).hasPlan,false,'edited input invalidates old confirmation');assert.equal(panel(p).feedback,undefined,'old feedback is hidden after an edit');panel(p).onRun();p=await settled();assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
  p=await start();p=await ready();p.onPaid('1'.repeat(101));assert.doesNotThrow(()=>{p=render()});assert.equal(panel(p).hasPlan,false,'malformed in-progress edits do not crash rendering or retain confirmation')
  p=await start();panel(p).onRestoreFile(file({...env.work,eventId:'Autumn'}));p=await settled();assert.match(panel(p).error,/Winter/);assert.equal(p.frozen,false);assert.deepEqual(env.posts,{person:0,participants:0,entry:0})
  // Another tab's saved record is never overwritten by a frozen work instance.

@@ -1,11 +1,14 @@
 'use client'
 
+import {MasterApplicationImportStatus} from './application-import-status'
+import type {ApplicationImportFeedback} from '@/lib/master/application-import-status'
 import {ApplicationAffiliationFields} from './application-affiliation'
 import type {ApplicationPerson,IdentityCandidate,RosterAffiliationEdit} from '@/lib/master/application'
 
 type IdentityCorrection={person:ApplicationPerson;accepted?:boolean;participantCount?:number;original?:ApplicationPerson;selected:string;club:string;candidates:IdentityCandidate[];affiliation:RosterAffiliationEdit;clubs:{id:string;name:string}[];currentClubs:{id:string;name:string}[]}
 type ResultRow={key:string;label:string;state:string;id?:string;issues:string[]}
 export type ApplicationRegistrationPanelProps={
+ feedback?:ApplicationImportFeedback
  busy:boolean;running:boolean;frozen:boolean;hasCheckpoint:boolean;hasPlan:boolean;ready:boolean
  credentials?:{key:string;name:string;kind:string;value:string;previous:string;saved:boolean}[]
  showAccountConfirmation?:boolean;hasCorrections?:boolean;reviewStale?:boolean;editError?:string
@@ -80,7 +83,7 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
   <p className="mt-3">同じ端末では資料番号から再開できます。別の端末では最新の登録再開JSONを開いてください。</p></details>
   {p.frozen&&<p className="rounded-lg bg-amber-50 p-3 font-semibold">登録再開記録を開いています。確定時の入力は固定しています。訂正版は上のExcel読込から差分だけを確認し、既存登録を変更・削除しません。</p>}
   <button type="button" className={button} disabled={p.busy||!p.canReview} onClick={p.onReview}>{p.hasCorrections?'訂正内容を再照合する':p.frozen||p.hasPlan?'登録結果を再確認':'既存登録との照合（内容確認後）'}</button>
-  {p.error&&<p role="alert" className="whitespace-pre-wrap rounded-lg bg-red-100 p-4">{p.error}</p>}
+  {p.error&&p.feedback?.state!=='error'&&<p role="alert" className="whitespace-pre-wrap rounded-lg bg-red-100 p-4">{p.error}</p>}
   {p.message&&<p role="status" className="whitespace-pre-wrap rounded-lg bg-blue-50 p-4">{p.message}</p>}
   {p.editError&&(p.hasCorrections||p.reviewStale)&&<p role="alert" className="rounded-lg bg-red-100 p-3">{p.editError}</p>}
   {p.reviewStale&&<p role="status" className="rounded-lg bg-amber-100 p-3 font-bold">入力を変更しました。表の黄色い欄で訂正を続け、下の「訂正内容を再照合する」を押してください。前回の確認事項は再照合まで残しています。</p>}
@@ -114,12 +117,13 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
     <label className="flex gap-3"><input type="checkbox" checked={p.accepted} disabled={p.busy||!p.ready} onChange={e=>p.onAccepted(e.target.checked)}/>原本・人馬の対応・名簿の訂正・所属・資格・グレード宣言・料金と照合結果を確認しました。</label>
     <label className="flex gap-3"><input type="checkbox" checked={p.singleOperator} disabled={p.busy||!p.ready} onChange={e=>p.onSingleOperator(e.target.checked)}/>この申込はこの画面だけで登録し、人馬登録など別の画面・端末・管理者と同時に登録しません。</label>
     <p>別画面・別端末・別ブラウザーとの同時操作は自動では防げません。途中再開では保存済みを照合し、未登録の分だけを処理します。</p>
-    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>{p.running?'取り込み中…':remaining?`確認した${remaining}件を取り込む`:p.rosterCorrectionCount?'仮確定した人馬名簿の訂正を保存する':'確認した資格・グレードを保存する'}</button>
+    <button type="button" className={primaryButton} disabled={p.busy||!p.ready||!p.accepted||!p.singleOperator} onClick={p.onRun}>{p.running?'反映中…':remaining?`確認した${remaining}件を取り込む`:p.rosterCorrectionCount?'仮確定した人馬名簿の訂正を保存する':'確認した資格・グレードを保存する'}</button>
    </>}
   </>}
-  {p.complete&&<div className="flex flex-wrap gap-3">{p.onStartlist&&<button type="button" className={primaryButton} onClick={p.onStartlist}>出番表を見る</button>}{p.onSettlement&&<button type="button" className={button} onClick={p.onSettlement}>精算を見る</button>}<p className="w-full">請求への反映を確認できます。ここで確認した入金額は、精算の入金登録には使いません。</p></div>}
+  {p.feedback&&<MasterApplicationImportStatus value={p.feedback} onReview={p.onReview} canReview={p.canReview} busy={p.busy} onStop={p.onStop}/>}
+  {p.complete&&<div className="flex flex-wrap gap-3"><button type="button" disabled className="min-h-14 w-full rounded-xl border-2 border-emerald-700 bg-emerald-50 p-3 text-xl font-bold text-emerald-900">✓ 反映完了</button>{p.onStartlist&&<button type="button" className={primaryButton} disabled={p.busy} onClick={p.onStartlist}>出番表を見る</button>}{p.onSettlement&&<button type="button" className={button} disabled={p.busy} onClick={p.onSettlement}>精算を見る</button>}<p className="w-full">請求への反映を確認できます。ここで確認した入金額は、精算の入金登録には使いません。</p></div>}
   {p.complete&&!p.hasCheckpoint&&p.onNext&&<button type="button" className={button} disabled={p.busy} onClick={p.onNext}>次の申込書へ（この端末に記録を保持）</button>}
-  {p.running&&<button type="button" className={button+' border-red-800 !text-red-900'} onClick={p.onStop}>処理中の1件を確認して停止</button>}
+  {p.running&&!p.feedback&&<button type="button" className={button+' border-red-800 !text-red-900'} onClick={p.onStop}>処理中の1件を確認して停止</button>}
   {p.hasCheckpoint&&<div className="space-y-3">
    <p>{p.savedSummary}。端末記録だけで完了とは判断せず、上の照合ボタンで現在の結果を確認してください。</p>
    <details className="rounded-lg border p-3"><summary className="cursor-pointer font-bold">別の端末で再開・ファイルに保存</summary><button type="button" className={button+' mt-3'} disabled={p.busy} onClick={p.onDownload}>原本・対応・途中結果を登録再開JSONに保存</button>
