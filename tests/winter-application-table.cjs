@@ -24,7 +24,8 @@ const rows=props=>nodes(MasterApplicationReview(props)).filter(n=>n.type===Maste
 const controls=row=>row.props.cells.flatMap(c=>nodes(c.content))
 const tree=MasterApplicationReview(p),allRows=rows(p),entryRows=allRows.filter(n=>n.props.target.startsWith('application-entry-'))
 assert.equal(allRows.length,69);assert.equal(entryRows.length,60,'all entries remain present without pagination or filtering')
-assert.deepEqual(entryRows.map(r=>r.props.target),app.entries.map(e=>applicationEntryTarget(e.key)),'workbook order and identity are stable')
+assert.deepEqual(entryRows.map(r=>r.props.target),app.people.filter(p=>p.kind==='horse').flatMap(p=>app.entries.filter(e=>e.horse===p.key).map(e=>applicationEntryTarget(e.key))),'display groups entries by horse roster order without reordering source identities')
+for(const row of entryRows){const index=Number(decodeURIComponent(row.props.target).split('entry-').at(-1));const fee=row.props.cells.find(c=>c.label==='料金');assert.equal(fee.content.props.children.props.children,index%2?'10,000円':'5,000円','sorted display keeps the original fee index')}
 const html=renderToStaticMarkup(React.createElement(MasterApplicationReview,p))
 for(const label of ['選手一覧（1名）','馬一覧（4頭）','エントリー確認一覧（全60件）','所有資格級','グレード宣言','所属（申込団体）','4頭 × 14,000円','450,000円','506,000円'])assert.ok(html.includes(label),label)
 assert.equal((html.match(/data-review-row="true"/g)||[]).length,69)

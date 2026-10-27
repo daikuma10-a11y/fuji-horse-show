@@ -1,5 +1,7 @@
 'use client'
 
+import {MasterApplicationCountReview} from './application-count-review'
+import {applicationEntriesByHorse,applicationEntryCountAssignments,type ApplicationCountReview} from '@/lib/master/application-entry-counts'
 import {MasterApplicationReviewRow,MasterApplicationReviewField} from './application-review-row'
 import {ApplicationAffiliationFields,type ApplicationAffiliationValue} from './application-affiliation'
 import type {RosterAffiliationEdit} from '@/lib/master/application'
@@ -36,7 +38,7 @@ function differenceText(text:string){
  return text
 }
 type AmountRow={key:keyof Application['amounts'];label:string;original:number|null;calculated:number|null;reason:string}
-export type ApplicationReviewModel={amounts:AmountRow[];issues:string[];entryPrices:(number|null)[];entryFeeTotal:number|null;horseRegistration:{count:number;unit:number};ready:boolean}
+export type ApplicationReviewModel={entryCounts?:ApplicationCountReview[];amounts:AmountRow[];issues:string[];entryPrices:(number|null)[];entryFeeTotal:number|null;horseRegistration:{count:number;unit:number};ready:boolean}
 export function MasterApplicationReview(p:{
  busy:boolean;message:string;error:string;fileName:string;eventName:string;formatDescription:string
  frozen?:boolean;registration?:ReactNode;stage?:number;todos?:ApplicationTodo[];clubSummary?:ApplicationClubSummary|null
@@ -53,10 +55,12 @@ export function MasterApplicationReview(p:{
  affiliations?:Record<string,ApplicationAffiliationValue>;onAffiliation?:(key:string,value:RosterAffiliationEdit)=>void
  rosterPrepared?:boolean;onPrepareRoster?:()=>void
  rosterChanges?:{key:string;name:string;changes:{label:string;before:string;after:string}[]}[]
+ onEntryCount?:(key:string,value:string)=>void
  onAmount:(key:keyof Application['amounts'],value:string)=>void;onChoice:(key:string,value:string)=>void
  competitions:{number:string;name:string}[]
 }){
  const app=p.edited,source=p.original,stage=p.stage??(app?2:1),todos=p.todos??[],blocking=todos.filter(t=>t.blocking)
+ const countAssignments=app?applicationEntryCountAssignments(app):new Map()
  const notesByTarget=new Map<string,ApplicationTodo[]>()
  for(const todo of todos){const list=notesByTarget.get(todo.target)??[];list.push(todo);notesByTarget.set(todo.target,list)}
  const notes=(target:string)=>notesByTarget.get(target)??[]
@@ -162,16 +166,16 @@ export function MasterApplicationReview(p:{
     {p.onPrepareRoster&&!p.rosterPrepared&&<p className="rounded-lg bg-blue-50 p-3">上の人馬を仮確定すると、エントリーを追加・訂正できます。</p>}
     <section id="application-entries" tabIndex={-1} aria-label="エントリー確認一覧" className="min-w-0 space-y-3"><h5 className="text-xl font-bold">エントリー確認一覧（全{app.entries.length}件）</h5>
      <div className="flex flex-wrap items-center gap-3">{p.onAddEntry&&!p.frozen&&<button type="button" className={button} disabled={p.busy||app.entries.length>=5000} onClick={()=>p.onAddEntry?.()}>出番を追加</button>}<p className="text-sm">同じ馬に複数の選手が乗る場合は、選手ごとに1行です。各行の「同じ競技・馬に選手を追加」から補えます。</p></div>
-     <p>要確認：{app.entries.filter(e=>notes(applicationEntryTarget(e.key)).some(t=>t.blocking)).length}行。競技・選手・馬・OPを表の中で訂正できます。所属は今回の申込団体です。</p>
-     <div className={tableScroll} tabIndex={0} role="region" aria-label="エントリー一覧の表"><table className={inlineTable}><caption className="sr-only">エントリー確認一覧：原本の順に全{app.entries.length}件</caption>
+     <p>要確認：{app.entries.filter(e=>notes(applicationEntryTarget(e.key)).some(t=>t.blocking)).length}行。競技・選手・馬・OPを表の中で訂正できます。所属は今回の申込団体です。馬一覧の掲載順に、同じ馬のエントリーをまとめて表示します。</p>
+     <div className={tableScroll} tabIndex={0} role="region" aria-label="エントリー一覧の表"><table className={inlineTable}><caption className="sr-only">エントリー確認一覧：馬の掲載順に全{app.entries.length}件</caption>
       <colgroup className="@max-[760px]:hidden">{[29,19,19,14,7,12].map((width,i)=><col key={i} style={{width:`${width}%`}}/>)}</colgroup>
       <thead className="@max-[760px]:sr-only"><tr>{['競技名','選手','馬名','所属（申込団体）','OP','料金'].map(header=><th key={header} scope="col" className={tableHead}>{header}</th>)}</tr></thead><tbody className="@max-[760px]:block">
-     {app.entries.map((e,i)=>{const target=applicationEntryTarget(e.key),competitionLabel=`${e.competition}：${p.competitions.find(c=>c.number===e.competition)?.name??'競技を確認してください'}`;return <MasterApplicationReviewRow key={`${app.digest}:${e.key}`} target={target} cells={[
-      {label:'競技名',content:<><span className="text-xs text-slate-600">{i+1}</span>{inline(target,'competition',<><select {...attributes(target,'competition')} aria-label={`${e.key} 競技`} title={competitionLabel} className={inlineField} value={e.competition} onChange={v=>p.onEntry(e.key,{competition:v.target.value})}>{!p.competitions.some(c=>c.number===e.competition)&&<option value={e.competition}>要確認：{e.competition}</option>}{p.competitions.map(c=><option key={c.number} value={c.number}>{c.number}：{c.name}</option>)}</select><p data-competition-label className="mt-1 whitespace-normal break-words text-sm font-semibold leading-snug">{competitionLabel}</p></>)}<details className="text-xs"><summary className="cursor-pointer">{e.added?'画面で追加した出番':'Excel原本'}</summary>{e.added?<p>Excel原本は変更していません。{e.sourceKey&&`追加元：${e.sourceKey}`}</p>:<p>{e.origin.sheet}!{e.origin.cell} ／ {e.rawRider} ／ {e.rawHorse}</p>}</details>{p.onAddEntry&&!p.frozen&&<button type="button" className="mt-2 min-h-10 rounded border border-blue-700 px-2 py-1 text-xs font-bold text-blue-900" disabled={app.entries.length>=5000} onClick={()=>p.onAddEntry?.(e.key)}>同じ競技・馬に選手を追加</button>}{e.added&&p.onRemoveAddition&&!p.frozen&&<button type="button" className="block min-h-10 text-xs text-red-800 underline" onClick={()=>p.onRemoveAddition?.(e.key)}>追加した出番を削除</button>}</>},
+     {applicationEntriesByHorse(app).map(({entry:e,sourceIndex},i)=>{const assignment=countAssignments.get(e.key),target=applicationEntryTarget(e.key),competitionLabel=`${e.competition}：${p.competitions.find(c=>c.number===e.competition)?.name??'競技を確認してください'}`;return <MasterApplicationReviewRow key={`${app.digest}:${e.key}`} target={target} cells={[
+      {label:'競技名',content:<><span className="text-xs text-slate-600">{i+1}</span>{inline(target,'competition',<><select {...attributes(target,'competition')} aria-label={`${e.key} 競技`} title={competitionLabel} className={inlineField} value={e.competition} onChange={v=>p.onEntry(e.key,{competition:v.target.value})}>{!p.competitions.some(c=>c.number===e.competition)&&<option value={e.competition}>要確認：{e.competition}</option>}{p.competitions.map(c=><option key={c.number} value={c.number}>{c.number}：{c.name}</option>)}</select><p data-competition-label className="mt-1 whitespace-normal break-words text-sm font-semibold leading-snug">{competitionLabel}</p>{assignment?.options.length>0&&(e.added||e.countBlock||assignment.reason)&&<label className="mt-2 block text-xs font-semibold">申込書の集計欄<select aria-label={`${e.key} 申込書の集計欄`} aria-invalid={!!assignment.reason||undefined} aria-describedby={assignment.reason?`${target}-competition-message`:undefined} className={inlineField} value={e.countBlock??''} onChange={v=>p.onEntry(e.key,{countBlock:v.target.value})}><option value="">{assignment.block?`自動：${assignment.block}`:'集計する申込欄を選択'}</option>{assignment.options.map((option:{block:string;label:string})=><option key={option.block} value={option.block}>{option.label}</option>)}</select></label>}</>)}<details className="text-xs"><summary className="cursor-pointer">{e.added?'画面で追加した出番':'Excel原本'}</summary>{e.added?<p>Excel原本は変更していません。{e.sourceKey&&`追加元：${e.sourceKey}`}</p>:<p>{e.origin.sheet}!{e.origin.cell} ／ {e.rawRider} ／ {e.rawHorse}</p>}</details>{p.onAddEntry&&!p.frozen&&<button type="button" className="mt-2 min-h-10 rounded border border-blue-700 px-2 py-1 text-xs font-bold text-blue-900" disabled={app.entries.length>=5000} onClick={()=>p.onAddEntry?.(e.key)}>同じ競技・馬に選手を追加</button>}{e.added&&p.onRemoveAddition&&!p.frozen&&<button type="button" className="block min-h-10 text-xs text-red-800 underline" onClick={()=>p.onRemoveAddition?.(e.key)}>追加した出番を削除</button>}</>},
       ...(['rider','horse'] as const).map(kind=>{const person=app.people.find(p=>p.key===e[kind]),label=kind==='rider'?'選手':'馬名';return {label,content:inline(target,kind,<><select {...attributes(target,kind)} aria-label={`${e.key} ${kind}`} title={person?.name??'未対応'} className={inlineField} value={e[kind]} onChange={v=>p.onEntry(e.key,{[kind]:v.target.value})}><option value="">未対応・選択</option>{app.people.filter(p=>p.kind===kind).map(person=><option key={person.key} value={person.key}>{person.name}</option>)}</select><p className="mt-1 text-xs">{person?.name||'未対応'}</p>{person&&fieldNotes(target,kind).length>0&&<button type="button" className="mt-1 text-xs text-blue-900 underline" onClick={()=>go(applicationPersonTarget(person.key))}>{label}の確認箇所へ</button>}</>)}}),
       {label:'所属（申込団体）',content:<p>{app.club||'団体名未入力'}</p>},
       {label:'OP',content:inline(target,'op',<label className="flex flex-wrap items-center gap-1"><input {...attributes(target,'op')} aria-label={`${e.key} OP参加`} type="checkbox" className="size-5 shrink-0" checked={e.op} onChange={v=>p.onEntry(e.key,{op:v.target.checked})}/><span className="text-xs">OP</span></label>)},
-      {label:'料金',content:inline(target,'fee',<span className="font-semibold tabular-nums">{yen(p.review?.entryPrices[i]??null)}</span>)}
+      {label:'料金',content:inline(target,'fee',<span className="font-semibold tabular-nums">{yen(p.review?.entryPrices[sourceIndex]??null)}</span>)}
      ]} index={i} disabled={p.busy||!!p.frozen}/>})}</tbody></table></div>
      <div aria-label="今回のExcelの料金合計" className="rounded-xl border-2 border-blue-800 bg-blue-50 p-4">
       <h6 className="text-lg font-bold">今回のExcelの料金合計</h6>
@@ -182,6 +186,7 @@ export function MasterApplicationReview(p:{
       </dl><p className="mt-3 text-sm">入力内容からの計算額です。既存分との重複は③で照合します。計算できない料金がある場合は「未確認」と表示します。</p>
      </div>
     </section>
+   {!!p.review?.entryCounts?.length&&<MasterApplicationCountReview rows={p.review.entryCounts} disabled={p.busy||!!p.frozen} onChange={p.onEntryCount}/>}
    <fieldset disabled={p.busy||p.frozen} className="min-w-0 space-y-5"><legend className="sr-only">原本請求・入金額の確認</legend>
     <section aria-label="原本請求と料金の照合" className="space-y-3"><h5 className="text-xl font-bold">原本請求と料金の照合</h5><p>上の計算額とExcel原本を比べ、違いがあれば確認・訂正してください。</p>
      <div className={tableScroll} role="region" aria-label="原本請求と料金の比較表" tabIndex={0}><table className={inlineTable}><caption className="sr-only">原本と入力額・計算額の比較</caption><colgroup className="@max-[760px]:hidden">{[15,18,20,17,30].map((width,i)=><col key={i} style={{width:`${width}%`}}/>)}</colgroup><thead className="@max-[760px]:sr-only"><tr>{['項目','Excel原本','原本確認後の値','計算額','確認結果'].map(label=><th scope="col" key={label} className={tableHead}>{label}</th>)}</tr></thead><tbody className="@max-[760px]:block">{p.review?.amounts.map((row,i)=>{const target=`application-amount-${row.key}`;return <MasterApplicationReviewRow key={row.key} target={target} index={i} disabled={p.busy||!!p.frozen} cells={[
