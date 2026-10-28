@@ -17,6 +17,17 @@ export function addApplicationEntry(app:Application,id:string,sourceKey?:string)
  entries.splice(index,0,entry)
  return {...app,entries}
 }
+export type ApplicationCountEntryInput=Pick<ApplicationEntry,'rider'|'horse'|'op'>
+/** Add an omitted rider/horse to the exact competition and original count scope being reviewed. */
+export function addApplicationCountEntry(app:Application,id:string,countKey:string,input:ApplicationCountEntryInput):Application{
+ const row=app.entryCounts?.find(row=>row.key===countKey)
+ if(!row)throw new Error('追加先の競技を確認できません。申込書を確認してください。')
+ if(!app.people.some(p=>p.key===input.rider&&p.kind==='rider')||!app.people.some(p=>p.key===input.horse&&p.kind==='horse'))throw new Error('出場する選手と馬を選んでください。')
+ if(input.op&&!row.buckets.some(b=>b.kind==='op'))throw new Error('この競技にはOPの集計欄がありません。参加区分を確認してください。')
+ if(app.entries.some(e=>e.competition===row.competition&&e.rider===input.rider&&e.horse===input.horse))throw new Error('この選手・馬の出番は、同じ競技にすでにあります。下の出場者を確認してください。')
+ const added=addApplicationEntry(app,id)
+ return {...added,entries:added.entries.map(e=>e.key===`manual-entry-${id}`?{...e,...input,competition:row.competition,countBlock:row.block}:e)}
+}
 export function removeApplicationAddition(app:Application,key:string):Application{
  const person=app.people.find(p=>p.key===key&&p.added)
  if(person)return {...app,people:app.people.filter(p=>p.key!==key),entries:app.entries.map(e=>e.rider===key||e.horse===key?{...e,[person.kind]:''}:e)}

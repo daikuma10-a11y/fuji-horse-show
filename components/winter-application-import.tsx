@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {prepareApplicationRoster,applicationRosterChanges,retainRosterPreparation} from '@/lib/winter-application-roster-stage'
-import {addApplicationEntry,addApplicationPerson,removeApplicationAddition} from '@/lib/master/application-additions'
+import {addApplicationEntry,addApplicationCountEntry,addApplicationPerson,removeApplicationAddition,type ApplicationCountEntryInput} from '@/lib/master/application-additions'
 import {applicationEntryTarget,applicationPersonTarget} from '@/lib/master/application-guide'
 import {MasterApplicationReview} from './master/application-review'
 import {applyApplicationCandidate,autofillApplicationPerson,jefRiderQualification} from '@/lib/master/application-autofill'
@@ -86,6 +86,14 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  function addEntry(sourceKey?:string){
   if(!draft||lock.current||registration.isBusy()||registration.isFrozen())return
   try{const id=crypto.randomUUID(),edited=addApplicationEntry(draft.edited,id,sourceKey);edit(d=>({...d,edited,accountChecked:false}));registration.invalidate();focusAdded(applicationEntryTarget(`manual-entry-${id}`))}catch(e){setError((e as Error).message)}
+ }
+ function addCountEntry(key:string,input:ApplicationCountEntryInput):string|undefined{
+  if(!draft||lock.current||registration.isBusy()||registration.isFrozen())return '現在は編集できません。処理が終わってから確認してください。'
+  if(!draft.rosterPreparation)return '先に選手・馬を仮確定してください。'
+  try{
+   const edited=addApplicationCountEntry(draft.edited,crypto.randomUUID(),key,input)
+   edit(d=>({...d,edited,accountChecked:false}));registration.invalidate();setError('')
+  }catch(e){return (e as Error).message}
  }
  function addPerson(kind:ApplicationPerson['kind']){
   if(!draft||lock.current||registration.isBusy()||registration.isFrozen())return
@@ -253,7 +261,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onReference={reference=>edit(d=>({...d,reference}))}
   onClub={club=>{edit(d=>({...d,rosterEdits:{},accountChecked:false,edited:{...d.edited,club}}));setIntent('');registration.invalidate()}}
   onPaid={paid=>edit(d=>({...d,paid,accountChecked:false}))} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}
-  onPerson={person} onEntry={entry} onAddEntry={addEntry} onAddPerson={addPerson} onRemoveAddition={removeAddition}
+  onPerson={person} onEntry={entry} onAddEntry={addEntry} onAddCountEntry={addCountEntry} onAddPerson={addPerson} onRemoveAddition={removeAddition}
   onEntryCount={(key,value)=>{edit(d=>({...d,accountChecked:false,edited:{...d.edited,entryCountCorrections:{...d.edited.entryCountCorrections,[key]:value}}}));registration.invalidate()}}
   onAmount={(key,value)=>edit(d=>({...d,accountChecked:false,edited:{...d.edited,amounts:{...d.edited.amounts,[key]:value}}}))}
   onChoice={choose}

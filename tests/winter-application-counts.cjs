@@ -91,10 +91,12 @@ const upgraded=upgradeApplicationCounts(old,raw);assert.equal(upgraded.edited.pe
 assert.equal(upgradeApplicationCounts(old,raw,true),null);assert.equal(upgradeApplicationCounts(upgraded,raw),null);assert.equal(upgradeApplicationCounts(old,{...raw,digest:'d'.repeat(64)}),null)
 assert.equal(old.original.entryCounts,undefined)
 
-// Count cells can be corrected inline; warnings include the original location and text, not color alone.
-let edits=[];const props={rows:review.entryCounts,disabled:false,onChange:(...args)=>edits.push(args)}
+// Explain the discrepancy before edits; the source coordinates remain in the immutable record only.
+let edits=[];const props={rows:review.entryCounts,disabled:false,competitions:[{number:'26',name:'フジウィンターグランプリ'},{number:'30',name:'フジ中障害飛越競技Dファイナル'}],onChange:(...args)=>edits.push(args)}
 const html=renderToStaticMarkup(React.createElement(MasterApplicationCountReview,props))
-for(const text of ['競技ごとの集計人数の照合','第26競技','第30競技','障害!Q33','障害!Q84','要確認：2競技欄','aria-invalid="true"','bg-amber-100'])assert(html.includes(text),text)
+for(const text of ['競技ごとの集計人数の照合','第26競技 ／ フジウィンターグランプリ','第30競技 ／ フジ中障害飛越競技Dファイナル','Excel原本では出場者1名となっていますが、人馬の記載がありません。','要確認：2競技欄','aria-invalid="true"','bg-amber-100'])assert(html.includes(text),text)
+for(const text of ['障害!Q33','障害!Q84','障害!C33','障害!C84'])assert(!html.includes(text),text)
+assert(html.indexOf('人馬の記載がありません。')<html.indexOf('人数の入力ミスの場合'))
 const nodes=t=>Array.isArray(t)?t.flatMap(nodes):!t||typeof t!=='object'?[]:[t,...nodes(t.props?.children)]
 const tree=MasterApplicationCountReview(props),field=nodes(tree).filter(n=>n.type===MasterApplicationReviewField)[0],input=nodes(field).find(n=>n.type==='input')
 input.props.onChange({target:{value:'0'}});assert.deepEqual(edits,[['障害!C33:regular','0']])
