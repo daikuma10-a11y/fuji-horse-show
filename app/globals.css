@@ -257,3 +257,12 @@
  .checkout-paper .checkout-normal th, .checkout-paper .checkout-normal td { padding: 2px 3px; }
  .checkout-paper { width: 100%; max-width: 100%; }
 }
+
+@media print {
+  .reading-list-print-root { position: static !important; height: auto !important; overflow: visible !important; display: block !important; }
+  .reading-list-paper { font-size: 10pt; line-height: 1.4; }
+  .reading-list-paper thead { display: table-header-group; }
+  .reading-list-paper tr { break-inside: avoid; }
+  .reading-list-paper h3 { break-after: avoid; }
+  .reading-list-paper table { width: 100%; }
+}
