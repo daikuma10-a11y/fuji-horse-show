@@ -1,26 +1,75 @@
 'use client'
 
+import {useState} from 'react'
 import {MasterApplicationReviewField} from './application-review-row'
-import {entryCountTarget,type ApplicationCountReview} from '@/lib/master/application-entry-counts'
+import {applicationCountMessage,entryCountTarget,type ApplicationCountReview} from '@/lib/master/application-entry-counts'
+import type {ApplicationPerson,ApplicationEntry} from '@/lib/master/application'
+import type {ApplicationCountEntryInput} from '@/lib/master/application-additions'
 
-/** Count corrections belong to this review; the workbook's saved cells remain visible. */
-export function MasterApplicationCountReview({rows,disabled,onChange}:{rows:ApplicationCountReview[];disabled:boolean;onChange?:(key:string,value:string)=>void}){
- const pending=rows.filter(row=>row.changed||row.buckets.some(b=>b.reason)),matched=rows.filter(row=>!pending.includes(row))
- const render=(items:ApplicationCountReview[])=>items.map(row=><fieldset key={row.key} id={entryCountTarget(row.key)} tabIndex={-1} disabled={disabled||!onChange} className={`min-w-0 scroll-mt-16 space-y-2 rounded-lg border-2 p-3 ${row.buckets.some(b=>b.reason)?'border-amber-600 bg-amber-50':'border-emerald-700 bg-emerald-50'}`}>
-  <legend className="px-1 font-bold">第{row.competition}競技 ／ {row.key}</legend>
-  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{row.buckets.map(b=>{const id=`${entryCountTarget(b.key)}-value`;return <MasterApplicationReviewField key={b.key} id={id} notes={b.reason?[{label:b.label,message:b.reason,target:entryCountTarget(row.key),blocking:true}]:[]}>
-   <label className="block text-sm font-bold" htmlFor={`${id}-input`}>{b.label}・確認後の集計人数</label>
-   <input id={`${id}-input`} aria-label={`${b.origin.sheet}!${b.origin.cell} 第${row.competition}競技 ${b.label} 集計人数`} aria-invalid={!!b.reason||undefined} aria-describedby={b.reason?`${id}-message`:undefined} className="mt-1 min-h-10 w-full min-w-0 rounded border border-slate-500 bg-white p-2 text-base" inputMode="numeric" maxLength={100} value={b.value} onChange={e=>onChange?.(b.key,e.target.value)}/>
-   <p className="mt-1 text-sm">Excel原本：{b.origin.value.trim()||'空欄（0名）'} ／ 出場者：{b.actual===null?'区分未確認':`${b.actual}名`}</p>
-   <p className="text-xs">{b.origin.sheet}!{b.origin.cell}{b.origin.formula&&` ／ 数式：${b.origin.formula}`}</p>
-  </MasterApplicationReviewField>})}</div>
-  {row.names.length?<details className="text-sm"><summary className="cursor-pointer">この競技・申込欄の出場者（{row.names.length}名）</summary><ul>{row.names.map((name,i)=><li key={row.entryKeys[i]}>{name}</li>)}</ul></details>:<p className="text-sm">この申込欄には出場者がいません。</p>}
-  <p className={`text-sm font-bold ${row.buckets.some(b=>b.reason)?'text-amber-950':'text-emerald-950'}`}>{row.buckets.some(b=>b.reason)?'要確認：出場者の記載と集計欄を確認してください。':row.changed?'訂正後の人数が一致しました。':'人数が一致しています。'}</p>
- </fieldset>)
+const field='mt-1 min-h-11 w-full min-w-0 rounded border border-slate-500 bg-white p-2 text-base disabled:bg-slate-100'
+type AddCountEntry=(key:string,input:ApplicationCountEntryInput)=>string|undefined
+type Props={
+ rows:ApplicationCountReview[];disabled:boolean;competitions?:{number:string;name:string}[]
+ people?:ApplicationPerson[];entries?:ApplicationEntry[]
+ onChange?:(key:string,value:string)=>void;onAddEntry?:AddCountEntry
+ onEntry?:(key:string,input:Partial<ApplicationEntry>)=>void;onRemoveEntry?:(key:string)=>void
+}
+
+/** Selection is provisional until the operator presses Add; amounts/counts are never invented. */
+export function ApplicationCountEntryAdder({row,people,disabled,onAdd}:{row:ApplicationCountReview;people:ApplicationPerson[];disabled:boolean;onAdd:AddCountEntry}){
+ const [input,setInput]=useState<ApplicationCountEntryInput>({rider:'',horse:'',op:false})
+ const [error,setError]=useState(''),[message,setMessage]=useState('')
+ const change=(patch:Partial<ApplicationCountEntryInput>)=>{if(disabled)return;setInput(v=>({...v,...patch}));setError('');setMessage('')}
+ return <fieldset disabled={disabled} className="min-w-0 space-y-3 rounded-lg border border-blue-300 bg-blue-50 p-3">
+  <legend className="px-1 font-bold">人馬の書き忘れの場合</legend>
+  <p className="text-sm">出場する選手と馬を選んで追加してください。この競技の人数と料金に反映します。</p>
+  <div className="grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind} className="min-w-0 text-sm font-semibold">{kind==='rider'?'選手':'馬名'}<select aria-label={`${row.key} 追加する${kind==='rider'?'選手':'馬'}`} className={field} value={input[kind]} onChange={e=>change({[kind]:e.target.value})}><option value="">選んでください</option>{people.filter(p=>p.kind===kind).map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>)}</div>
+  {row.buckets.some(b=>b.kind==='op')&&<label className="flex min-h-11 items-center gap-2"><input aria-label={`${row.key} 追加する出場者のOP参加`} type="checkbox" className="size-5" checked={input.op} onChange={e=>change({op:e.target.checked})}/>OP参加</label>}
+  {error&&<p role="alert" className="font-semibold text-red-800">{error}</p>}
+  {message&&<p role="status" className="font-semibold text-emerald-900">{message}</p>}
+  <button type="button" className="min-h-12 rounded-lg bg-blue-800 px-4 py-2 font-bold text-white disabled:opacity-40" disabled={disabled||!input.rider||!input.horse} onClick={()=>{
+   if(disabled)return
+   const failure=onAdd(row.key,input)
+   if(failure){setError(failure);setMessage('');return}
+   setInput({rider:'',horse:'',op:false});setError('');setMessage('出場者を追加しました。人数と料金を再計算しました。')
+  }}>この競技に出場者を追加</button>
+ </fieldset>
+}
+
+/** Count corrections belong to this review; the workbook's saved cells remain unchanged. */
+export function MasterApplicationCountReview({rows,disabled,competitions=[],people=[],entries=[],onChange,onAddEntry,onEntry,onRemoveEntry}:Props){
+ const pending=rows.filter(row=>row.changed||row.buckets.some(b=>b.reason)),pendingKeys=new Set(pending.map(row=>row.key)),matched=rows.filter(row=>!pendingKeys.has(row.key)),entriesByKey=new Map(entries.map(e=>[e.key,e]))
+ const render=(items:ApplicationCountReview[])=>items.map(row=>{
+  const problem=row.buckets.some(b=>b.reason),target=entryCountTarget(row.key),name=competitions.find(c=>c.number===row.competition)?.name
+  const rowEntries=row.entryKeys.flatMap(key=>{const entry=entriesByKey.get(key);return entry?[entry]:[]})
+  const explanations=row.buckets.filter(b=>b.reason||b.value!==b.origin.value)
+  return <fieldset key={row.key} id={target} tabIndex={-1} disabled={disabled} className={`min-w-0 scroll-mt-16 space-y-4 rounded-lg border-2 p-4 ${problem?'border-amber-600 bg-amber-50':'border-emerald-700 bg-emerald-50'}`}>
+   <legend className="px-1 font-bold">第{row.competition}競技{name&&` ／ ${name}`}</legend>
+   {row.scopeLabel&&<p className="text-sm">{row.scopeLabel}</p>}
+   <div id={`${target}-explanation`} className="space-y-2 font-semibold" role="status">{explanations.map(b=><p key={b.key}>{b.label}：{applicationCountMessage(b)}</p>)}
+    {!problem&&<p className="text-emerald-950">{row.changed?'訂正後の人数が一致しました。':'人数が一致しています。'}</p>}
+   </div>
+   <section className="space-y-2" aria-label="人数の入力ミスの訂正">
+    <h6 className="font-bold">人数の入力ミスの場合</h6>
+    <p className="text-sm">正しい人数に訂正してください。出場者がいない場合は0名です。</p>
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{row.buckets.map(b=>{const id=`${entryCountTarget(b.key)}-value`;return <MasterApplicationReviewField key={b.key} id={id} notes={b.reason?[{label:b.label,message:b.actual===null?'選手の会員区分を確認してください。':'人数を訂正するか、下で書き忘れた人馬を追加してください。',target,blocking:true}]:[]}>
+     <label className="block text-sm font-bold" htmlFor={`${id}-input`}>{b.label}・確認後の人数</label>
+     <input id={`${id}-input`} aria-label={`第${row.competition}競技 ${b.label} 集計人数`} aria-invalid={!!b.reason||undefined} aria-describedby={`${target}-explanation`} className={field} inputMode="numeric" maxLength={100} disabled={!onChange} value={b.value} onChange={e=>{if(!disabled)onChange?.(b.key,e.target.value)}}/>
+    </MasterApplicationReviewField>})}</div>
+   </section>
+   {!!rowEntries.length&&<section className="space-y-2" aria-label="この競技の出場者の訂正"><h6 className="font-bold">この競技の出場者（{rowEntries.length}名）</h6><div className="space-y-2">{rowEntries.map((entry,i)=><fieldset key={entry.key} disabled={disabled||!onEntry} className="min-w-0 rounded border border-slate-300 bg-white p-3">
+    <legend className="px-1 text-sm font-semibold">{i+1}人目{entry.added?'（この画面で追加）':''}</legend>
+    <div className="grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind} className="min-w-0 text-sm font-semibold">{kind==='rider'?'選手':'馬名'}<select aria-label={`${row.key} ${entry.key} ${kind==='rider'?'選手':'馬'}`} className={field} value={entry[kind]} onChange={e=>{if(!disabled)onEntry?.(entry.key,{[kind]:e.target.value})}}><option value="">選んでください</option>{people.filter(p=>p.kind===kind).map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>)}</div>
+    {(entry.op||row.buckets.some(b=>b.kind==='op'))&&<label className="mt-2 flex min-h-11 items-center gap-2"><input aria-label={`${row.key} ${entry.key} OP参加`} type="checkbox" className="size-5" checked={entry.op} onChange={e=>{if(!disabled)onEntry?.(entry.key,{op:e.target.checked})}}/>OP参加</label>}
+    {entry.added&&onRemoveEntry&&<button type="button" className="min-h-11 text-sm text-red-800 underline" onClick={()=>{if(!disabled)onRemoveEntry(entry.key)}}>追加した出場者を取り消す</button>}
+   </fieldset>)}</div></section>}
+   {onAddEntry&&<ApplicationCountEntryAdder row={row} people={people} disabled={disabled||entries.length>=5000} onAdd={onAddEntry}/>}
+  </fieldset>
+ })
  return <section id="application-entry-counts" aria-label="競技ごとの集計人数の照合" className="space-y-3 rounded-xl border-2 border-slate-300 p-4">
   <h5 className="text-xl font-bold">競技ごとの集計人数の照合</h5>
-  <p>合計金額が同じでも、競技・申込シート・通常参加／OP・会員区分ごとに人数を照合します。要確認：{rows.filter(row=>row.buckets.some(b=>b.reason)).length}競技欄。</p>
-  <p className="text-sm">黄色い欄は、原本を確かめてこの場で集計人数を訂正できます。出場者の入力漏れは上の「出番を追加」で補ってください。人数だけでは出番を作成しません。Excel原本の数値は保持します。</p>
+  <p>要確認：{rows.filter(row=>row.buckets.some(b=>b.reason)).length}競技欄。合計金額が同じでも、競技ごとの人数を確認します。</p>
+  <p className="text-sm">人数の入力ミスと人馬の書き忘れを、この場で訂正できます。通常参加・OP・会員区分は分けて照合します。元のExcelは変更しません。</p>
   {render(pending)}
   {!!matched.length&&<details><summary className="cursor-pointer font-semibold">一致した競技欄を見る（{matched.length}件）</summary><div className="mt-3 space-y-3">{render(matched)}</div></details>}
  </section>

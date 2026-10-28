@@ -4,7 +4,18 @@ export const entryCountKey=(row:ApplicationEntryCount,kind:string)=>`${row.key}:
 export const entryCountTarget=(key:string)=>`application-count-${encodeURIComponent(key)}`
 const labels={regular:'通常参加',op:'OP参加',member:'会員',nonmember:'非会員'}
 const count=(s:string)=>{const v=s.normalize('NFKC').trim();return v===''?0:/^\d+$/.test(v)&&Number.isSafeInteger(Number(v))&&Number(v)<=5000?Number(v):null}
-export type ApplicationCountReview={key:string;competition:string;block:string;entryKeys:string[];names:string[];changed:boolean;buckets:{key:string;label:string;origin:Origin;value:string;actual:number|null;reason:string}[]}
+export type ApplicationCountReview={key:string;competition:string;block:string;scopeLabel:string;entryKeys:string[];names:string[];changed:boolean;buckets:{key:string;kind:ApplicationEntryCount['buckets'][number]['kind'];label:string;origin:Origin;value:string;actual:number|null;reason:string}[]}
+
+/** Explain the discrepancy before offering either correction; cell addresses stay in the source record. */
+export function applicationCountMessage(bucket:ApplicationCountReview['buckets'][number]){
+ const original=count(bucket.origin.value),declared=count(bucket.value),actual=bucket.actual
+ if(actual===null)return '選手の会員区分が未確認のため、出場者の人数を照合できません。選手一覧で会員区分を確認してください。'
+ if(declared===null)return '集計人数を確認できません。正しい人数を0以上の整数で入力してください。'
+ if(original===null)return `Excel原本の集計人数を確認できません。人馬の記載は${actual}名です。`
+ if(original!==actual)return actual===0?`Excel原本では出場者${original}名となっていますが、人馬の記載がありません。`:`Excel原本では出場者${original}名となっていますが、人馬の記載は${actual}名です。`
+ if(declared!==actual)return `訂正後の集計人数は${declared}名ですが、人馬の記載は${actual}名です。`
+ return `出場者${actual}名と集計人数が一致しています。`
+}
 
 /** Sort a view only: registration IDs and the fee indexes still use the source array. */
 export function applicationEntriesByHorse(app:Application){
@@ -38,6 +49,8 @@ export function applicationEntryCountAssignments(app:Application){
 /** Compare each original sheet/block separately, so opposing count errors cannot cancel. */
 export function reviewApplicationEntryCounts(app:Application):ApplicationCountReview[]{
  const rows=app.entryCounts??[],assignments=applicationEntryCountAssignments(app),people=new Map(app.people.map(p=>[p.key,p]))
+ const scopes=new Map<string,ApplicationEntryCount[]>()
+ for(const row of rows){const group=scopes.get(row.competition)??[];group.push(row);scopes.set(row.competition,group)}
  const grouped=new Map<string,ApplicationEntry[]>()
  for(const entry of app.entries){const b=assignments.get(entry.key)?.block;if(!b)continue;const key=JSON.stringify([b,entry.competition]),list=grouped.get(key)??[];list.push(entry);grouped.set(key,list)}
  return rows.map(row=>{
@@ -48,9 +61,11 @@ export function reviewApplicationEntryCounts(app:Application):ApplicationCountRe
    const actual=(bucket.kind==='member'||bucket.kind==='nonmember')&&unknown?null:entries.filter(e=>bucket.kind==='op'?e.op:bucket.kind==='regular'?!e.op:!e.op&&people.get(e.rider)?.[row.membership!]===(bucket.kind==='member'?'会員':'非会員')).length
    const location=`${bucket.origin.sheet}!${bucket.origin.cell}・第${row.competition}競技 ${labels[bucket.kind]}`
    const reason=declared===null?`${location}：集計欄を0以上の整数で確認してください。`:actual===null?`${location}：選手の会員区分を確認してください。`:declared!==actual?`${location}：集計欄${declared}名に対して出場者${actual}名です。${actual===0?'人数だけが入力されています。':declared===0?'人数の入力漏れの可能性があります。':'出場者・OP区分・集計人数を確認してください。'}`:''
-   return {key,label:labels[bucket.kind],origin:bucket.origin,value,actual,reason}
+   return {key,kind:bucket.kind,label:labels[bucket.kind],origin:bucket.origin,value,actual,reason}
   })
-  const changed=buckets.some(b=>app.entryCountCorrections?.[b.key]!==undefined)
-  return {key:row.key,competition:row.competition,block:row.block,entryKeys:entries.map(e=>e.key),names:entries.map(e=>`${people.get(e.rider)?.name||e.rawRider||'選手未選択'} ／ ${people.get(e.horse)?.name||e.rawHorse||'馬未選択'}${e.op?'（OP）':''}`),changed,buckets}
+  const changed=buckets.some(b=>app.entryCountCorrections?.[b.key]!==undefined)||entries.some(e=>e.added&&e.countBlock===row.block)
+  const sameCompetition=scopes.get(row.competition)!
+  const scopeLabel=sameCompetition.length>1?`申込欄${sameCompetition.indexOf(row)+1} ／ ${row.horseKeys.map(key=>people.get(key)?.name).filter(Boolean).join('・')||'馬名欄空欄'}`:''
+  return {key:row.key,competition:row.competition,block:row.block,scopeLabel,entryKeys:entries.map(e=>e.key),names:entries.map(e=>`${people.get(e.rider)?.name||e.rawRider||'選手未選択'} ／ ${people.get(e.horse)?.name||e.rawHorse||'馬未選択'}${e.op?'（OP）':''}`),changed,buckets}
  }).filter(row=>row.entryKeys.length||row.changed||row.buckets.some(b=>b.reason||count(b.value)!==0))
 }

@@ -80,6 +80,20 @@ const file={name:'synthetic.xlsx',size:1,arrayBuffer:async()=>new ArrayBuffer(1)
  p.onAccountChecked(true);p=render();p.onCandidateSearch('h1','ハリー');p=render();assert(p.candidates.h1.some(c=>c.id===harryId));assert.equal(p.edited.people[1].name,nameBefore);assert.equal(JSON.stringify(p.original),originalBefore);assert.equal(p.accountChecked,true);assert.equal(auth,lookupBefore,'typing searches loaded roster without requests')
  const candidatesMarkup=renderToStaticMarkup(React.createElement(MasterApplicationReview,p));assert.match(candidatesMarkup,/登録済みの候補が1件あります/);assert.match(candidatesMarkup,/bg-amber-100/);assert.match(candidatesMarkup,/候補を検索（名前の一部・番号）/);assert.match(candidatesMarkup,/ハリーポッター・D/)
  p.onChoice('h1',harryId);p=await settle();assert.equal(p.choices.h1,harryId);assert.equal(p.edited.people[1].jef,'900777');assert.equal(p.edited.people[1].name,'ハリーポッターD');assert.equal(p.original.people[1].jef,'');assert.equal(p.accountChecked,false)
+ // Inline count repair changes only the local draft and retains its prepared roster.
+ assert.match(p.onAddCountEntry('missing',{rider:'r1',horse:'h1',op:false}),/仮確定/)
+ const {createApplicationDraft,serializeApplicationDraft}=require('../lib/winter-application-draft.ts'),{applicationRosterSignature}=require('../lib/winter-application-roster-stage.ts')
+ h=hooks();map.clear();const prepared=createApplicationDraft(fixture());prepared.original.digest=prepared.edited.digest='d'.repeat(64)
+ const countRows=[{key:'障害!C9',competition:'1',block:'障害!4',horseKeys:['h1'],entryKeys:[],buckets:[{kind:'regular',origin:{sheet:'障害',cell:'Q9',value:'1'}},{kind:'op',origin:{sheet:'障害',cell:'U9',value:''}}]}]
+ prepared.original.entryCounts=structuredClone(countRows);prepared.edited.entryCounts=structuredClone(countRows);prepared.choices={r1:'new',h1:'new'};prepared.accountChecked=true;prepared.paid='0';prepared.rosterPreparation={signature:applicationRosterSignature(prepared),corrections:{}}
+ const savedPreparation=JSON.stringify(prepared.rosterPreparation),preparedJson=serializeApplicationDraft(prepared)
+ p=render();p.onRestoreFile({size:preparedJson.length,arrayBuffer:async()=>new TextEncoder().encode(preparedJson).buffer});p=await settle();assert.equal(p.rosterPrepared,true)
+ const countOriginal=JSON.stringify(p.original),requestsBefore=auth
+ assert.equal(p.onAddCountEntry('障害!C9',{rider:'r1',horse:'h1',op:false}),undefined);p=render()
+ const countEntry=p.edited.entries.at(-1);assert.deepEqual([countEntry.competition,countEntry.countBlock,countEntry.rider,countEntry.horse],['1','障害!4','r1','h1']);assert.equal(p.review.entryFeeTotal,13000);assert.equal(p.accountChecked,false);assert(p.review.entryCounts[0].buckets.every(b=>!b.reason));assert.equal(p.rosterPrepared,true);assert.equal(JSON.stringify(p.original),countOriginal);assert.equal(auth,requestsBefore)
+ assert.match(p.onAddCountEntry('障害!C9',{rider:'r1',horse:'h1',op:false}),/すでにあります/);p=render();assert.equal(p.edited.entries.length,2)
+ p.onSave();p=await settle();const restoredCount=parseApplicationDraft(map.get(applicationDraftKey(p.original.digest)));assert.equal(restoredCount.edited.entries.at(-1).key,countEntry.key);assert.equal(JSON.stringify(restoredCount.rosterPreparation),savedPreparation)
+ p.onRemoveAddition(countEntry.key);p=render();assert.equal(p.edited.entries.length,1);assert.equal(p.review.entryCounts[0].buckets[0].actual,0)
  assert.equal(network,0,'no real auth, database or payment requests')
  Module._load=originalLoad;URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke
  console.log('PASS: file selection/read lock, original/edited review, explicit candidates, confirmation invalidation, saved review reload, revision preservation, conflict/auth-data guards and zero real network (component mocks)')

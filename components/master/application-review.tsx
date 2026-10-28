@@ -5,6 +5,7 @@ import {applicationEntriesByHorse,applicationEntryCountAssignments,type Applicat
 import {MasterApplicationReviewRow,MasterApplicationReviewField} from './application-review-row'
 import {ApplicationAffiliationFields,type ApplicationAffiliationValue} from './application-affiliation'
 import type {RosterAffiliationEdit} from '@/lib/master/application'
+import type {ApplicationCountEntryInput} from '@/lib/master/application-additions'
 import {HORSE_DECLARATIONS} from '@/lib/master/application-credentials'
 
 import type {Application,ApplicationPerson,ApplicationEntry,ApplicationDifference,IdentityCandidate} from '@/lib/master/application'
@@ -57,6 +58,7 @@ export function MasterApplicationReview(p:{
  rosterPrepared?:boolean;onPrepareRoster?:()=>void
  rosterChanges?:{key:string;name:string;changes:{label:string;before:string;after:string}[]}[]
  onEntryCount?:(key:string,value:string)=>void
+ onAddCountEntry?:(key:string,input:ApplicationCountEntryInput)=>string|undefined
  onAmount:(key:keyof Application['amounts'],value:string)=>void;onChoice:(key:string,value:string)=>void
  competitions:{number:string;name:string}[]
 }){
@@ -189,7 +191,7 @@ export function MasterApplicationReview(p:{
       </dl><p className="mt-3 text-sm">入力内容からの計算額です。既存分との重複は③で照合します。計算できない料金がある場合は「未確認」と表示します。</p>
      </div>
     </section>
-   {!!p.review?.entryCounts?.length&&<MasterApplicationCountReview rows={p.review.entryCounts} disabled={p.busy||!!p.frozen} onChange={p.onEntryCount}/>}
+   {!!p.review?.entryCounts?.length&&<MasterApplicationCountReview key={app.digest} rows={p.review.entryCounts} competitions={p.competitions} people={app.people} entries={app.entries} disabled={p.busy||!!p.frozen||!!p.onPrepareRoster&&!p.rosterPrepared} onChange={p.onEntryCount} onAddEntry={p.frozen?undefined:p.onAddCountEntry} onEntry={p.onEntry} onRemoveEntry={p.frozen?undefined:p.onRemoveAddition}/>}
    <fieldset disabled={p.busy||p.frozen} className="min-w-0 space-y-5"><legend className="sr-only">原本請求・入金額の確認</legend>
     <section aria-label="原本請求と料金の照合" className="space-y-3"><h5 className="text-xl font-bold">原本請求と料金の照合</h5>
      <div id="application-amount-help" className="space-y-2 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm">
