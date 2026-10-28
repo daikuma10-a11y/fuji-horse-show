@@ -67,6 +67,8 @@ assert.ok(liveMarkup.includes('data-review-issue="blocking"'));assert.ok(liveMar
 d.edited.people[0].grade='A';d.edited.people[0].checked=true;d.edited.people[1].checked=true;d.edited.people[1].reading='ごうせいうま'
 assert.equal(issueAt(`${personTarget}-checked`).length,0);assert.equal(issueAt(`${personTarget}-grade`).length,0);assert.equal(issueAt(`${horseTarget}-reading`).length,0)
 assert.equal(applicationTodos(d,true).filter(n=>n.blocking).length,0)
+const amountHelp=renderToStaticMarkup(React.createElement(MasterApplicationReview,{...p,edited:{...app,amounts:{...app.amounts,jump:'462000',total:'518000'}},review:model({...app,amounts:{...app.amounts,jump:'462000',total:'518000'}})}))
+for(const explanation of ['申込内容を確認したうえで手直しできる請求額','出場者・競技・OP・会員区分・頭数','集計人数を直しても','元のExcelファイルは自動では書き換わりません','確認後の請求額が計算額より','12,000円','application-amount-help'])assert(amountHelp.includes(explanation),explanation)
 const corrected=renderToStaticMarkup(React.createElement(MasterApplicationReview,live()));assert.ok(!corrected.includes('data-review-issue='));assert.ok(!corrected.includes('aria-invalid="true"'))
 d.edited.entries[0].competition='5';d.edited.people[0].sportsMember='';assert(issueAt(`${personTarget}-sportsMember`).some(n=>n.blocking));assert.equal(issueAt(`${personTarget}-instructorMember`).length,0)
 d.edited.entries[0].competition='8';assert(issueAt(`${personTarget}-qualified`).some(n=>n.blocking));d.edited.people[0].qualified=true;assert(issueAt(`${personTarget}-instructorMember`).some(n=>n.blocking))
