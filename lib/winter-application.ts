@@ -1,5 +1,6 @@
 import {extractWinterEntryCount} from './winter-application-count-extraction'
 import {reviewApplicationEntryCounts,applicationEntryCountAssignments} from './master/application-entry-counts'
+import {searchIdentityCandidate} from './master/identity-candidate-search'
 import {horseDeclaration,validHorseDeclaration} from './master/application-credentials'
 import {splitApplicationRiders} from './master/application-entry-input'
 import {readInputXlsx,type InputBook,type InputSheet} from './master/xlsx-input'
@@ -88,8 +89,17 @@ export function applicationReview(app:Application,paid:string,checked:boolean){
  countIssues.push(...[...countAssignments.values()].filter(a=>a.reason).map(a=>a.reason))
  return {report,amounts,credentialIssues,entryCounts,countAssignments,countIssues,ready:!countIssues.length&&!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
 }
-export function rosterCandidates(person:ApplicationPerson,data:SharedRoster,club:string){
- return data.entities.filter(e=>e.kind===person.kind&&!e.archived_at&&(person.jef&&person.jef===e.jef_number||norm(person.name)===norm(e.name)||person.reading&&norm(person.reading)===norm(e.reading))).map(entity=>({entity,reason:person.jef&&person.jef===entity.jef_number?'日馬連番号一致':norm(person.name)===norm(entity.name)?'氏名・馬名一致（空白・全半角を除く）':'読み一致',clubs:data.affiliations.filter(a=>a.entity_id===entity.id&&!a.ended_at).map(a=>data.clubs.find(c=>c.id===a.club_id)?.name??''),sameClub:data.affiliations.some(a=>a.entity_id===entity.id&&!a.ended_at&&data.clubs.some(c=>c.id===a.club_id&&c.name===club))})).sort((a,b)=>Number(b.sameClub)-Number(a.sameClub))
+export function rosterCandidates(person:ApplicationPerson,data:SharedRoster,club:string,options:{similar?:boolean;search?:string}={}){
+ const clubNames=new Map(data.clubs.map(c=>[c.id,c.name]))
+ return data.entities.flatMap(entity=>{
+  if(entity.kind!==person.kind||entity.archived_at)return []
+  const exact=person.jef&&person.jef===entity.jef_number?{rank:0,reason:'日馬連番号一致'}:person.name&&norm(person.name)===norm(entity.name)?{rank:1,reason:'氏名・馬名一致（空白・全半角を除く）'}:person.reading&&norm(person.reading)===norm(entity.reading)?{rank:2,reason:'読み一致'}:null
+  const suggestion=options.similar||options.search?searchIdentityCandidate(person,{name:entity.name,reading:entity.reading,jef:entity.jef_number??''},options.search):null
+  const match=options.search?.trim()?suggestion:exact??suggestion
+  if(!match)return []
+  const clubs=data.affiliations.filter(a=>a.entity_id===entity.id&&!a.ended_at).map(a=>clubNames.get(a.club_id)??'')
+  return [{entity,reason:match.reason,rank:match.rank,clubs,sameClub:!!club&&clubs.includes(club)}]
+ }).sort((a,b)=>a.rank-b.rank||Number(b.sameClub)-Number(a.sameClub)||a.entity.name.localeCompare(b.entity.name,'ja')||a.entity.id.localeCompare(b.entity.id))
 }
 export function applicationDifferences(before:Application,after:Application){
  const differences:{location:string;before:string;after:string;kind:string}[]=[]

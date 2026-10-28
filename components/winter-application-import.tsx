@@ -33,6 +33,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const [file,setFile]=useState<File|null>(null),[draft,setDraft]=useState<ApplicationDraft|null>(null)
  const [revision,setRevision]=useState<Application|null>(null),[roster,setRoster]=useState<SharedRoster|null>(null)
  const [context,setContext]=useState<ApplicationSnapshot|null>(null)
+ const [candidateSearch,setCandidateSearch]=useState<Record<string,string>>({})
  const [intent,setIntent]=useState<'addition'|''>('')
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[dirty,setDirty]=useState(false)
  const lock=useRef(false),expectedSaved=useRef<string|null>(null)
@@ -65,7 +66,10 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   finally{lock.current=false;setBusy(false)}
  }
  function edit(fn:(d:ApplicationDraft)=>ApplicationDraft){if(lock.current||registration.isBusy()||registration.isFrozen())return;setDraft(d=>d?retainRosterPreparation(fn(d)):d);setDirty(true);setMessage('')}
- function person(key:string,patch:Partial<ApplicationPerson>){edit(d=>{
+ function person(key:string,patch:Partial<ApplicationPerson>){
+  if(lock.current||registration.isBusy()||registration.isFrozen())return
+  if('name' in patch||'reading' in patch||'jef' in patch)setCandidateSearch(search=>{const next={...search};delete next[key];return next})
+  edit(d=>{
   const choices={...d.choices} // Keep the explicitly selected identity while correcting its spelling or number.
   const rosterEdits=d.rosterEdits?{...d.rosterEdits}:undefined;if(rosterEdits&&!choices[key])delete rosterEdits[key]
   return {...d,choices,...(rosterEdits?{rosterEdits}:{}),accountChecked:false,edited:{...d.edited,people:d.edited.people.map(p=>{
@@ -96,7 +100,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   const clean=readApplicationDraft(value),key=applicationDraftKey(clean.original.digest),stored=localStorage.getItem(key)
   if(stored&&JSON.stringify(parseApplicationDraft(stored))!==JSON.stringify(clean))throw new Error('同じ原本の異なる確認記録がこの端末にあります。上書きせず、先にこの端末の確認途中を開いてください')
   if(dirty&&!window.confirm('現在の未保存の訂正を、選択した確認記録で置き換えます。続けますか？'))return
-  expectedSaved.current=stored;setDraft(clean);setFile(null);setRevision(null);setRoster(null);setIntent('');setDirty(!stored)
+  expectedSaved.current=stored;setDraft(clean);setCandidateSearch({});setFile(null);setRevision(null);setRoster(null);setIntent('');setDirty(!stored)
   setMessage('確認途中を開きました。既存名簿の対応は候補を読み直して確認してください。登録結果を示すファイルではありません。')
   return clean
  }
@@ -104,13 +108,15 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const candidates=useMemo(()=>{
   const result:Record<string,IdentityCandidate[]>={}
   if(draft&&roster)for(const p of draft.edited.people){
-   const options=rosterCandidates(p,roster,draft.edited.club).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs}))
+   const suggested=rosterCandidates(p,roster,draft.edited.club,{similar:true})
+   const searched=candidateSearch[p.key]?.trim()?rosterCandidates(p,roster,draft.edited.club,{similar:true,search:candidateSearch[p.key]}):[]
+   const options=[...new Map([...searched,...suggested].map(c=>[c.entity.id,c])).values()].sort((a,b)=>a.rank-b.rank||Number(b.sameClub)-Number(a.sameClub)||a.entity.name.localeCompare(b.entity.name,'ja')).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs}))
    const selected=roster.entities.find(e=>e.id===draft.choices[p.key]&&e.kind===p.kind&&!e.archived_at)
    if(selected&&!options.some(c=>c.id===selected.id))options.unshift({id:selected.id,name:selected.name,reading:selected.reading,jef:selected.jef_number??'',reason:'選択済みの人馬（入力を訂正中）',clubs:roster.affiliations.filter(a=>a.entity_id===selected.id&&!a.ended_at).map(a=>roster.clubs.find(c=>c.id===a.club_id)?.name??'')})
    result[p.key]=options
   }
   return result
- },[draft,roster])
+ },[draft,roster,candidateSearch])
  const differences=useMemo(()=>draft&&revision?applicationDifferences(draft.original,revision):null,[draft,revision])
  const clubSummary=draft&&context?applicationClubSummary(draft,context):null
  const todos=draft?applicationTodos(draft,roster!==null).filter(t=>draft.rosterPreparation||registration.frozen||t.target.startsWith('application-person-')||['application-club','application-source','application-reference'].includes(t.target)):[]
@@ -120,6 +126,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const rosterChanges=draft&&context?applicationRosterChanges(draft,context):[]
  if(draft&&!draft.rosterPreparation&&!registration.isFrozen())todos.push({label:'人馬の仮確定',message:'先に人馬の内容と登録先を仮確定してください。その人馬でエントリーを確認できます。',target:'application-roster-stage',blocking:true})
  for(const row of rosterChanges)for(const change of row.changes)todos.push({label:row.name,message:`取り込み時に${change.label}を反映：${change.before||'なし'} → ${change.after||'なし'}`,target:applicationPersonTarget(row.key),blocking:false,fields:[change.field]})
+ for(const person of draft?.edited.people??[]){const options=candidates[person.key]??[];if(options.length&&(!draft?.choices[person.key]||draft.choices[person.key]==='new'))todos.push({label:person.name,message:`登録済みの候補が${options.length}件あります。番号・所属を確認して登録先を選んでください。`,target:applicationPersonTarget(person.key),blocking:false,fields:['choice']})}
  const qualificationNotes=Object.fromEntries((draft?.edited.people??[]).filter(p=>p.kind==='rider'&&p.jef).map(p=>[p.key,context?.riderGrades&&!context.riderGradesError?jefRiderQualification(p,context.riderGrades).message:'']))
  async function loadContext(target:ApplicationDraft|null=draft){
   setRoster(null);setContext(null)
@@ -173,7 +180,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   if(person.kind==='rider'&&person.jef&&person.jef!==current.jef)await loadContext(next)
  })}
  async function begin(app:Application){
-  setIntent('')
+  setIntent('');setCandidateSearch({})
   const stored=localStorage.getItem(applicationDraftKey(app.digest))
   let next=stored?parseApplicationDraft(stored):createApplicationDraft(app)
   const needsReference=!next.reference.trim()
@@ -224,6 +231,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   formatDescription="対応：2026 Winterの指定様式（選手30人・馬20頭、障害・馬場の追加入力欄とコピーシート）。"
   original={draft?.original??null} edited={draft?.edited??null} reference={draft?.reference??''} paid={draft?.paid??''} accountChecked={draft?.accountChecked??false}
   review={review?{entryCounts:review.entryCounts,amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),entryFeeTotal:review.report.entryFeeTotal,horseRegistration:{count:draft!.edited.people.filter(p=>p.kind==='horse').length,unit:WINTER_HORSE_REGISTRATION_FEE},issues:[...draft!.edited.issues,...review.countIssues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
+  candidateSearch={candidateSearch} onCandidateSearch={(key,value)=>{if(!lock.current&&!registration.isBusy()&&!registration.isFrozen())setCandidateSearch(s=>({...s,[key]:value}))}}
   candidates={candidates} choices={draft?.choices??{}} qualificationNotes={qualificationNotes} rosterLoaded={roster!==null} differences={differences} revisionName={revision?.fileName??''} competitions={preparation.competitions}
   onFiles={files=>{if(lock.current||registration.isBusy())return;if(!files||files.length!==1){setError('Excelファイルを1つ選択してください');return}setFile(files[0]);setError('')}}
   onRead={()=>void action(async()=>{

@@ -113,12 +113,12 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const model=shown?.work??work,plan=shown?.plan??null,review=model?.review??p.draft
  const people=(review?.edited.people??[]).filter(()=>!!model||!!correctionSource).map(person=>{
   const recorded=model?.people[person.key],row=plan?.people.find(r=>r.key===person.key)
-  const options=snapshot?rosterCandidates(person,snapshot.roster,review!.edited.club).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs})):[]
+  const options=snapshot?rosterCandidates(person,snapshot.roster,review!.edited.club,{similar:true}).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs})):[]
   const previous=correctionSource?.plan.people.find(r=>r.key===person.key)
   const before=correctionSource?.work.review.edited.people.find(r=>r.key===person.key)
   const roster=correctionSource?.snapshot.roster,selected=p.draft?.choices[person.key]??''
   // Retain inspected candidates while typing, including an explicitly selected identity.
-  const ids=new Set(roster&&before?[...rosterCandidates(before,roster,review!.edited.club),...rosterCandidates(person,roster,review!.edited.club)].map(c=>c.entity.id):[])
+  const ids=new Set(roster&&before?[...rosterCandidates(before,roster,review!.edited.club,{similar:true}),...rosterCandidates(person,roster,review!.edited.club,{similar:true})].map(c=>c.entity.id):[])
   ids.add(selected)
   const correction=correctionSource&&roster&&(previous?.issues.length||selected&&selected!=='new')?{
    person,selected,accepted:!!correctionAccepted[person.key],participantCount:roster.participants.filter(p=>p.entity_id===selected).length,original:review!.original.people.find(r=>r.key===person.key),club:review!.edited.club,
