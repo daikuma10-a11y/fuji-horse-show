@@ -2,7 +2,7 @@ import {unzipSync,strFromU8} from 'fflate'
 
 export type InputCell={value:string;formula?:string;error?:boolean}
 export type InputSheet={name:string;cells:Record<string,InputCell>;hidden:boolean}
-export type InputBook={sheets:InputSheet[]}
+export type InputBook={sheets:InputSheet[];date1904?:boolean}
 const decode=(s:string)=>s.replace(/&#x([0-9a-f]+);|&#(\d+);|&(lt|gt|amp|quot|apos);/gi,(_,hex,dec,n)=>hex||dec?String.fromCodePoint(parseInt(hex||dec,hex?16:10)):({lt:'<',gt:'>',amp:'&',quot:'"',apos:"'"}[n as string]??''))
 function attrs(s:string){const a:Record<string,string>={};for(const m of s.matchAll(/([\w:]+)\s*=\s*(["'])(.*?)\2/g))a[m[1]]=decode(m[3]);return a}
 function text(s:string){return [...s.replace(/<rPh\b[\s\S]*?<\/rPh>/g,'').matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map(m=>decode(m[1])).join('')}
@@ -39,5 +39,5 @@ export function readInputXlsx(bytes:Uint8Array):InputBook{
   sheets.push({name:a.name,cells,hidden:a.state==='hidden'||a.state==='veryHidden'})
  }
  if(!sheets.length)throw new Error('シートがありません')
- return {sheets}
+ return {sheets,...(/<workbookPr\b[^>]*\bdate1904=["'](?:1|true)["']/.test(xml('xl/workbook.xml'))?{date1904:true}:{})}
 }

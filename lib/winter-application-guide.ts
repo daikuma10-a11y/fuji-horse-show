@@ -11,6 +11,7 @@ export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):Applic
  const app=d.edited,review=applicationReview(app,d.paid,d.accountChecked),items:ApplicationTodo[]=[]
  const add=(label:string,message:string,target:string,blocking=true,fields?:ApplicationIssueField[])=>{if(!items.some(t=>t.target===target&&t.message===message&&JSON.stringify(t.fields)===JSON.stringify(fields)))items.push({label,message,target,blocking,...(fields?{fields}:{})})}
  for(const p of app.people)if(p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??''))add(p.name,'グレード宣言を原本で確認して選択してください。',applicationPersonTarget(p.key),true,['horseGrade'])
+ for(const message of review.stableIssues)add('入退厩予定',message,'application-stable')
  for(const message of app.issues)add('Excel原本',message,'application-source')
  if(!rosterLoaded)add('既存登録の確認','登録済みの団体・人馬を読み込んでください。','application-club')
  for(const p of app.people)if(!d.choices[p.key])add(p.name||'名前未入力','既存の人馬を選ぶか、新規登録を選んでください。',applicationPersonTarget(p.key),true,['choice'])

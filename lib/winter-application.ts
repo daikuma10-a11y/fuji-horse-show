@@ -1,3 +1,5 @@
+import {extractWinterStableSchedule} from './winter-stable-extraction'
+import {stableScheduleIssues} from './master/stable-schedule'
 import {extractWinterEntryCount} from './winter-application-count-extraction'
 import {reviewApplicationEntryCounts,applicationEntryCountAssignments} from './master/application-entry-counts'
 import {searchIdentityCandidate} from './master/identity-candidate-search'
@@ -25,7 +27,7 @@ export function extractWinterApplication(book:InputBook,fileName:string,digest:s
  if(!/2026.*Winter.*Grand Prix/i.test(value(summary,'A1')))throw new Error('2026 Winter以外の申込書は取り込めません')
  const rs=riders[0],hs=horses[0],clubRow=rows(rs).find(r=>norm(value(rs,'C'+r))==='団体名')
  if(!clubRow)throw new Error('団体名の欄を確認できません')
- const app:Application={fileName,digest,eventId:WINTER_EVENT_ID,club:value(rs,'D'+clubRow),clubOrigin:origin(rs,'D'+clubRow),people:[],entries:[],entryCounts:[],amounts:{horse:value(summary,'F6'),jump:value(summary,'F7'),dressage:value(summary,'F8'),total:value(summary,'F10')},amountOrigins:{horse:origin(summary,'F6'),jump:origin(summary,'F7'),dressage:origin(summary,'F8'),total:origin(summary,'F10')},issues:[],sheets:[]}
+ const app:Application={...extractWinterStableSchedule(summary,book),fileName,digest,eventId:WINTER_EVENT_ID,club:value(rs,'D'+clubRow),clubOrigin:origin(rs,'D'+clubRow),people:[],entries:[],entryCounts:[],amounts:{horse:value(summary,'F6'),jump:value(summary,'F7'),dressage:value(summary,'F8'),total:value(summary,'F10')},amountOrigins:{horse:origin(summary,'F6'),jump:origin(summary,'F7'),dressage:origin(summary,'F8'),total:origin(summary,'F10')},issues:[],sheets:[]}
  for(const [s,kind] of [[rs,'rider'],[hs,'horse']] as const){
   const rosterRows:number[]=rows(s).filter(row=>/^\d+$/.test(value(s,'A'+row))&&row<(s===rs?clubRow:68))
   for(const r of rosterRows){
@@ -87,7 +89,9 @@ export function applicationReview(app:Application,paid:string,checked:boolean){
  const credentialIssues=app.people.filter(p=>p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??'')).map(p=>`${p.name}：グレード宣言を原本で確認して選択してください`)
  const countAssignments=applicationEntryCountAssignments(app),entryCounts=reviewApplicationEntryCounts(app),countIssues=entryCounts.flatMap(row=>row.buckets.filter(b=>b.reason).map(b=>b.reason))
  countIssues.push(...[...countAssignments.values()].filter(a=>a.reason).map(a=>a.reason))
- return {report,amounts,credentialIssues,entryCounts,countAssignments,countIssues,ready:!countIssues.length&&!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
+ const stableIssues=stableScheduleIssues(app.stable)
+ for(const key of ['arrivalDate','departureDate'] as const)if(app.stable?.[key]&&!app.stable[key].startsWith('2026-'))stableIssues.push('入退厩日は2026年の日付で確認してください。')
+ return {report,amounts,credentialIssues,entryCounts,countAssignments,countIssues,stableIssues,ready:!stableIssues.length&&!countIssues.length&&!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
 }
 export function rosterCandidates(person:ApplicationPerson,data:SharedRoster,club:string,options:{similar?:boolean;search?:string}={}){
  const clubNames=new Map(data.clubs.map(c=>[c.id,c.name]))
@@ -105,6 +109,7 @@ export function applicationDifferences(before:Application,after:Application){
  const differences:{location:string;before:string;after:string;kind:string}[]=[]
  function compare(label:string,a:unknown,b:unknown){if(JSON.stringify(a)!==JSON.stringify(b))differences.push({location:label,before:a===undefined?'（なし）':JSON.stringify(a),after:b===undefined?'（なし）':JSON.stringify(b),kind:a===undefined?'追加候補':b===undefined?'取消候補':'変更候補'})}
  compare('団体名',before.club,after.club)
+ compare('入退厩予定',before.stable,after.stable)
  const counts=(app:Application)=>new Map((app.entryCounts??[]).flatMap(row=>row.buckets.map(bucket=>[`${row.key}:${bucket.kind}`,{location:`${bucket.origin.sheet}!${bucket.origin.cell}・第${row.competition}競技 集計人数`,value:bucket.origin.value}] as const)))
  const beforeCounts=counts(before),afterCounts=counts(after)
  for(const key of new Set([...beforeCounts.keys(),...afterCounts.keys()]))compare((afterCounts.get(key)??beforeCounts.get(key))!.location,beforeCounts.get(key)?.value,afterCounts.get(key)?.value)

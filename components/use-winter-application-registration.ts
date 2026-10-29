@@ -12,7 +12,7 @@ import {winterStorageKey} from '@/lib/winter-event'
 import type {AdminSession} from '@/lib/supabase-rest'
 
 type Plan=Awaited<ReturnType<typeof reviewApplicationRegistration>>
-const completePlan=(plan:Plan,work:ApplicationRegistration)=>plan.ready&&!plan.pendingRoster.length&&plan.credentialsComplete&&plan.participating&&work.review.edited.entries.length>0&&plan.entries?.rows.length===work.review.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered')
+const completePlan=(plan:Plan,work:ApplicationRegistration)=>plan.ready&&!plan.pendingRoster.length&&plan.credentialsComplete&&plan.stable.complete&&plan.participating&&work.review.edited.entries.length>0&&plan.entries?.rows.length===work.review.edited.entries.length&&plan.entries.rows.every(r=>r.state==='registered')
 function observedProgress(plan:Plan,work:ApplicationRegistration):ApplicationImportProgress{return {phase:'verifying',detail:'保存結果を確認しました',peopleConfirmed:plan.people.filter(p=>p.state==='registered'&&!plan.pendingRoster.some(r=>r.key===p.key)).length,peopleTotal:work.review.edited.people.length,entriesConfirmed:plan.entries?.rows.filter(r=>r.state==='registered').length??0,entriesTotal:work.review.edited.entries.length}}
 function focusFeedback(){if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{const el=document.getElementById('application-import-status');el?.scrollIntoView({block:'center',behavior:'smooth'});el?.focus({preventScroll:true})})}
 const copy=<T,>(v:T):T=>structuredClone(v)
@@ -95,7 +95,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  }
  function finishFeedback(plan:Plan,value:ApplicationRegistration,operation:'save'|'review'){
   const complete=completePlan(plan,value),stopped=operation==='save'&&stop.current&&!complete
-  setFeedback({signature:signature(value.review),operation,state:complete?'success':stopped?'stopped':operation==='review'&&plan.ready?'ready':'attention',progress:observedProgress(plan,value),checkedAt:new Date().toISOString(),detail:complete?'人馬・出番・資格・グレードの保存結果を確認しました。出番表と精算を確認できます。':stopped?'保存できた分を確認しました。残りは再確認してから再開できます。':plan.ready?'内容の確認が終わりました。上の確認欄にチェックし、取り込むボタンを押してください。':plan.issues.join('\n')||'まだ保存が完了していない項目があります。確認してから再開してください。'})
+  setFeedback({signature:signature(value.review),operation,state:complete?'success':stopped?'stopped':operation==='review'&&plan.ready?'ready':'attention',progress:observedProgress(plan,value),checkedAt:new Date().toISOString(),detail:complete?'人馬・出番・資格・グレード・入退厩予定の保存結果を確認しました。出番表と精算を確認できます。':stopped?'保存できた分を確認しました。残りは再確認してから再開できます。':plan.ready?'内容の確認が終わりました。上の確認欄にチェックし、取り込むボタンを押してください。':plan.issues.join('\n')||'まだ保存が完了していない項目があります。確認してから再開してください。'})
   focusFeedback()
  }
  function restore(value:ApplicationRegistration){
@@ -134,7 +134,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
  const panel:ApplicationRegistrationPanelProps={
   complete:!!(plan&&model&&completePlan(plan,model)),
   feedback:feedback&&activeReview&&feedback.signature===signature(activeReview)?feedback:undefined,
-  rosterCorrectionCount:plan?.pendingRoster.length??0,credentials:plan?.credentials,showAccountConfirmation:!!(p.draft&&!work&&!p.draft.accountChecked&&(plan||correctionSource)),hasCorrections,reviewStale:!!correctionSource&&!plan,
+  rosterCorrectionCount:plan?.pendingRoster.length??0,credentials:plan?.credentials,stable:plan?.stable,showAccountConfirmation:!!(p.draft&&!work&&!p.draft.accountChecked&&(plan||correctionSource)),hasCorrections,reviewStale:!!correctionSource&&!plan,
   busy:busy||p.isReviewBusy(),running,frozen:!!work,hasCheckpoint:!!work,hasPlan:!!plan,ready:!!plan?.ready&&(!!work||!p.canImport||p.canImport()),canReview:!!activeReview&&(!!work||!p.canImport||p.canImport()),canOpenSaved:!!activeReview?.reference.trim(),accepted,singleOperator,
   reference:review?.reference??'',originalTotal:review?.edited.amounts.total??'',paid:review?.paid??'',participantState:plan?(plan.participating?'登録済み':'未登録を含む'):work?`端末記録：${status(work.participants.state)}（未再照合）`:'未照合',savedSummary:`出番の端末記録：登録確認済み ${registered}件 ／ 結果不明 ${unknown}件 ／ 未登録・未記録 ${Math.max(0,(work?.review.edited.entries.length??0)-registered-unknown)}件`,message,error:error||plan?.issues.join('\n')||'',people,
   entries:(model?.review.edited.entries??[]).map((entry,i)=>{const row=plan?.entries?.rows.find(r=>r.index===i);return {key:entry.key,label:`第${entry.competition}競技 ／ ${review!.edited.people.find(p=>p.key===entry.rider)?.name??'選手未対応'} ／ ${review!.edited.people.find(p=>p.key===entry.horse)?.name??'馬未対応'}${entry.op?' ／ OP':''}`,fee:row?.fee??appReview?.report.entries[i]?.price??null,id:row?.registeredId??row?.id,state:row?.differences.length?'要確認':row?status(row.state):work?.entries?'未再照合（端末の途中記録あり）':'参加登録後に出番を照合',issues:row?.differences??[]}}),
@@ -152,6 +152,7 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
    setAccepted(false);setSingleOperator(false)
    await exclusive(async()=>{
     const next=candidate();frozenMatch(shown.work,next)
+    if(!next.stable&&shown.plan.stable.expectation)next.stable=shown.plan.stable.expectation
     if(!next.credentials)next.credentials=Object.fromEntries(shown.plan.credentials.filter(c=>c.value).map(c=>[c.key,{requestId:c.requestId,expected:c.expected}]))
     if(local(next)!==expected.current)throw new Error('登録記録が変わりました。上書きせず照合してください')
     const service=services(),fresh=await reviewApplicationRegistration(next,await service.load())

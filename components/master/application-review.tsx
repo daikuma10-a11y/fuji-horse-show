@@ -2,6 +2,8 @@
 
 import {MasterApplicationCountReview} from './application-count-review'
 import {applicationEntriesByHorse,applicationEntryCountAssignments,type ApplicationCountReview} from '@/lib/master/application-entry-counts'
+import {MasterStableScheduleFields} from './stable-schedule-fields'
+import {emptyStableSchedule,type StableSchedule} from '@/lib/master/stable-schedule'
 import {MasterApplicationReviewRow,MasterApplicationReviewField} from './application-review-row'
 import {ApplicationAffiliationFields,type ApplicationAffiliationValue} from './application-affiliation'
 import type {RosterAffiliationEdit} from '@/lib/master/application'
@@ -51,7 +53,7 @@ export function MasterApplicationReview(p:{
  qualificationNotes?:Record<string,string>
  differences:ApplicationDifference[]|null;revisionName:string
  onFiles:(files:FileList|null)=>void;onRead:()=>void;onRestoreFile:(file:File)=>void;onSave:()=>void;onOpenSaved:()=>void;onDownload:()=>void;onLoadRoster:()=>void;onReset:()=>void
- onReference:(s:string)=>void;onClub:(s:string)=>void;onPaid:(s:string)=>void;onAccountChecked:(v:boolean)=>void
+ scheduleYear?:string;onStable?:(value:StableSchedule)=>void;onReference:(s:string)=>void;onClub:(s:string)=>void;onPaid:(s:string)=>void;onAccountChecked:(v:boolean)=>void
  onPerson:(key:string,patch:Partial<ApplicationPerson>)=>void;onEntry:(key:string,patch:Partial<ApplicationEntry>)=>void
  onAddEntry?:(sourceKey?:string)=>void;onAddPerson?:(kind:ApplicationPerson['kind'])=>void;onRemoveAddition?:(key:string)=>void
  affiliations?:Record<string,ApplicationAffiliationValue>;onAffiliation?:(key:string,value:RosterAffiliationEdit)=>void
@@ -117,6 +119,7 @@ export function MasterApplicationReview(p:{
     </div>
     <details id="application-reference" tabIndex={-1} className="rounded-lg border p-3"><summary className="cursor-pointer font-semibold">資料番号（自動発行済み・通常は入力不要）</summary><p className="my-2">同じファイルには同じ番号を使います。追加・訂正版は別番号になり、既存の出番と照合します。</p><label>資料番号<input className={field} maxLength={100} value={p.reference} onChange={e=>p.onReference(e.target.value)}/></label></details>
    </fieldset>
+    {p.onStable&&<section id="application-stable" tabIndex={-1} className="space-y-3 scroll-mt-24 rounded-xl border-2 p-4"><h5 className="text-xl font-bold">入退厩予定</h5><p>申込書から読み取った日時です。この場で訂正でき、③で取り込むと手帳チェックに反映します。空欄では保存済みの日時を消しません。</p><MasterStableScheduleFields value={app.stable??emptyStableSchedule()} onChange={p.onStable} disabled={p.busy||!!p.frozen} year={p.scheduleYear}/><details className="text-sm"><summary>Excel原本の記載を見る</summary>{(['arrival','departure','notes'] as const).flatMap(kind=>(source.stableOrigins?.[kind]??[]).map((o,i)=><p key={kind+i}>{kind==='arrival'?'入厩':kind==='departure'?'退厩':'要望'}：{o.value||'空欄'}</p>))}</details></section>}
     <section aria-label="人馬名簿：原本と読取・訂正値" className="min-w-0 space-y-4"><h5 className="text-xl font-bold">②-1 選手・馬の確認と仮確定</h5><p>ここは今回の申込の下書きです。「登録済み」は選んだ人馬が既存名簿にあることを示し、この表で直した内容の保存完了を意味しません。団体名が未入力でも、名前・フリガナ・日馬連番号から候補を選べます。</p>
      <p className="flex flex-wrap gap-2 text-sm"><span className="rounded border-2 border-amber-600 bg-amber-100 px-2 py-1">黄色：取り込み前に確認・訂正が必要</span><span className="rounded border-2 border-sky-600 bg-sky-50 px-2 py-1">水色：補足・任意の確認</span></p>
      {(['rider','horse'] as const).map(kind=>{const people=app.people.filter(person=>person.kind===kind),title=kind==='rider'?'選手一覧':'馬一覧',headers=kind==='rider'?['選手名・登録先','フリガナ','日馬連番号','所有資格級','乗馬協会','指導者協会']:['馬名・登録先','フリガナ','日馬連番号','グレード宣言'];return <section key={kind} aria-label={title} className="min-w-0 space-y-2">
