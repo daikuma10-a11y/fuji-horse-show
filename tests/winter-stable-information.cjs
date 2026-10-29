@@ -1,0 +1,53 @@
+require('./register-ts.cjs')
+const assert = require('node:assert/strict')
+const React = require('react'), { renderToStaticMarkup } = require('react-dom/server')
+const { WINTER_EVENT_ID: eventId } = require('../lib/winter-event.ts')
+const { winterStableGroups } = require('../lib/winter-stable-information.ts')
+const { stableChecklistPages, stableChecklistHtml, fitStableChecklistNames } = require('../lib/master/stable-information.ts')
+const { MasterStableInformation } = require('../components/master/stable-information.tsx')
+const org = (id, name) => ({ id, name, event_id: eventId })
+const horse = (id, name, organization_id, extra={}) => ({ id, name, organization_id, event_id:eventId, ...extra })
+const data = { eventId, organizations:[org('a','団体A'),org('b','団体B'),org('empty','空の団体')], horses:[
+  horse('h1','同じ馬名','a'), horse('h2','同じ馬名','a'),
+  horse('reserve','出番未登録の参加馬','b',{roster_source:'shared_roster',is_participant:true}),
+  horse('excluded','名簿のみ','a',{roster_source:'shared_roster',is_participant:false}),
+], entries:[] }
+const original=JSON.stringify(data), groups=winterStableGroups(data)
+assert.equal(groups.length,2)
+assert.equal(groups[0].horses.length,2,'Equal names with different identities stay separate')
+assert.equal(groups[1].horses[0].id,'reserve','Reserve horses without entries still require stable checks')
+assert.equal(JSON.stringify(data),original,'No roster or registration mutations')
+assert.throws(()=>winterStableGroups({...data,eventId:'autumn'}),/Winter/)
+assert.throws(()=>winterStableGroups({...data,horses:[{...data.horses[0],event_id:'autumn'}]}),/Winter/)
+assert.throws(()=>winterStableGroups({...data,horses:[horse('bad','馬','missing')]}),/団体/)
+assert.throws(()=>winterStableGroups({...data,horses:[data.horses[0],data.horses[0]]}),/重複/)
+const long='とても長い馬名でも省略せず一行に縮小して表示するウィンタースター号'
+const many={id:'many',name:'団体名<script>bad()</script>',horses:Array.from({length:17},(_,i)=>({id:String(i),name:i===0?long:`馬${i+1}号`}))}
+const pages=stableChecklistPages([many,...groups])
+assert.deepEqual(pages.map(p=>p.length),[2,2])
+assert.deepEqual(pages[0].map(p=>p.horses.length),[16,1])
+assert.deepEqual(pages[0].map(p=>[p.total,p.part,p.parts]),[[17,1,2],[17,2,2]])
+assert.equal(stableChecklistPages([{...many,horses:many.horses.slice(0,16)}])[0].length,1)
+assert.deepEqual(stableChecklistPages([]),[])
+const html=stableChecklistHtml([many,...groups],'Winter')
+assert.ok(html.includes(long))
+assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'))
+assert.equal((html.match(/class="stable-card"/g)||[]).length,4)
+assert.equal((html.match(/class="stable-box"/g)||[]).length,64)
+assert.equal((html.match(/>備考</g)||[]).length,8)
+assert.ok(html.includes('size:A4 landscape'));assert.ok(html.includes('white-space:nowrap'))
+assert.ok(!html.includes('入厩日'));assert.ok(!html.includes('退厩日'))
+const spans=[{style:{},getBoundingClientRect:()=>({width:240})},{style:{},getBoundingClientRect:()=>({width:50})}]
+const boxes=spans.map(span=>({dataset:{fitSize:'11'},querySelector:()=>span,getBoundingClientRect:()=>({width:120})}))
+fitStableChecklistNames({querySelectorAll:()=>boxes})
+assert.ok(parseFloat(spans[0].style.fontSize)<5.5,'Shrink to the measured width, with a small safety margin')
+assert.equal(spans[1].style.fontSize,'11pt','Short names retain the standard size')
+const props={groups,eventName:'Winter',loadForPrint:async()=>groups}
+const view=renderToStaticMarkup(React.createElement(MasterStableInformation,props))
+assert.ok(view.includes('入厩チェックリスト'));assert.ok(view.includes('一括印刷'))
+assert.ok(view.includes('厩舎配置図'));assert.ok(view.includes('出店配置図'))
+const busy=renderToStaticMarkup(React.createElement(MasterStableInformation,{...props,loading:true}))
+assert.match(busy,/<button[^>]*disabled/)
+const failed=renderToStaticMarkup(React.createElement(MasterStableInformation,{...props,error:'読取失敗'}))
+assert.match(failed,/<button[^>]*disabled/);assert.ok(failed.includes('role="alert"'))
+console.log('PASS: participant scope, distinct identities, event guards, 16/17-horse pagination, escaped complete names, measured shrink, loading/error guards, no writes')
