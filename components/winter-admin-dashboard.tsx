@@ -21,6 +21,7 @@ import {WinterAdminNavigation,winterAdminTabs,type WinterAdminTab} from '@/compo
 import {MasterPreRegistration,type PreRegistrationSection} from '@/components/master/pre-registration'
 import {WinterApplicationImport} from '@/components/winter-application-import'
 import {WinterRegistrationOverview} from '@/components/winter-registration-overview'
+import {WinterStableInformation} from '@/components/winter-stable-information'
 const sessionKey=winterStorageKey('admin-session')
 const field='mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-background px-4 text-lg'
 const button='inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 border-border bg-card px-5 text-xl font-semibold'
@@ -50,6 +51,7 @@ export function WinterAdminDashboard(){
   if(window.location.hash==='#winter-application-import'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('application')}
   if(window.location.hash==='#winter-registration-overview'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-meeting'){setTab('meeting');setVisited(['requests','meeting'])}
+  if(window.location.hash==='#winter-stable-information'){setTab('stable');setVisited(['requests','stable'])}
   const raw=sessionStorage.getItem(sessionKey)
   if(!raw){setChecking(false);return}
   try{verifyAdminSession(JSON.parse(raw) as AdminSession).then(next=>{if(active)updateSession(next)}).catch(()=>{if(active)sessionStorage.removeItem(sessionKey)}).finally(()=>{if(active)setChecking(false)})}
@@ -80,7 +82,7 @@ export function WinterAdminDashboard(){
  <p role="status" className="print-hide mb-3">{liveStatus}</p>
  {tab!=='startlist'&&<> <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div></>}
  {dataError&&<p role="alert" className="mb-4 rounded-xl bg-red-100 p-4 text-xl">{dataError}</p>}
- {tab!=='startlist'&&<WinterExportPanel session={session} onSession={updateSession}/>}
+ {tab!=='startlist'&&tab!=='stable'&&<WinterExportPanel session={session} onSession={updateSession}/>}
  {/* Visited panels remain mounted so tab changes preserve unsaved inputs and monitor state. */}
  {winterAdminTabs.filter(t=>visited.includes(t.id)).map(t=><section key={t.id} role="tabpanel" id={`winter-panel-${t.id}`} aria-labelledby={`winter-tab-${t.id}`} tabIndex={-1} hidden={tab!==t.id} className="space-y-5">
  {t.id==='roster'?<MasterPreRegistration selected={registrationSection} onSelect={setRegistrationSection}
@@ -91,6 +93,7 @@ export function WinterAdminDashboard(){
  ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">CSV・TSVからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVは、これまでの取込準備画面を使えます。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
  t.id==='meeting'?<WinterMeetingPanel session={session} onSession={updateSession} onChanged={refresh} onStartlist={()=>select('startlist')}/>:
+ t.id==='stable'?<WinterStableInformation data={data} loading={loading} error={dataError} session={session} onSession={updateSession} active={tab==='stable'} revision={revision}/>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='timetable'?<WinterTimetable data={data} session={session} onSession={updateSession} onChanged={refresh}/>:
  t.id==='requests'?<WinterRequestPanel session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh} showWithdraw={false}/>:
