@@ -12,6 +12,7 @@ function hooks(){
   render(fn){index=0;pending=[];const value=fn();pending.forEach(f=>f());return value},
   useState(initial){const i=index++;cells[i]??={value:typeof initial==='function'?initial():initial};return[cells[i].value,v=>{cells[i].value=typeof v==='function'?v(cells[i].value):v}]},
   useRef(initial){const i=index++;return cells[i]??(cells[i]={current:initial})},
+  useId(){const i=index++;cells[i]??={value:`test-id-${i}`};return cells[i].value},
   useMemo(fn,deps){const i=index++;if(!cells[i]||!equal(cells[i].deps,deps))cells[i]={value:fn(),deps};return cells[i].value},
   useEffect(fn,deps){const i=index++;if(!cells[i]||!equal(cells[i].deps,deps))pending.push(()=>{cells[i]?.cleanup?.();cells[i]={deps,cleanup:fn()}})},
   close(){cells.forEach(c=>c?.cleanup?.())},
@@ -33,7 +34,7 @@ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{get locks
 const originalCreate=URL.createObjectURL,originalRevoke=URL.revokeObjectURL
 URL.createObjectURL=blob=>{downloadBlob=blob;return 'blob:synthetic-only'};URL.revokeObjectURL=()=>{}
 Module._load=function(name,...args){
- if(name==='react')return {...React,...Object.fromEntries(['useState','useRef','useMemo','useEffect'].map(k=>[k,(...args)=>h[k](...args)]))}
+ if(name==='react')return {...React,...Object.fromEntries(['useState','useRef','useId','useMemo','useEffect'].map(k=>[k,(...args)=>h[k](...args)]))}
  if(name==='@/lib/winter-application-services')return {winterApplicationServices:()=>({
   load:async()=>{loads++;if(deny)throw Error('synthetic admin denied');if(gateLoad)await gateLoad;if(holdFinal&&env.posts.entry>0&&env.stored?.entries&&Object.values(env.stored.entries.states).every(s=>s==='registered')){holdFinal=false;await new Promise(resolve=>releaseFinal=resolve)}return structuredClone(env.snapshot)},
   saveCredential:input=>env.deps.saveCredential(input),savePerson:input=>env.deps.savePerson(input),saveParticipants:(...args)=>env.deps.saveParticipants(...args),saveEntry:input=>env.deps.saveEntry(input),
