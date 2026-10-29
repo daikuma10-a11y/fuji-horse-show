@@ -238,7 +238,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   message={message} error={error} fileName={file?.name??''} eventName={WINTER_EVENT_NAME}
   formatDescription="対応：2026 Winterの指定様式（選手30人・馬20頭、障害・馬場の追加入力欄とコピーシート）。"
   original={draft?.original??null} edited={draft?.edited??null} reference={draft?.reference??''} paid={draft?.paid??''} accountChecked={draft?.accountChecked??false}
-  review={review?{entryCounts:review.entryCounts,amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),entryFeeTotal:review.report.entryFeeTotal,horseRegistration:{count:draft!.edited.people.filter(p=>p.kind==='horse').length,unit:WINTER_HORSE_REGISTRATION_FEE},issues:[...draft!.edited.issues,...review.countIssues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
+  review={review?{entryCounts:review.entryCounts,amounts:review.amounts,entryPrices:review.report.entries.map(e=>e.price),entryFeeTotal:review.report.entryFeeTotal,horseRegistration:{count:draft!.edited.people.filter(p=>p.kind==='horse').length,unit:WINTER_HORSE_REGISTRATION_FEE},issues:[...draft!.edited.issues,...review.countIssues,...review.stableIssues,...review.report.issues.map(i=>`${i.section} ${i.row}行：${i.message}`)],ready:review.ready}:null}
   candidateSearch={candidateSearch} onCandidateSearch={(key,value)=>{if(!lock.current&&!registration.isBusy()&&!registration.isFrozen())setCandidateSearch(s=>({...s,[key]:value}))}}
   candidates={candidates} choices={draft?.choices??{}} qualificationNotes={qualificationNotes} rosterLoaded={roster!==null} differences={differences} revisionName={revision?.fileName??''} competitions={preparation.competitions}
   onFiles={files=>{if(lock.current||registration.isBusy())return;if(!files||files.length!==1){setError('Excelファイルを1つ選択してください');return}setFile(files[0]);setError('')}}
@@ -258,6 +258,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   onDownload={()=>void action(()=>{if(draft&&!registration.isFrozen()){download(draft);setMessage('確認再開JSONのダウンロードを開始しました。保存先でファイルを確認してください。')}})}
   onReset={nextApplication}
   onLoadRoster={()=>void action(async()=>{if(registration.isFrozen())return;await loadContext();setMessage('既存登録を確認しました。候補の所属・番号を確認して選んでください。')})}
+  scheduleYear="2026" onStable={stable=>edit(d=>({...d,edited:{...d.edited,stable}}))}
   onReference={reference=>edit(d=>({...d,reference}))}
   onClub={club=>{edit(d=>({...d,rosterEdits:{},accountChecked:false,edited:{...d.edited,club}}));setIntent('');registration.invalidate()}}
   onPaid={paid=>edit(d=>({...d,paid,accountChecked:false}))} onAccountChecked={accountChecked=>edit(d=>({...d,accountChecked}))}

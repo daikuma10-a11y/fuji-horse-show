@@ -1,14 +1,15 @@
+import {stableDateLabel,type StableSchedule} from './stable-schedule'
 import type { StableGroup } from './stable-information'
 
 export type BookletRow = { id: string; name: string; count: number; received: string; arrival: string; departure: string; returned: string; notes: string }
 export type UnsettledRow = { id: string; name: string; amount: number | null; notes: string; review: boolean }
 export const bookletHeaders = ['No.', '団体名', '手帳受取日', '頭数', '入厩日時', '退厩日時', '手帳返却日', '備考']
 export const unsettledHeaders = ['✓', '乗馬クラブ名', '金額', '備考']
-export const bookletExplanation = '団体名・頭数は参加登録から自動反映します。手帳受取日・返却日、入退厩日時、備考は印刷後に記入してください。'
+export const bookletExplanation = '団体名・頭数は参加登録、入退厩日時は保存済みの申込内容から自動反映します。日時の空欄は未登録です。手帳受取日・返却日は印刷後に記入してください。'
 export const unsettledExplanation = '精算画面と同じ請求・入金記録から作成します。残額がある団体と、入金・料金・返金の確認が必要な団体を表示します。後日振込の選択だけでは入金済みになりません。'
 export const yen = (value: number) => `${value.toLocaleString('ja-JP')}円`
-export function bookletRows(groups: StableGroup[]): BookletRow[] {
-  return groups.map(group => ({ id: group.id, name: group.name, count: group.horses.length, received: '', arrival: '', departure: '', returned: '', notes: '' }))
+export function bookletRows(groups: StableGroup[], schedules: {id:string;value:StableSchedule}[] = []): BookletRow[] {
+  return groups.map(group => {const value=schedules.find(s=>s.id===group.id)?.value;return { id: group.id, name: group.name, count: group.horses.length, received: '', arrival: value?stableDateLabel(value.arrivalDate,value.arrivalTime):'', departure: value?stableDateLabel(value.departureDate,value.departureTime):'', returned: '', notes: value?.notes??'' }})
 }
 function escape(value: string | number) { return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!) }
 const style = `
