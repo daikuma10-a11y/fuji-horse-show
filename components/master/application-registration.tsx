@@ -2,6 +2,7 @@
 
 import {stableDateLabel,type StableSchedule} from '@/lib/master/stable-schedule'
 import {MasterApplicationImportStatus} from './application-import-status'
+import {MasterFilePicker} from './file-picker'
 import type {ApplicationImportFeedback} from '@/lib/master/application-import-status'
 import {ApplicationAffiliationFields} from './application-affiliation'
 import type {ApplicationPerson,IdentityCandidate,RosterAffiliationEdit} from '@/lib/master/application'
@@ -73,14 +74,14 @@ function IdentityCorrectionFields({value,p}:{value:IdentityCorrection;p:Applicat
 export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProps){
  const existing=p.entries.filter(r=>r.state==='登録済み').length,remaining=p.entries.length-existing
  const extra=p.entries.filter(r=>r.state!=='登録済み').reduce((sum,r)=>sum+(r.fee??0),0)
- return <section id="application-registration" tabIndex={-1} aria-label="申込書の確定登録と再開" className="space-y-4 rounded-xl border-2 border-blue-800 p-5">
+ return <section id="application-registration" tabIndex={-1} aria-label="申込書の確定登録と再開" className="master-action-surface space-y-4 rounded-xl border-2 border-blue-800 p-5">
   <h3 className="text-2xl font-bold">{p.complete?'④ 取り込み結果':'③ 確認した内容を取り込む'}</h3>
   <p>{p.complete?'今回のExcelの出番はすべて登録済みです。重複して取り込む必要はありません。':'②で内容を確認した後、ここで取込対象を確認します。取り込むボタンを押すと出番表と精算の請求に反映します。'}</p>
   {!p.hasPlan&&!p.frozen&&!p.hasCorrections&&!p.reviewStale&&<p className="rounded-lg bg-blue-50 p-3">まず②の確認箇所を直して「取込内容を確認する」を押してください。</p>}
   <details className="rounded-lg border p-3"><summary className="cursor-pointer font-bold">以前の取り込みを再開する</summary>
   <div className="flex flex-wrap gap-3">
    <button type="button" className={button} disabled={p.busy||!p.canOpenSaved} onClick={p.onOpenSaved}>この資料番号の登録途中を開く</button>
-   <label className={button}>登録再開JSONを開く<input type="file" accept=".json" className="block max-w-full text-base" disabled={p.busy} onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)p.onRestoreFile(f)}}/></label>
+   <MasterFilePicker label="登録再開JSONを選んで開く" accept=".json" disabled={p.busy} hint="登録途中に保存したJSONを選ぶと、その内容を開きます。" onFiles={files=>{const f=files[0];if(f)p.onRestoreFile(f)}}/>
   </div>
   <p className="mt-3">同じ端末では資料番号から再開できます。別の端末では最新の登録再開JSONを開いてください。</p></details>
   {p.frozen&&<p className="rounded-lg bg-amber-50 p-3 font-semibold">登録再開記録を開いています。確定時の入力は固定しています。訂正版は上のExcel読込から差分だけを確認し、既存登録を変更・削除しません。</p>}

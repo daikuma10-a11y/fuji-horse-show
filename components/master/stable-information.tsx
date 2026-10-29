@@ -21,7 +21,7 @@ export function MasterStableInformation({ groups, eventName, loading = false, er
       return stableChecklistHtml(target, eventName)
     }, '横', fitStableChecklistNames)
   }
-  return <section className="space-y-5" aria-label="入厩情報">
+  return <section className="master-action-surface space-y-5" aria-label="入厩情報">
     <h2 className="text-2xl font-bold">入厩情報</h2>
     <div className="space-y-4 rounded-xl border-2 bg-card p-4">
       <h3 className="text-xl font-bold">入厩チェックリスト</h3>

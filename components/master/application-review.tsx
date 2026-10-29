@@ -3,6 +3,7 @@
 import {MasterApplicationCountReview} from './application-count-review'
 import {applicationEntriesByHorse,applicationEntryCountAssignments,type ApplicationCountReview} from '@/lib/master/application-entry-counts'
 import {MasterStableScheduleFields} from './stable-schedule-fields'
+import {MasterFilePicker} from './file-picker'
 import {emptyStableSchedule,type StableSchedule} from '@/lib/master/stable-schedule'
 import {MasterApplicationReviewRow,MasterApplicationReviewField} from './application-review-row'
 import {ApplicationAffiliationFields,type ApplicationAffiliationValue} from './application-affiliation'
@@ -74,7 +75,7 @@ export function MasterApplicationReview(p:{
  const attributes=(target:string,key:ApplicationIssueField)=>{const ns=fieldNotes(target,key);return {id:`${target}-${key}-input`,'aria-invalid':ns.some(n=>n.blocking)||undefined,'aria-describedby':ns.length?`${target}-${key}-message`:undefined}}
  const inline=(target:string,key:ApplicationIssueField,content:ReactNode)=><MasterApplicationReviewField id={`${target}-${key}`} notes={fieldNotes(target,key)}>{content}</MasterApplicationReviewField>
  const panel=(target:string)=>`scroll-mt-24 rounded-xl border-2 p-4 ${notes(target).some(t=>t.blocking)?'border-amber-500 bg-amber-50/30':'border-slate-300 bg-white'}`
- return <section aria-label="申込書の読み込み" className="min-w-0 space-y-5 rounded-xl border-2 border-blue-300 bg-white p-4 text-slate-900 sm:p-5">
+ return <section aria-label="申込書の読み込み" className="master-action-surface min-w-0 space-y-5 rounded-xl border-2 border-blue-300 bg-white p-4 text-slate-900 sm:p-5">
   <h3 className="text-2xl font-bold">Excel申込書の取り込み</h3>
   <p>{p.eventName}</p>
   <ol aria-label="取り込みの進み具合" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{['① 申込書を読む','② 内容を確認・訂正','③ 取り込む','④ 反映結果'].map((label,i)=><li key={label} aria-current={stage===i+1?'step':undefined} className={`rounded-lg border-2 p-3 font-bold ${stage===i+1?'border-blue-800 bg-blue-800 text-white':stage>i+1?'border-emerald-700 bg-emerald-50':'border-slate-200 bg-slate-50'}`}>{label}{stage>i+1?' ✓':''}</li>)}</ol>
@@ -83,12 +84,11 @@ export function MasterApplicationReview(p:{
   </div>
   <div id="application-source" tabIndex={-1} className="space-y-3 rounded-xl border-2 border-dashed border-blue-700 p-4" onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='copy'}} onDrop={e=>{e.preventDefault();if(!p.busy)p.onFiles(e.dataTransfer.files)}}>
    <h4 className="text-xl font-bold">① 申込書を読み込む</h4>
-   <label className="block font-bold">Excelファイルを選択、またはここへドラッグして置く<input className={field} type="file" accept=".xlsx" disabled={p.busy} onChange={e=>{p.onFiles(e.target.files);e.target.value=''}}/></label>
-   <p>選択中：{p.fileName||'未選択'}</p>
+   <MasterFilePicker label="申込書のExcelを選ぶ" accept=".xlsx" disabled={p.busy} fileName={p.fileName} onFiles={p.onFiles} hint={`ボタンを押してファイルを選ぶか、この枠内にドラッグしてください。選んだ後、下の「${app?'選択したExcelと比較する':'申込書を読み込む'}」を押します。`}/>
    <button type="button" className={primaryButton} disabled={p.busy||!p.fileName} onClick={p.onRead}>{p.busy?'処理中…':app?'選択したExcelと比較する':'申込書を読み込む'}</button>
    <p>読み込んだだけでは登録しません。{app?'別のExcelを選ぶと、今の内容を保持して差分を表示します。':''}</p>
   </div>
-  <details className="rounded-lg border p-3"><summary className="cursor-pointer font-semibold">対応するExcel・途中から再開</summary><p className="my-3">{p.formatDescription} .xls・PDF・マクロ・外部参照は対象外です。数式はExcelで保存された計算結果を使います。</p><label className="block font-semibold">確認再開JSONを開く<input type="file" accept=".json" className={field} disabled={p.busy||p.frozen} onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)p.onRestoreFile(f)}}/></label></details>
+  <details className="rounded-lg border p-3"><summary className="cursor-pointer font-semibold">対応するExcel・途中から再開</summary><p className="my-3">{p.formatDescription} .xls・PDF・マクロ・外部参照は対象外です。数式はExcelで保存された計算結果を使います。</p><MasterFilePicker label="確認再開JSONを選んで開く" accept=".json" disabled={p.busy||p.frozen} hint="確認途中に保存したJSONを選ぶと、その内容を開きます。" onFiles={files=>{const f=files[0];if(f)p.onRestoreFile(f)}}/></details>
   {p.error&&<p role="alert" className="whitespace-pre-wrap rounded-xl bg-red-100 p-4">{p.error}</p>}
   {p.message&&<p role="status" className="whitespace-pre-wrap rounded-xl bg-blue-50 p-4">{p.message}</p>}
   {app&&source&&<>
