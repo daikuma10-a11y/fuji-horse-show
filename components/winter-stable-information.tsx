@@ -14,6 +14,8 @@ import { bookletRows, bookletPrintHtml, unsettledPrintHtml, type UnsettledRow } 
 import { winterUnsettledRows } from '@/lib/winter-stable-reports'
 import { loadWinterSettlement } from '@/lib/winter-settlement'
 import { verifyAdminSession, type AdminSession } from '@/lib/supabase-rest'
+import { MasterStallAllocation } from './master/stall-allocation'
+import { loadWinterStallPlan, saveWinterStallPlan } from '@/lib/winter-stall-allocation'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 const printedAt = () => new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
@@ -76,6 +78,7 @@ export function WinterStableInformation({ data, loading, error, session, onSessi
     return unsettledPrintHtml(winterUnsettledRows(fresh, ledger), WINTER_EVENT_NAME, printedAt())
   }
   return <MasterStableInformation groups={view.groups} eventName={WINTER_EVENT_NAME} loading={pending} error={problem} loadForPrint={async () => winterStableGroups(await loadWinterData())}
+    allocation={<MasterStallAllocation groups={view.groups} eventName={WINTER_EVENT_NAME} active={active&&!pending&&!problem} onLoad={async()=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);const [fresh,saved]=await Promise.all([loadWinterData(),loadWinterStallPlan(verified.accessToken)]);return {groups:winterStableGroups(fresh),saved}}} onSave={async(plan,expected)=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);return saveWinterStallPlan(plan,expected,verified.accessToken)}}/>}
     reports={<><MasterStableScheduleEditor rows={view.groups.map(g=>{const row=schedules.find(s=>s.organization_id===g.id);return {id:g.id,name:g.name,value:row?.value??emptyStableSchedule(),revision:row?.request_id??null}})} loading={pending||scheduleLoading} error={problem||scheduleError} year="2026" onReload={async()=>{await reloadSchedules()}} onSave={saveSchedule} onReadExcel={async file=>{const app=await readWinterApplication(new Uint8Array(await file.arrayBuffer()),file.name);return {club:app.club,value:app.stable??emptyStableSchedule()}}}/>
     <MasterStableReports booklets={bookletRows(view.groups,schedules.map(row=>({id:row.organization_id,value:row.value})))} bookletLoading={scheduleLoading} bookletError={scheduleError} unsettled={unsettled} loading={pending} error={problem} unsettledLoading={ledgerLoading} unsettledError={ledgerError}
       loadBookletPrint={loadBookletPrint} loadUnsettledPrint={loadUnsettledPrint}/></>}/>
