@@ -1,0 +1,32 @@
+{
+  "runId": "winter-offline-ipad-20261030-recovery-v1",
+  "eventId": "b571f05e-ed23-4e07-929e-be2b73e601a5",
+  "competitionId": "fac5f06e-5155-4177-b072-c79f96267a5c",
+  "clubs": [
+    {
+      "label": "A",
+      "name": "【オフライン確認専用】A",
+      "organizationId": "f383cafc-4351-534b-9136-c0f4193bfe82",
+      "riderId": "8c1e9b59-79cb-57dc-99a1-1b2e444d7527",
+      "horseId": "1a8f9876-6a04-5c93-b1f3-172c9809dcb1"
+    },
+    {
+      "label": "B",
+      "name": "【オフライン確認専用】B",
+      "organizationId": "cde350ff-a80b-5afd-833d-b2fe9a2d0007",
+      "riderId": "c2f8f3af-470e-5270-8373-2a033764ff3b",
+      "horseId": "9fe9c5cd-3b7f-55e1-bd53-12d4cc7fef16",
+      "entryId": "2aee4231-b912-5959-9466-871038f2b663",
+      "startOrder": 999981
+    },
+    {
+      "label": "C",
+      "name": "【オフライン確認専用】C",
+      "organizationId": "80064d97-3b7b-5988-9b45-b0b0202fd672",
+      "riderId": "055f019a-b18a-5eb0-af75-041838aacaca",
+      "horseId": "1563d7ec-3a00-5402-99c0-5e46b92288f0",
+      "entryId": "fb787e53-51f2-5a86-b132-c98a81663585",
+      "startOrder": 999982
+    }
+  ]
+}
