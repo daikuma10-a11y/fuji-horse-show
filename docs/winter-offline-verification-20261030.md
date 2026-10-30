@@ -15,7 +15,7 @@
 ## 実施済み
 
 - TypeScript `tsc --noEmit`。
-- Next.js production build（ローカルは共有node_modulesのシンボリックリンク制約があるためwebpack。Vercelの通常ビルドは別途記録）。
+- Next.js production build（webpack）。Vercelの最初のTurbopackビルドで既存Googleフォントの内部モジュール解決が失敗したため、検証済みのwebpack方式をビルドコマンドに明記した。依存バージョン・フォント・秘密設定の変更なし。
 - `tests/winter-offline.cjs`：合成3団体の追加・変更・棄権、端末保管／読み戻し、保存直後の再開、容量不足、競合更新、送信前／保存後の応答消失、ID・料金重複防止、独立受付の進行、変更済み対象／重複対象の要確認、大会分離。
 - `tests/winter-offline-worker.cjs`：完全準備後のみ有効化、オフラインHTML／資産取得、API等の除外、準備途中の失敗、部分キャッシュ消失、自動送信なし。Service Workerプロトコルの模擬試験。
 - `tests/winter-offline-ui.cjs`：名前は最後に1回、通信なしの保存、保存後の入力欄クリア、再マウント後の前の人の非表示／次の受付。DOM模擬試験。
