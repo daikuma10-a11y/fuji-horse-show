@@ -1,3 +1,4 @@
+import {WinterOfflineShell} from '@/components/winter-offline-shell'
 import type {Metadata} from 'next'
 import type {ReactNode} from 'react'
 import {WINTER_EVENT_NAME} from '@/lib/winter-event'
@@ -10,4 +11,4 @@ export const metadata:Metadata={
  appleWebApp:{capable:true,title:'FHS Winter',statusBarStyle:'default'},
 }
 
-export default function WinterLayout({children}:{children:ReactNode}){return children}
+export default function WinterLayout({children}:{children:ReactNode}){return <WinterOfflineShell>{children}</WinterOfflineShell>}

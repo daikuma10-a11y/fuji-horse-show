@@ -6,7 +6,7 @@ import type { WinterEntryRow } from './winter-data'
 export type WinterDraft = { type: 'add'; input: WinterAddInput } | { type: 'change'; input: WinterChangeInput } | {
   type: 'withdraw'; id: string; entry: WinterEntryRow; organizationId: string; organizationName: string; riderName: string; horseName: string; visitorName: string
 }
-export type WinterQueue = { version: 1; eventId: string; attempted: boolean; items: WinterDraft[]; visitorName?: string }
+export type WinterQueue = { version: 1; eventId: string; attempted: boolean; items: WinterDraft[]; visitorName?: string; receiptId?:string; localOnly?:boolean; contexts?:Record<string,Record<string,unknown>>; snapshotAt?:string }
 export type WinterQueueScope='reception'|'meeting'
 export const WINTER_MEETING_QUEUE_KEY=`fhs:winter:${WINTER_EVENT_ID}:meeting-drafts:v1`
 const queueKey=(scope:WinterQueueScope)=>scope==='meeting'?WINTER_MEETING_QUEUE_KEY:WINTER_QUEUE_KEY
@@ -36,6 +36,7 @@ export function winterDraftSummary(draft: WinterDraft) {
 
 export function validateWinterQueue(queue: WinterQueue,scope:WinterQueueScope='reception') {
   if (queue?.version !== 1 || queue.eventId !== WINTER_EVENT_ID || typeof queue.attempted !== 'boolean' || !Array.isArray(queue.items) || queue.items.length > 50) throw new Error('Winterの未確定一覧を確認できません')
+  if(queue.receiptId!==undefined&&!uuid.test(queue.receiptId))throw new Error('受付番号を確認してください')
   const ids = new Set<string>(), originals = new Set<string>(), organizations = new Set<string>()
   for (const item of queue.items) {
     const summary = winterDraftSummary(item)
@@ -56,15 +57,15 @@ export function readWinterQueue(storage: Pick<Storage, 'getItem'>,scope:WinterQu
   try { return validateWinterQueue(JSON.parse(raw),scope) } catch { throw new Error('この端末の未確定一覧を読み込めません。内容を消さず、本部に確認してください') }
 }
 
-export function writeWinterQueue(storage: Pick<Storage, 'setItem'>, queue: WinterQueue,scope:WinterQueueScope='reception') {
+export function writeWinterQueue(storage: Pick<Storage, 'setItem'> & Partial<Pick<Storage,'getItem'>>, queue: WinterQueue,scope:WinterQueueScope='reception') {
   validateWinterQueue(queue,scope)
-  try { storage.setItem(queueKey(scope), JSON.stringify(queue)) } catch { throw new Error('この端末に未確定内容を保存できません。ブラウザーの保存設定を確認してください') }
+  try { storage.setItem(queueKey(scope), JSON.stringify(queue)); if(storage.getItem&&storage.getItem(queueKey(scope))!==JSON.stringify(queue))throw new Error('保存の読み戻しに失敗しました') } catch { throw new Error('この端末に未確定内容を保存できません。ブラウザーの保存設定を確認してください') }
 }
 
-export function stageWinterDraft(draft: WinterDraft,scope:WinterQueueScope='reception') {
+export function stageWinterDraft(draft: WinterDraft,scope:WinterQueueScope='reception',source?:{context:Record<string,unknown>;snapshotAt?:string}) {
   const queue = readWinterQueue(window.localStorage,scope)
   if (queue.attempted) throw new Error('前の確定結果を確認してから次の申請を入力してください')
-  const next = validateWinterQueue({ ...queue, visitorName: undefined, items: [...queue.items, JSON.parse(JSON.stringify(draft))] },scope)
+  const next = validateWinterQueue({ ...queue, ...(source?{contexts:{...queue.contexts,[winterDraftSummary(draft).id]:source.context},snapshotAt:queue.snapshotAt??source.snapshotAt}:{}), receiptId:queue.receiptId??(scope==='reception'?crypto.randomUUID():undefined), visitorName: undefined, items: [...queue.items, JSON.parse(JSON.stringify(draft))] },scope)
   writeWinterQueue(window.localStorage, next,scope)
   window.dispatchEvent(new Event('winter-queue-changed'))
 }
