@@ -3,6 +3,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typ
 const {JSDOM}=require(process.env.JSDOM_MODULE||'jsdom')
 const dom=new JSDOM('<div id="root"></div>',{url:'https://winter.example.test/winter/confirm'})
 for(const key of ['window','document','HTMLElement','HTMLInputElement','Event','MouseEvent'])global[key]=key==='window'?dom.window:dom.window[key]
+global.localStorage=dom.window.localStorage
+global.indexedDB=require(process.env.FHS_TEST_IDB_PATH||'fake-indexeddb').indexedDB
 global.IS_REACT_ACT_ENVIRONMENT=true
 const React=require('react'),{act}=React,{createRoot}=require('react-dom/client')
 const resolve=Module._resolveFilename;Module._resolveFilename=function(id,...args){return resolve.call(this,id.startsWith('@/')?path.resolve(id.slice(2)):id,...args)}
@@ -10,7 +12,7 @@ for(const ext of ['.ts','.tsx'])Module._extensions[ext]=(m,f)=>{const original=m
 const {queue}=require('./winter-public-reception.cjs'),batch=require('../lib/winter-batch.ts'),Page=require('../app/winter/confirm/page.tsx').default
 const el=document.getElementById('root');let root,mode='offline',sent=[]
 global.fetch=async(url,options)=>{assert.equal(url,'/api/winter-reception');if(options.method!=='POST')return Response.json({ready:true});sent.push(options.body);if(mode==='offline')throw Error('offline');const b=JSON.parse(options.body);return Response.json({ids:b.p_items.map(x=>x.args.p_id),total:b.p_expected_total})}
-async function mount(){root=createRoot(el);await act(async()=>{root.render(React.createElement(Page))})}
+async function mount(){root=createRoot(el);await act(async()=>{root.render(React.createElement(Page))});for(let n=0;n<30&&!el.querySelector('input');n++)await act(async()=>{await new Promise(r=>setTimeout(r,10))})}
 async function submit(){await act(async()=>{el.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await new Promise(setImmediate)})}
 ;(async()=>{
  batch.writeWinterQueue(window.localStorage,queue);await mount()
