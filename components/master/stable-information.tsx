@@ -5,8 +5,8 @@ import { fitStableChecklistNames, stableChecklistHtml, type StableGroup } from '
 
 const button = 'min-h-14 rounded-xl border-2 border-primary bg-primary px-5 text-lg font-bold text-primary-foreground disabled:opacity-50'
 
-export function MasterStableInformation({ groups, eventName, loading = false, error = '', loadForPrint, reports }: {
-  groups: StableGroup[]; eventName: string; loading?: boolean; error?: string; loadForPrint: () => Promise<StableGroup[]>; reports?: ReactNode
+export function MasterStableInformation({ groups, eventName, loading = false, error = '', loadForPrint, reports, allocation }: {
+  groups: StableGroup[]; eventName: string; loading?: boolean; error?: string; loadForPrint: () => Promise<StableGroup[]>; reports?: ReactNode; allocation?: ReactNode
 }) {
   const [selected, setSelected] = useState('')
   const printer = usePrintDocument()
@@ -37,8 +37,9 @@ export function MasterStableInformation({ groups, eventName, loading = false, er
     </details>)}
     </div>
     {reports}
+    {allocation}
     <div className="grid gap-4 sm:grid-cols-2">
-      {['厩舎配置図', '出店配置図'].map(title => <section key={title} className="rounded-xl border-2 bg-card p-4"><h3 className="text-xl font-bold">{title}</h3><p className="mt-2 text-muted-foreground">資料はまだ登録されていません。</p></section>)}
+      {(allocation?['出店配置図']:['厩舎配置図', '出店配置図']).map(title => <section key={title} className="rounded-xl border-2 bg-card p-4"><h3 className="text-xl font-bold">{title}</h3><p className="mt-2 text-muted-foreground">資料はまだ登録されていません。</p></section>)}
     </div>
   </section>
 }
