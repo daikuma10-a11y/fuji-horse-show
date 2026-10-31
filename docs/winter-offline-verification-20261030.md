@@ -1,5 +1,7 @@
 # Winterオフライン受付：公開可能な検証記録
 
+> 2026-10-31更新：以下の手動送信・自動送信なしの記載は各時点の履歴。保存完了分は新承認で自動送信へ変更した。現行手順は `winter-offline-reception.md`、追加検証は `winter-automatic-delivery-20261031.md`。入力途中の非送信と本部反映・入金の明示操作は継続する。
+
 対象：`prep/winter-2026`。実参加者・実受付内容・認証情報はこの記録に含めない。
 
 現在の操作は [winter-offline-reception.md](winter-offline-reception.md) を参照。以下の過去の実施記録にある手動準備は、末尾の2026-10-31自動準備の追記で更新している。

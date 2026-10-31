@@ -6,10 +6,10 @@ export type WinterData=Awaited<ReturnType<typeof loadWinterData>>
 export const preparationId=`${WINTER_EVENT_ID}:preparation`
 export type WinterPreparation=DeviceRecord&{kind:'preparation';schema:1;eventName:string;retrievedAt:string;build:string;data:WinterData}
 export type OfflineStatus='queued'|'review'|'unknown'|'sent'|'cancelled'
-export type OfflineItem={draft:WinterDraft;status:OfflineStatus;message:string;attempts:number;locked?:boolean;context:Record<string,unknown>;history:{at:string;note:string;draft?:WinterDraft}[]}
+export type OfflineItem={draft:WinterDraft;status:OfflineStatus;message:string;attempts:number;locked?:boolean;handoff?:{receivedAt:string;status:'registered'|'review'|'cancelled'};context:Record<string,unknown>;history:{at:string;note:string;draft?:WinterDraft}[]}
 export type WinterOfflineReceipt=DeviceRecord&{kind:'receipt';schema:1;createdAt:string;snapshotAt:string;sourceDigest:string;items:OfflineItem[]}
 export const offlineStatusLabel:Record<OfflineStatus,string>={queued:'未送信',review:'要確認',unknown:'結果確認待ち',sent:'送信済み',cancelled:'端末内で取下げ'}
-export const offlineUrgentNotice='端末に預かった受付は、本部・審判には届いていません。出番が迫る申請は、本部・審判へ電話や係員を通じて別途連絡してください。'
+export const offlineUrgentNotice='通信断中・送信待ちの受付は、本部に届いていない場合があります。出番が迫る申請は、本部・審判へ電話や係員を通じて別途連絡してください。'
 export function stableJson(value:unknown):string{if(Array.isArray(value))return '['+value.map(stableJson).join(',')+']';if(value&&typeof value==='object')return '{'+Object.entries(value).filter(([,v])=>v!==undefined).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>JSON.stringify(k)+':'+stableJson(v)).join(',')+'}';return JSON.stringify(value)}
 export async function digest(value:unknown){const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(stableJson(value)));return Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('')}
 function pick(row:object,keys:string[]){const r=row as Record<string,unknown>;return Object.fromEntries(keys.map(k=>[k,r[k]??null]))}
@@ -94,7 +94,7 @@ export async function loadReceptionData(signal?:AbortSignal){
  const p=await preparedReception();await recoverSealedInput();return p?{...p.data,offlinePreparedAt:p.retrievedAt}:loadWinterData(signal)
 }
 export function receptionNavigate(path:string,push:(path:string)=>void){if(new URLSearchParams(window.location.search).get('meeting')==='1')push(path);else window.location.assign(path)}
-export async function listOfflineReceipts(){const rows=await listDeviceRecords<WinterOfflineReceipt>(WINTER_EVENT_ID,'receipt');for(const r of rows){if(r.schema!==1||!Array.isArray(r.items)||!r.items.length||r.items.some(i=>!i.context||!Object.keys(offlineStatusLabel).includes(i.status)||!Array.isArray(i.history)))throw new Error('保存済み受付の形式を確認できません。消さずに管理者へ確認してください');for(const i of r.items)winterDraftSummary(i.draft)}return rows}
+export async function listOfflineReceipts(){const rows=await listDeviceRecords<WinterOfflineReceipt>(WINTER_EVENT_ID,'receipt');for(const r of rows){if(r.schema!==1||!Array.isArray(r.items)||!r.items.length||r.items.some(i=>!i.context||!Object.keys(offlineStatusLabel).includes(i.status)||!Array.isArray(i.history)||i.handoff&&(!['registered','review','cancelled'].includes(i.handoff.status)||!Number.isFinite(Date.parse(i.handoff.receivedAt)))))throw new Error('保存済み受付の形式を確認できません。消さずに管理者へ確認してください');for(const i of r.items)winterDraftSummary(i.draft)}return rows}
 export function receiptId(queue:WinterQueue){return queue.receiptId??winterDraftSummary(queue.items[0]).id}
 export async function archiveReception(queue:WinterQueue,p:WinterPreparation){
  validateWinterQueue(queue);if(!queue.attempted||!queue.items.length)throw new Error('受付内容とお名前を確認してください')

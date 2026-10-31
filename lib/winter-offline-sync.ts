@@ -5,7 +5,7 @@ import {winterDraftSummary} from './winter-batch'
 import {draftContext,itemPayload,listOfflineReceipts,stableJson,type OfflineItem,type WinterOfflineReceipt,type WinterData} from './winter-offline'
 export function offlineStamp(receiptId:string,item:OfflineItem){const p=itemPayload(item);return {version:1,receiptId,item:p.p_items[0],context:item.context,expectedTotal:p.p_expected_total}}
 export function inspectOfflineItem(receiptId:string,item:OfflineItem,data:WinterData,requests:WinterRequestRow[],receipts:WinterOfflineReceipt[]):OfflineItem{
- if(item.status==='cancelled')return item
+ if(item.handoff||item.status==='cancelled')return item
  const summary=winterDraftSummary(item.draft),saved=requests.find(r=>r.id===summary.id)
  if(saved){const stamp=(saved.payload as Record<string,unknown>).offlineReception;if(stableJson(stamp)===stableJson(offlineStamp(receiptId,item))&&saved.fee_amount===summary.total)return {...item,status:'sent',message:'本部で申請の保存を確認しました。出番表への反映は本部操作です',locked:true};return {...item,status:'review',locked:true,message:'同じ申請IDの本部記録を確認しましたが内容の一致を確認できません。新しい受付として送らず、本部で確認してください'}}
  if(item.status==='sent')return {...item,status:'review',locked:true,message:'以前確認した本部記録を取得できません。再送せず本部で確認してください'}
@@ -29,7 +29,7 @@ export async function reviewOfflineReceipts(token:string){
 /** Explicit admin action only; persist uncertain state BEFORE any network mutation. */
 export async function sendOfflineItem(receiptId:string,index:number,token:string){
  let receipt=await readDeviceRecord<WinterOfflineReceipt>(receiptId);if(!receipt)throw new Error('受付を読み戻せません')
- let item=receipt.items[index];if(!item||['sent','cancelled'].includes(item.status))return receipt
+ let item=receipt.items[index];if(!item||item.handoff||['sent','cancelled'].includes(item.status))return receipt
  const [data,requests,receipts]=await Promise.all([loadWinterData(AbortSignal.timeout(30000)),loadWinterRequests(token),listOfflineReceipts()])
  const reviewed=inspectOfflineItem(receipt.id,item,data,requests,receipts)
  if(reviewed.status==='sent'||(reviewed.status==='review'&&!item.locked))return updateOfflineItem(receipt,index,reviewed)
