@@ -51,7 +51,7 @@ export function WinterOfflinePreparation({session,onSession,revision}:{session:A
   <p role={state.phase==='error'?'alert':'status'} className="text-xl font-bold">{titles[state.phase]}</p>
   {state.preparation&&<p>{state.preparation.eventName} ／ データ取得：{new Date(state.preparation.retrievedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>}
   {state.phase==='preparing'&&<p>画面・名簿・料金・出番を保存して確認しています。準備完了まで通信をつないでお待ちください。</p>}
-  {state.phase==='ready'&&<p>通信が切れても受付をこのiPadに預かれます。通信中も端末に保存し、本部への送信は管理者が確認して行います。</p>}
+  {state.phase==='ready'&&<p>通信が切れても受付をこの端末に預かれます。通信中は本部へ自動送信し、通信断中の保存分は復旧後に送信します。出番表への反映は本部が行います。</p>}
   {state.phase==='waiting-input'&&<p>入力中の受付を保存して本部へ戻ると、自動で準備を再開します。<a href="/winter/confirm" className="ml-2 inline-block min-h-12 content-center font-bold underline">入力中の受付を確認する</a></p>}
   {state.phase==='waiting-network'&&<p>本部画面を開いたまま通信が戻ると、自動で準備を再開します。</p>}
   {state.phase==='error'&&<><p>{state.message} 保存済み受付は消していません。</p><button type="button" className="min-h-14 rounded-xl border-2 border-blue-800 bg-white px-4 py-3 text-lg font-bold text-blue-900" onClick={()=>request.current()}>準備を再試行</button></>}

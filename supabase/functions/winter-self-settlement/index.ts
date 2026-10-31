@@ -21,6 +21,7 @@ Deno.serve(async(req:Request)=>{
   const devices=await rest(`fhs_winter_settlement_devices?token_hash=eq.${hash}&revoked=eq.false&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=token_hash`)
   if(devices.length!==1)return json({error:'有効期限が切れました。精算画面を開き直してください'},401)
   if(body.action==='reception-ready')return json({ready:true})
+  if(body.action==='reception-offline')return json(await rest('rpc/receive_winter_offline_item',{method:'POST',body:JSON.stringify({p_receipt_id:body.receiptId,p_source:body.source,p_token_hash:hash})}))
   if(body.action==='reception-confirm')return json(await rest('rpc/submit_winter_public_reception_batch',{method:'POST',body:JSON.stringify({p_items:body.items,p_expected_total:body.total,p_visitor_name:body.name,p_token_hash:hash})}))
   if(body.action==='organizations'){
    const rows=[]

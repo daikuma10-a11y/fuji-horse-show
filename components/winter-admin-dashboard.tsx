@@ -22,6 +22,8 @@ import {MasterPreRegistration,type PreRegistrationSection} from '@/components/ma
 import {WinterApplicationImport} from '@/components/winter-application-import'
 import {WinterRegistrationOverview} from '@/components/winter-registration-overview'
 import {WinterOfflineReception} from '@/components/winter-offline-reception'
+import {WinterReceptionNotice} from '@/components/winter-reception-notice'
+import {WinterReceivedReception} from '@/components/winter-received-reception'
 import {WinterOfflinePreparation} from '@/components/winter-offline-preparation'
 import {WinterStableInformation} from '@/components/winter-stable-information'
 const sessionKey=winterStorageKey('admin-session')
@@ -82,6 +84,7 @@ export function WinterAdminDashboard(){
  </form>:<>
  <h1 className="sr-only">Winter 大会本部 管理画面</h1>
  <WinterOfflinePreparation session={session} onSession={updateSession} revision={revision}/>
+ <WinterReceptionNotice session={session} onSession={updateSession} revision={revision} onOpen={()=>{select('requests');refresh()}}/>
  <WinterAdminNavigation tab={tab} onSelect={select}/>
  <p role="status" className="print-hide mb-3">{liveStatus}</p>
  {tab!=='startlist'&&<> <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div></>}
@@ -89,7 +92,7 @@ export function WinterAdminDashboard(){
  {tab!=='startlist'&&tab!=='stable'&&<WinterExportPanel session={session} onSession={updateSession}/>}
  {/* Visited panels remain mounted so tab changes preserve unsaved inputs and monitor state. */}
  {winterAdminTabs.filter(t=>visited.includes(t.id)).map(t=><section key={t.id} role="tabpanel" id={`winter-panel-${t.id}`} aria-labelledby={`winter-tab-${t.id}`} tabIndex={-1} hidden={tab!==t.id} className="space-y-5">
- {t.id==='requests'?<><WinterOfflineReception session={session} onSession={updateSession} active={tab==='requests'} onChanged={refresh}/>{data?<WinterRequestPanel session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh} showWithdraw={false}/>:<p role="status">Winterのデータを読み込んでいます…</p>}</>:t.id==='roster'?<MasterPreRegistration selected={registrationSection} onSelect={setRegistrationSection}
+ {t.id==='requests'?<><WinterReceivedReception session={session} onSession={updateSession} data={data} active={tab==='requests'} revision={revision} onChanged={refresh}/><WinterOfflineReception session={session} onSession={updateSession} active={tab==='requests'} onChanged={refresh}/>{data?<WinterRequestPanel session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh} showWithdraw={false}/>:<p role="status">Winterのデータを読み込んでいます…</p>}</>:t.id==='roster'?<MasterPreRegistration selected={registrationSection} onSelect={setRegistrationSection}
  roster={<><p className="text-lg">団体を選ぶ → 参加する選手と馬にチェック →「参加チェックを保存」の順です。見つからない人馬は名簿全体を検索し、新規の場合は「新しい選手・馬を登録」を使います。</p><SharedRosterManager session={session} onParticipantsSaved={refresh}/>{data&&<WinterMasterRegistration session={session} organizations={data.organizations} onRegistered={refresh}/>}<button type="button" className={button} onClick={()=>openRegistration('entries')}>次へ：出番表の登録</button></>}
  entries={<div id="winter-initial-registration" className="space-y-4"><p className="text-lg">馬の所属団体 → 馬 → 競技・騎乗する選手を選び、内容と料金を確認して登録します。</p>{data?<WinterInitialEntryRegistration data={data} session={session} onChanged={refresh} onChooseParticipants={()=>openRegistration('roster')}/>:<p role="status">Winterのデータを読み込んでいます…</p>}<button type="button" className={button} onClick={()=>select('startlist')}>登録した出番表を確認</button></div>}
  application={<WinterApplicationImport session={session} onSession={updateSession} onChanged={refresh} onStartlist={()=>{refresh();select('startlist')}} onSettlement={()=>{refresh();select('settlement')}} onChanges={()=>select('on-site')} onRoster={()=>openRegistration('roster')}/>}
