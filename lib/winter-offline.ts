@@ -45,11 +45,28 @@ export async function workerMessage(type:'PREPARE'|'CHECK'|'ACTIVATE',build?:str
 export async function preparedReception(){const p=await readPreparation();if(!p)return null;assertSnapshot(p);const status=await workerMessage('CHECK',p.build);if(!status.ready)throw new Error('画面またはデータの準備が不完全です。管理者が通信中に準備し直してください');return p}
 export async function prepareReception(){
  if(!('serviceWorker' in navigator)||!window.isSecureContext)throw new Error('このブラウザーではオフライン受付を準備できません')
- if(readWinterQueue(localStorage).items.length)throw new Error('入力中の受付を保存してから準備し直してください')
- const registration=await navigator.serviceWorker.register('/winter/sw.js',{scope:'/winter/',updateViaCache:'none'})
- await navigator.serviceWorker.ready
+ // The canonical home is /winter (no trailing slash). /winter/ excludes it.
+ // Keep existing registrations/caches/receipts: the old scope can coexist safely.
+ const registration=await navigator.serviceWorker.register('/winter/sw.js',{scope:'/winter',updateViaCache:'none'})
+ const worker=registration.installing??registration.waiting??registration.active
+ if(!worker)throw new Error('受付画面の準備を開始できません。通信中にもう一度準備してください')
+ // navigator.serviceWorker.ready may resolve to the older /winter/ registration.
+ await new Promise<void>((resolve,reject)=>{
+  const finish=(error?:Error)=>{clearTimeout(timer);worker.removeEventListener('statechange',changed);error?reject(error):resolve()}
+  const changed=()=>{
+   if(registration.waiting)finish(new Error('新しい画面が待機中です。Winterの他の画面を閉じ、開き直して準備してください'))
+   else if(worker.state==='redundant')finish(new Error('受付画面の準備が中断されました。通信中にもう一度準備してください'))
+   else if(registration.active===worker&&worker.state==='activated')finish()
+  }
+  const timer=setTimeout(()=>finish(new Error('受付画面の準備を確認できません。通信中にもう一度準備してください')),15000)
+  worker.addEventListener('statechange',changed);changed()
+ })
+ const homeRegistration=await navigator.serviceWorker.getRegistration('/winter')
+ if(homeRegistration?.scope!==new URL('/winter',window.location.origin).href||homeRegistration.active?.state!=='activated')throw new Error('受付トップのオフライン準備を確認できません')
  if(!navigator.serviceWorker.controller){await new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>{navigator.serviceWorker.removeEventListener('controllerchange',changed);reject(new Error('画面を再読み込みし、もう一度準備してください'))},15000);function changed(){clearTimeout(timer);navigator.serviceWorker.removeEventListener('controllerchange',changed);resolve()}navigator.serviceWorker.addEventListener('controllerchange',changed)})}
- if(registration.waiting)throw new Error('新しい画面が待機中です。Winterの他の画面を閉じ、開き直して準備してください')
+ // Repair navigation even if an interrupted draft is present, without replacing
+ // that draft or its data snapshot. The user can then resume the same input.
+ if(readWinterQueue(localStorage).items.length)throw new Error('入力中の受付を保存してから準備し直してください')
  const data=await loadWinterData(AbortSignal.timeout(60000)),retrievedAt=new Date().toISOString(),old=await readPreparation()
  const result=await workerMessage('PREPARE')
  if(!result.ready)throw new Error('画面の保存が完了していません')
