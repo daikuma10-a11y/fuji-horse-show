@@ -62,7 +62,7 @@ function application(v:unknown):Application{
  const amount=object(a.amounts),origins=object(a.amountOrigins)
  const stable=a.stable===undefined?undefined:Object.fromEntries(stableScheduleKeys.map(key=>[key,string(object(a.stable)[key],key==='notes'?1000:200)])) as StableSchedule
  const stableOrigins=a.stableOrigins===undefined?undefined:{arrival:list(object(a.stableOrigins).arrival,10).map(source),departure:list(object(a.stableOrigins).departure,10).map(source),notes:list(object(a.stableOrigins).notes,20).map(source)}
- return {...(stable?{stable}:{}),...(stableOrigins?{stableOrigins}:{}),fileName:string(a.fileName,255),digest,eventId:WINTER_EVENT_ID,club:string(a.club,100),clubOrigin:source(a.clubOrigin),people,entries,...(entryCounts===undefined?{}:{entryCounts}),...(entryCountCorrections===undefined?{}:{entryCountCorrections}),
+ return {...(a.stallRequest===undefined?{}:{stallRequest:string(a.stallRequest,4000)}),...(a.stallRequestOrigins===undefined?{}:{stallRequestOrigins:list(a.stallRequestOrigins,100).map(source)}),...(stable?{stable}:{}),...(stableOrigins?{stableOrigins}:{}),fileName:string(a.fileName,255),digest,eventId:WINTER_EVENT_ID,club:string(a.club,100),clubOrigin:source(a.clubOrigin),people,entries,...(entryCounts===undefined?{}:{entryCounts}),...(entryCountCorrections===undefined?{}:{entryCountCorrections}),
   amounts:{horse:string(amount.horse,100),jump:string(amount.jump,100),dressage:string(amount.dressage,100),total:string(amount.total,100)},
   amountOrigins:Object.fromEntries(['horse','jump','dressage','total'].map(k=>[k,source(origins[k])])),
   issues:list(a.issues,10000).map(x=>string(x,4000)),sheets:list(a.sheets,32).map(x=>string(x,100))}
@@ -95,7 +95,7 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
  original.people.forEach(p=>{const e=edited.people.find(e=>e.key===p.key)!;if(p.kind!==e.kind||JSON.stringify(p.credentialOrigin)!==JSON.stringify(e.credentialOrigin))throw failure()})
  original.entries.forEach(p=>{const e=edited.entries.find(e=>e.key===p.key)!;if(p.countBlock!==undefined||p.rawRider!==e.rawRider||p.rawHorse!==e.rawHorse)throw failure()})
  for(const e of edited.entries.filter(e=>e.added))if(e.rawRider||e.rawHorse)throw failure()
- for(const key of ['clubOrigin','amountOrigins','issues','sheets','entryCounts','stableOrigins'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
+ for(const key of ['clubOrigin','amountOrigins','issues','sheets','entryCounts','stableOrigins','stallRequestOrigins','stallRequest'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
  for(const key of Object.keys(rawChoices)){
   if(!edited.people.some(p=>p.key===key))throw failure()
   const choice=string(rawChoices[key],36)
