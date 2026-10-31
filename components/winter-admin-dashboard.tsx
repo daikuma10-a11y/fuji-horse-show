@@ -22,6 +22,7 @@ import {MasterPreRegistration,type PreRegistrationSection} from '@/components/ma
 import {WinterApplicationImport} from '@/components/winter-application-import'
 import {WinterRegistrationOverview} from '@/components/winter-registration-overview'
 import {WinterOfflineReception} from '@/components/winter-offline-reception'
+import {WinterOfflinePreparation} from '@/components/winter-offline-preparation'
 import {WinterStableInformation} from '@/components/winter-stable-information'
 const sessionKey=winterStorageKey('admin-session')
 const field='mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-background px-4 text-lg'
@@ -80,6 +81,7 @@ export function WinterAdminDashboard(){
  {loginError&&<p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">{loginError}</p>}<button type="submit" disabled={busy} className="min-h-16 w-full rounded-xl bg-primary px-5 text-xl font-bold text-primary-foreground disabled:opacity-50">{busy?'ログイン中…':'本部へログイン'}</button>
  </form>:<>
  <h1 className="sr-only">Winter 大会本部 管理画面</h1>
+ <WinterOfflinePreparation session={session} onSession={updateSession} revision={revision}/>
  <WinterAdminNavigation tab={tab} onSelect={select}/>
  <p role="status" className="print-hide mb-3">{liveStatus}</p>
  {tab!=='startlist'&&<> <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div></>}

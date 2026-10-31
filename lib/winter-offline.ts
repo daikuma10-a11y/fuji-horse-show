@@ -43,7 +43,13 @@ export async function workerMessage(type:'PREPARE'|'CHECK'|'ACTIVATE',build?:str
  return new Promise((resolve,reject)=>{const channel=new MessageChannel(),timer=setTimeout(()=>reject(new Error('画面の端末保存を確認できません。通信と容量を確認してください')),120000);channel.port1.onmessage=e=>{clearTimeout(timer);channel.port1.close();e.data.error?reject(new Error(e.data.error)):resolve(e.data)};navigator.serviceWorker.controller!.postMessage({type,build},[channel.port2])})
 }
 export async function preparedReception(){const p=await readPreparation();if(!p)return null;assertSnapshot(p);const status=await workerMessage('CHECK',p.build);if(!status.ready)throw new Error('画面またはデータの準備が不完全です。管理者が通信中に準備し直してください');return p}
-export async function prepareReception(){
+export class WinterPreparationPending extends Error {
+ constructor(){super('入力中の受付を保存してから準備し直してください')}
+}
+export async function prepareReception(options:{signal?:AbortSignal}={}){
+ const checkActive=()=>{if(options.signal?.aborted)throw new Error('本部画面を離れたため、準備の更新を中止しました')}
+ const checkInput=()=>{checkActive();if(readWinterQueue(localStorage).items.length)throw new WinterPreparationPending()}
+ checkActive()
  if(!('serviceWorker' in navigator)||!window.isSecureContext)throw new Error('このブラウザーではオフライン受付を準備できません')
  // The canonical home is /winter (no trailing slash). /winter/ excludes it.
  // Keep existing registrations/caches/receipts: the old scope can coexist safely.
@@ -66,12 +72,18 @@ export async function prepareReception(){
  if(!navigator.serviceWorker.controller){await new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>{navigator.serviceWorker.removeEventListener('controllerchange',changed);reject(new Error('画面を再読み込みし、もう一度準備してください'))},15000);function changed(){clearTimeout(timer);navigator.serviceWorker.removeEventListener('controllerchange',changed);resolve()}navigator.serviceWorker.addEventListener('controllerchange',changed)})}
  // Repair navigation even if an interrupted draft is present, without replacing
  // that draft or its data snapshot. The user can then resume the same input.
- if(readWinterQueue(localStorage).items.length)throw new Error('入力中の受付を保存してから準備し直してください')
+ checkInput()
  const data=await loadWinterData(AbortSignal.timeout(60000)),retrievedAt=new Date().toISOString(),old=await readPreparation()
+ checkInput()
  const result=await workerMessage('PREPARE')
  if(!result.ready)throw new Error('画面の保存が完了していません')
  const p:WinterPreparation={id:preparationId,revision:(old?.revision??0)+1,kind:'preparation',schema:1,eventId:WINTER_EVENT_ID,eventName:WINTER_EVENT_NAME,retrievedAt,build:result.build,data};assertSnapshot(p)
+ // A draft can appear in another tab, or the administrator can leave while the
+ // data/assets are loading. Do not replace the snapshot after either event.
+ checkInput()
  await writeDeviceRecord(p,old?.revision??null)
+ // Once committed, finish activation even if the caller unmounts in this short
+ // interval. Never leave the new data pointing at an intentionally old shell.
  const activated=await workerMessage('ACTIVATE',p.build);if(!activated.ready)throw new Error('画面の準備を有効にできません')
  await navigator.storage?.persist?.().catch(()=>false)
  window.dispatchEvent(new Event('winter-offline-changed'))

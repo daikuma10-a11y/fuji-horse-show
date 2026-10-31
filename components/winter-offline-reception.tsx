@@ -1,18 +1,18 @@
 "use client"
 import {useEffect,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
-import {prepareReception,readPreparation,listOfflineReceipts,offlineStatusLabel,offlineUrgentNotice,draftContext,type WinterPreparation,type WinterOfflineReceipt,type OfflineItem,type WinterData} from '@/lib/winter-offline'
+import {listOfflineReceipts,offlineStatusLabel,offlineUrgentNotice,draftContext,type WinterOfflineReceipt,type OfflineItem,type WinterData} from '@/lib/winter-offline'
 import {reviewOfflineReceipts,sendOfflineItem,updateOfflineItem} from '@/lib/winter-offline-sync'
 import {winterDraftSummary,type WinterDraft} from '@/lib/winter-batch'
 import type {WinterFeeSelection} from '@/lib/winter-event'
 const button='min-h-14 rounded-xl border-2 border-blue-800 bg-white px-4 py-3 text-lg font-bold text-blue-900 disabled:opacity-50'
 const field='mt-1 min-h-12 w-full rounded-lg border-2 bg-white p-2 text-lg'
 export function WinterOfflineReception({session,onSession,active,onChanged}:{session:AdminSession;onSession:(s:AdminSession)=>void;active:boolean;onChanged:()=>void}){
- const[p,setP]=useState<WinterPreparation|null>(null),[receipts,setReceipts]=useState<WinterOfflineReceipt[]>([]),[data,setData]=useState<WinterData|null>(null)
+ const[receipts,setReceipts]=useState<WinterOfflineReceipt[]>([]),[data,setData]=useState<WinterData|null>(null)
  const[unlocked,setUnlocked]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),lock=useRef(false),alive=useRef(active)
  useEffect(()=>{alive.current=active;setUnlocked(false);setReceipts([]);setData(null);const hide=()=>{if(document.hidden){setUnlocked(false);setReceipts([]);setData(null)}};document.addEventListener('visibilitychange',hide);return()=>{alive.current=false;document.removeEventListener('visibilitychange',hide)}},[active])
  async function run(fn:(token:string)=>Promise<void>){if(lock.current||!active)return;lock.current=true;setBusy(true);setError('');try{const s=await verifyAdminSession(session);onSession(s);if(!alive.current)return;await fn(s.accessToken)}catch(e){if(alive.current)setError(e instanceof Error?e.message:'処理できません')}finally{lock.current=false;if(alive.current)setBusy(false)}}
- async function open(){await run(async()=>{const [next,rows]=await Promise.all([readPreparation(),listOfflineReceipts()]);if(alive.current){setP(next);setReceipts(rows);setUnlocked(true)}})}
+ async function open(){await run(async()=>{const rows=await listOfflineReceipts();if(alive.current){setReceipts(rows);setUnlocked(true)}})}
  async function refresh(token:string){const result=await reviewOfflineReceipts(token);if(alive.current){setReceipts(result.receipts);setData(result.data);setMessage('最新の本部データと照合しました。内容を確認して送信してください')}}
  async function send(token:string,only?:{id:string;index:number}){
   const targets=only?[only]:receipts.flatMap(r=>r.items.flatMap((i,index)=>i.status==='queued'?[{id:r.id,index}]:[]))
@@ -23,7 +23,7 @@ export function WinterOfflineReception({session,onSession,active,onChanged}:{ses
  return <div className="space-y-5"><h2 className="text-2xl font-bold">預かっている受付を確認・送信</h2>
  <p>このiPadの保存内容を管理者だけが確認します。通信復旧だけでは送信しません。</p>
  {!unlocked?<button className={button} disabled={busy} onClick={()=>void open()}>{busy?'管理者権限を確認中…':'管理者として端末の保存内容を開く'}</button>:<>
- <section className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">受付開始前の準備</h3><p>{p?`${p.eventName} ／ データ取得：${new Date(p.retrievedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`:'このiPadは未準備です'}</p><p>準備完了後は、通信中も受付を端末に預かります。開始前にSafariまたはホーム画面の、当日使用する方で準備してください。</p><button className={button+' bg-blue-50'} disabled={busy} onClick={()=>void run(async()=>{setMessage('画面・名簿・競技・料金・出番を保存し、読み戻しています…');const next=await prepareReception();if(alive.current){setP(next);setMessage('オフライン受付の準備が完了しました。受付画面を開いて確認してください')}})}>{busy?'処理中…':'このiPadでオフライン受付を準備・更新'}</button><a href="/winter" className={button+' inline-block'}>管理画面を閉じ、来訪者用の受付へ</a></section>
+ <section className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">受付開始前の準備</h3><p>本部ログイン時に自動で準備します。画面上部の「オフライン受付の準備完了」を確認してから受付へ戻ってください。</p><a href="/winter" className={button+' inline-block'}>管理画面を閉じ、来訪者用の受付へ</a></section>
  <div className="space-y-2 rounded-xl bg-amber-50 p-4"><p className="font-bold">{offlineUrgentNotice}</p><p>端末の故障・紛失、サイトデータの消去、プライベートブラウズの終了、OSによる保存領域の削除までは保証できません。十分な空き容量を確保し、同じ端末・同じURL・同じ開き方で使ってください。未送信がある間はサイトデータを消去しないでください。</p><p>ここで保存・送信するのは受付申請です。オフラインで精算確定・入金は行いません。</p></div>
  <div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={()=>void run(refresh)}>最新の本部データと照合・結果確認</button><button className={button+' bg-blue-800 text-white'} disabled={busy||!data||!receipts.some(r=>r.items.some(i=>i.status==='queued'))} onClick={()=>void run(token=>send(token))}>内容を確認した未送信分を本部へまとめて送信</button></div>
  <p>未送信 {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='queued').length,0)}件 ／ 要確認 {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='review').length,0)}件 ／ 結果確認待ち {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='unknown').length,0)}件 ／ 送信済み {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='sent').length,0)}件</p>
