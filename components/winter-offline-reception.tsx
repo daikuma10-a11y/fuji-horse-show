@@ -7,34 +7,81 @@ import {winterDraftSummary,type WinterDraft} from '@/lib/winter-batch'
 import type {WinterFeeSelection} from '@/lib/winter-event'
 const button='min-h-14 rounded-xl border-2 border-blue-800 bg-white px-4 py-3 text-lg font-bold text-blue-900 disabled:opacity-50'
 const field='mt-1 min-h-12 w-full rounded-lg border-2 bg-white p-2 text-lg'
+const statusLabel={...offlineStatusLabel,queued:'端末に保存済み・本部未受付',sent:'申請一覧に登録済み'}
+type Current=()=>boolean
 export function WinterOfflineReception({session,onSession,active,onChanged}:{session:AdminSession;onSession:(s:AdminSession)=>void;active:boolean;onChanged:()=>void}){
  const[receipts,setReceipts]=useState<WinterOfflineReceipt[]>([]),[data,setData]=useState<WinterData|null>(null)
- const[unlocked,setUnlocked]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),lock=useRef(false),alive=useRef(active)
- useEffect(()=>{alive.current=active;setUnlocked(false);setReceipts([]);setData(null);const hide=()=>{if(document.hidden){setUnlocked(false);setReceipts([]);setData(null)}};document.addEventListener('visibilitychange',hide);return()=>{alive.current=false;document.removeEventListener('visibilitychange',hide)}},[active])
- async function run(fn:(token:string)=>Promise<void>){if(lock.current||!active)return;lock.current=true;setBusy(true);setError('');try{const s=await verifyAdminSession(session);onSession(s);if(!alive.current)return;await fn(s.accessToken)}catch(e){if(alive.current)setError(e instanceof Error?e.message:'処理できません')}finally{lock.current=false;if(alive.current)setBusy(false)}}
- async function open(){await run(async()=>{const rows=await listOfflineReceipts();if(alive.current){setReceipts(rows);setUnlocked(true)}})}
- async function refresh(token:string){const result=await reviewOfflineReceipts(token);if(alive.current){setReceipts(result.receipts);setData(result.data);setMessage('最新の本部データと照合しました。内容を確認して送信してください')}}
- async function send(token:string,only?:{id:string;index:number}){
-  const targets=only?[only]:receipts.flatMap(r=>r.items.flatMap((i,index)=>i.status==='queued'?[{id:r.id,index}]:[]))
-  for(const t of targets){if(!alive.current)break;setMessage(`本部へ確認・送信中（受付番号：${t.id}）`);await sendOfflineItem(t.id,t.index,token)}
-  if(alive.current){setReceipts(await listOfflineReceipts());setMessage('送信処理を終えました。各申請の状態を確認してください。出番表への反映は本部の申請一覧から行います');onChanged()}
+ const[loaded,setLoaded]=useState(false),[reload,setReload]=useState(0),[unlocked,setUnlocked]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('')
+ const lock=useRef(false),alive=useRef(active),generation=useRef(0)
+ // Only counts are shown on entry. Names and details require an explicit admin
+ // action, and are hidden again on tab changes/backgrounding/logout.
+ useEffect(()=>{
+  let live=true
+  async function read(){
+   const version=++generation.current
+   alive.current=active&&!document.hidden
+   setUnlocked(false);setReceipts([]);setData(null);setLoaded(false);setError('');setMessage('')
+   if(!alive.current)return
+   try{const rows=await listOfflineReceipts();if(live&&alive.current&&generation.current===version){setReceipts(rows);setLoaded(true)}}
+   catch(e){if(live&&alive.current&&generation.current===version){setError(e instanceof Error?e.message:'端末の受付を確認できません');setLoaded(true)}}
+  }
+  void read()
+  const visibility=()=>void read()
+  document.addEventListener('visibilitychange',visibility)
+  return()=>{live=false;alive.current=false;generation.current++;document.removeEventListener('visibilitychange',visibility)}
+ },[active,reload])
+ async function run(fn:(token:string,current:Current)=>Promise<void>){
+  if(lock.current||!active||!alive.current)return
+  const version=generation.current,current=()=>alive.current&&generation.current===version
+  lock.current=true;setBusy(true);setError('');setMessage('')
+  try{const s=await verifyAdminSession(session);if(!current())return;onSession(s);await fn(s.accessToken,current)}
+  catch(e){if(current())setError(e instanceof Error?e.message:'処理できません')}
+  finally{lock.current=false;setBusy(false)}
  }
+ async function refresh(token:string,current:Current){
+  if(!current())return
+  setData(null)
+  const result=await reviewOfflineReceipts(token)
+  if(current()){setReceipts(result.receipts);setData(result.data);setMessage('本部の受付状況と照合しました。未送信分は内容を確認して取り込んでください');onChanged()}
+ }
+ async function open(){await run(async(token,current)=>{
+  const rows=await listOfflineReceipts();if(!current())return
+  setReceipts(rows);setUnlocked(true);setData(null)
+  // A failed remote check leaves the local contents visible and import disabled.
+  await refresh(token,current)
+ })}
+ async function send(token:string,current:Current,only?:{id:string;index:number}){
+  const targets=only?[only]:receipts.flatMap(r=>r.items.flatMap((i,index)=>i.status==='queued'?[{id:r.id,index}]:[]))
+  try{
+   for(const t of targets){if(!current())break;setMessage(`申請一覧へ取り込み中（受付番号：${t.id}）`);await sendOfflineItem(t.id,t.index,token)}
+  }finally{
+   // Refresh the existing request list even if a later item fails after an
+   // earlier success. A running item keeps its original durable retry record.
+   if(current()){setData(null);onChanged();const rows=await listOfflineReceipts();if(current()){setReceipts(rows);setMessage('取り込み結果を更新しました。登録済みの受付は下の申請一覧に表示されます。出番表への反映は一覧の反映ボタンで行ってください')}}
+  }
+ }
+ const items=receipts.flatMap(r=>r.items),pending=items.filter(i=>!['sent','cancelled'].includes(i.status))
+ const count=(status:OfflineItem['status'])=>items.filter(i=>i.status===status).length
  if(!active)return null
- return <div className="space-y-5"><h2 className="text-2xl font-bold">預かっている受付を確認・送信</h2>
- <p>このiPadの保存内容を管理者だけが確認します。通信復旧だけでは送信しません。</p>
- {!unlocked?<button className={button} disabled={busy} onClick={()=>void open()}>{busy?'管理者権限を確認中…':'管理者として端末の保存内容を開く'}</button>:<>
- <section className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">受付開始前の準備</h3><p>本部ログイン時に自動で準備します。画面上部の「オフライン受付の準備完了」を確認してから受付へ戻ってください。</p><a href="/winter" className={button+' inline-block'}>管理画面を閉じ、来訪者用の受付へ</a></section>
- <div className="space-y-2 rounded-xl bg-amber-50 p-4"><p className="font-bold">{offlineUrgentNotice}</p><p>端末の故障・紛失、サイトデータの消去、プライベートブラウズの終了、OSによる保存領域の削除までは保証できません。十分な空き容量を確保し、同じ端末・同じURL・同じ開き方で使ってください。未送信がある間はサイトデータを消去しないでください。</p><p>ここで保存・送信するのは受付申請です。オフラインで精算確定・入金は行いません。</p></div>
- <div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={()=>void run(refresh)}>最新の本部データと照合・結果確認</button><button className={button+' bg-blue-800 text-white'} disabled={busy||!data||!receipts.some(r=>r.items.some(i=>i.status==='queued'))} onClick={()=>void run(token=>send(token))}>内容を確認した未送信分を本部へまとめて送信</button></div>
- <p>未送信 {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='queued').length,0)}件 ／ 要確認 {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='review').length,0)}件 ／ 結果確認待ち {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='unknown').length,0)}件 ／ 送信済み {receipts.reduce((n,r)=>n+r.items.filter(i=>i.status==='sent').length,0)}件</p>
- {!receipts.length&&<p>この端末に預かっている受付はありません。</p>}
- {[...receipts].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).map(receipt=><section key={receipt.id} className="space-y-3 rounded-xl border-2 p-4"><h3 className="break-all text-lg font-bold">受付番号：{receipt.id}</h3><p>{new Date(receipt.createdAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>{receipt.items.map((item,index)=>{const summary=winterDraftSummary(item.draft);return <article key={summary.id} className={`space-y-2 rounded-lg border-2 p-3 ${item.status==='sent'?'bg-green-50':['review','unknown'].includes(item.status)?'border-amber-600 bg-amber-50':'bg-white'}`}><h4 className="text-xl font-bold">{offlineStatusLabel[item.status]} ／ {summary.organizationName} ／ {summary.type}</h4><p>{summary.label}</p><p>受付に来た方：{summary.visitorName} ／ {summary.category} ／ ¥{summary.total.toLocaleString('ja-JP')}</p><p className="break-all text-sm">申請ID：{summary.id}</p><p role="status">{item.message}</p>
- {item.locked&&['unknown','review'].includes(item.status)&&<button className={button} disabled={busy} onClick={()=>void run(token=>send(token,{id:receipt.id,index}))}>同じ番号で結果確認・再送</button>}
- {!item.locked&&!['sent','cancelled'].includes(item.status)&&data&&<OfflineItemEditor key={receipt.revision+':'+index} item={item} data={data} disabled={busy} onSave={(draft,reason)=>void run(async()=>{const next:OfflineItem={...item,draft,context:draftContext(draft,data),status:'queued',message:'管理者が訂正・確認しました。送信前に再照合します',history:[...item.history,{at:new Date().toISOString(),note:reason,draft:item.draft}]};await updateOfflineItem(receipt,index,next);setReceipts(await listOfflineReceipts());setData(null)})} onCancel={reason=>void run(async()=>{await updateOfflineItem(receipt,index,{...item,status:'cancelled',message:'端末内で取下げ（本部未送信）：'+reason,history:[...item.history,{at:new Date().toISOString(),note:reason}]});setReceipts(await listOfflineReceipts());setData(null)})}/>}
+ if(!loaded)return <p role="status" className="print-hide">このiPadの受付を確認しています…</p>
+ if(!receipts.length&&!error)return null
+ return <section id="winter-offline-reception" aria-label="このiPadの受付" className="print-hide space-y-4 rounded-xl border-2 p-4">
+ <h2 className="text-2xl font-bold">{count('queued')?'このiPadに未送信の受付があります':pending.length?'このiPadに確認が必要な受付があります':'このiPadの受付記録'}</h2>
+ {pending.length>0&&<p>未送信・確認待ちの内訳：追加{pending.filter(i=>i.draft.type==='add').length}件 ／ 変更{pending.filter(i=>i.draft.type==='change').length}件 ／ 棄権{pending.filter(i=>i.draft.type==='withdraw').length}件</p>}
+ {receipts.length>0&&<p>未送信 {count('queued')}件 ／ 要確認 {count('review')}件 ／ 結果確認待ち {count('unknown')}件 ／ 申請一覧に登録済み {count('sent')}件 ／ 端末内で取下げ {count('cancelled')}件</p>}
+ {!unlocked?<button type="button" className={button} disabled={busy} aria-expanded={false} aria-controls="winter-device-receipts" onClick={()=>void open()}>{busy?'管理者権限を確認中…':'内容を確認する'}</button>:<>
+ <button type="button" className={button} disabled={busy} aria-expanded={true} aria-controls="winter-device-receipts" onClick={()=>{setUnlocked(false);setData(null);setMessage('')}}>内容を閉じる</button>
+ <div id="winter-device-receipts" className="space-y-4">
+ <p>このiPadの保存内容を確認し、本部の申請一覧へ取り込みます。通信復旧だけでは取り込みません。</p>
+ {pending.length>0&&<p className="rounded-xl bg-amber-50 p-4 font-bold">{offlineUrgentNotice}</p>}<details className="space-y-2 rounded-xl bg-amber-50 p-4"><summary className="cursor-pointer font-bold">保存・取り込み時の注意</summary><p>端末の故障・紛失、サイトデータの消去、プライベートブラウズの終了、OSによる保存領域の削除までは保証できません。十分な空き容量を確保し、同じ端末・同じURL・同じ開き方で使ってください。未送信がある間はサイトデータを消去しないでください。</p><p>ここで取り込むのは受付申請です。出番表への反映は下の申請一覧で行います。オフラインで精算確定・入金は行いません。</p></details>
+ <div className="flex flex-wrap gap-3"><button type="button" className={button} disabled={busy} onClick={()=>void run(refresh)}>本部の受付状況を確認する</button><button type="button" className={button+' bg-blue-800 text-white'} disabled={busy||!data||!count('queued')} onClick={()=>void run((token,current)=>send(token,current))}>確認した未送信分を申請一覧へ取り込む</button></div>
+ {[...receipts].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).map(receipt=><section key={receipt.id} className="space-y-3 rounded-xl border-2 p-4"><h3 className="break-all text-lg font-bold">受付番号：{receipt.id}</h3><p>{new Date(receipt.createdAt).toLocaleString('ja-JP')}</p>{receipt.items.map((item,index)=>{const summary=winterDraftSummary(item.draft);return <article key={summary.id} className={`space-y-2 rounded-lg border-2 p-3 ${item.status==='sent'?'bg-green-50':['review','unknown'].includes(item.status)?'border-amber-600 bg-amber-50':'bg-white'}`}><h4 className="text-xl font-bold">{statusLabel[item.status]} ／ {summary.organizationName} ／ {summary.type}</h4><p>{summary.label}</p><p>受付に来た方：{summary.visitorName} ／ {summary.category} ／ ¥{summary.total.toLocaleString('ja-JP')}</p><p className="break-all text-sm">申請ID：{summary.id}</p><p role="status">{item.message}</p>
+ {item.locked&&['unknown','review'].includes(item.status)&&<div className="flex flex-wrap gap-3"><button type="button" className={button} disabled={busy} onClick={()=>void run(refresh)}>結果を確認する</button><button type="button" className={button} disabled={busy||!data} onClick={()=>void run((token,current)=>send(token,current,{id:receipt.id,index}))}>同じ受付番号で取り込みを再試行</button></div>}
+ {!item.locked&&!['sent','cancelled'].includes(item.status)&&data&&<OfflineItemEditor key={receipt.revision+':'+index} item={item} data={data} disabled={busy} onSave={(draft,reason)=>void run(async(_token,current)=>{const next:OfflineItem={...item,draft,context:draftContext(draft,data),status:'queued',message:'管理者が訂正・確認しました。送信前に再照合します',history:[...item.history,{at:new Date().toISOString(),note:reason,draft:item.draft}]};await updateOfflineItem(receipt,index,next);const rows=await listOfflineReceipts();if(current()){setReceipts(rows);setData(null)}})} onCancel={reason=>void run(async(_token,current)=>{if(window.confirm('この申請を本部へ送らず、端末内で取下げにします。記録は残します。')){await updateOfflineItem(receipt,index,{...item,status:'cancelled',message:'端末内で取下げ（本部未送信）：'+reason,history:[...item.history,{at:new Date().toISOString(),note:reason}]});const rows=await listOfflineReceipts();if(current()){setReceipts(rows);setData(null)}}})}/>}
  </article>})}</section>)}
- </>}
- {busy&&<p role="status" className="rounded-xl bg-blue-100 p-4 text-lg font-bold">{message||'処理中…'}</p>}{!busy&&message&&<p role="status" className="rounded-xl bg-blue-50 p-4">{message}</p>}{error&&<p role="alert" className="rounded-xl bg-red-100 p-4 text-lg">{error} 保存済み受付は消していません。</p>}
- </div>
+ </div></>}
+ {busy&&<p role="status" className="rounded-xl bg-blue-100 p-4 text-lg font-bold">{message||'処理中…'}</p>}{!busy&&message&&<p role="status" className="rounded-xl bg-blue-50 p-4">{message}</p>}{error&&<div role="alert" className="space-y-2 rounded-xl bg-red-100 p-4 text-lg"><p>{error} 保存済み受付は消していません。</p>{!unlocked&&<button type="button" className={button} disabled={busy} onClick={()=>setReload(v=>v+1)}>端末の受付を読み直す</button>}</div>}
+ </section>
 }
 function OfflineItemEditor({item,data,disabled,onSave,onCancel}:{item:OfflineItem;data:WinterData;disabled:boolean;onSave:(draft:WinterDraft,reason:string)=>void;onCancel:(reason:string)=>void}){
  const d=item.draft,target=d.type==='add'?d.input:d.type==='change'?d.input.target:null,original=d.type==='change'?d.input.original:d.type==='withdraw'?d.entry:null
