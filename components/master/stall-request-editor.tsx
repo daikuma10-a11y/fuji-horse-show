@@ -1,0 +1,31 @@
+'use client'
+import {useEffect,useRef,useState} from 'react'
+import {emptyStallRequest,stableBarns,stallRequestConditions,suggestStallRequest,type StallRequest} from '@/lib/master/stall-request'
+type Row={id:string;name:string;value:StallRequest;revision:string|null}
+const field='mt-1 min-h-12 w-full rounded-lg border-2 bg-background p-2 text-base'
+const button='min-h-12 rounded-xl border-2 border-primary px-4 py-2 font-bold disabled:opacity-40'
+export function MasterStallRequestEditor({rows,loading,error,onReload,onSave}:{rows:Row[];loading:boolean;error:string;onReload:()=>Promise<void>;onSave:(id:string,value:StallRequest,expected:string|null)=>Promise<void>}){
+ const [edit,setEdit]=useState<{id:string;value:StallRequest;expected:string|null}|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[failure,setFailure]=useState(''),lock=useRef(false)
+ const dirty=!!edit
+ useEffect(()=>{if(!dirty)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue=''};window.addEventListener('beforeunload',leave);return()=>window.removeEventListener('beforeunload',leave)},[dirty])
+ async function run(work:()=>Promise<void>){if(lock.current)return;lock.current=true;setBusy(true);setMessage('');setFailure('');try{await work()}catch(e){setFailure(e instanceof Error?e.message:'保存できませんでした。')}finally{lock.current=false;setBusy(false)}}
+ function change(patch:Partial<StallRequest>){setEdit(e=>e?{...e,value:{...e.value,...patch,confirmed:patch.confirmed??false}}:e)}
+ const row=rows.find(r=>r.id===edit?.id),conditions=edit?stallRequestConditions(edit.value,rows,edit.id):null
+ return <section className="space-y-4 rounded-xl border-2 p-4" aria-label="団体別の厩舎割要望"><h3 className="text-2xl font-bold">団体別の厩舎割要望</h3><p>Excelの要望欄を保存し、メール・電話の要望や運営上の理由を追記できます。要望を保存しても配置済みの馬は動きません。配置案の作成・修正後に反映状況を確認します。</p>
+  <button className={button} disabled={loading||busy||dirty} onClick={()=>void run(onReload)}>保存済みの要望を読み直す</button>
+  {(error||failure)&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-red-900">{error||failure}</p>}{message&&<p role="status" className="rounded-lg bg-emerald-50 p-3">{message}</p>}{busy&&<p role="status">要望の保存・結果確認中…</p>}
+  <label className="block">要望を入力・修正する団体<select className={field} disabled={loading||busy||!!error||dirty} value={edit?.id??''} onChange={e=>{const r=rows.find(r=>r.id===e.target.value);if(r){setEdit({id:r.id,value:structuredClone(r.value),expected:r.revision});setFailure('');setMessage('')}}}><option value="">団体を選択してください</option>{rows.map(r=><option key={r.id} value={r.id}>{r.name}{r.value.imports.length||r.value.manual?'（要望あり）':''}</option>)}</select></label>
+  <details><summary className="cursor-pointer font-bold">団体別の保存状況（{rows.filter(r=>r.value.imports.length||r.value.manual).length}団体に要望あり）</summary>{rows.map(r=><div key={r.id} className="rounded-lg border p-3"><strong>{r.name}</strong><p>{r.value.imports.length}件のExcel要望{r.value.manual?' ／ 手入力あり':''} ／ {r.value.confirmed?'条件確認済み':r.value.imports.length||r.value.manual?'条件未確認':'指定なし'}</p><button className={button} disabled={loading||busy||!!error||dirty} onClick={()=>{setEdit({id:r.id,value:structuredClone(r.value??emptyStallRequest()),expected:r.revision});setFailure('');setMessage('')}}>{r.name}の要望を入力・修正</button></div>)}</details>
+  {edit&&row&&<fieldset className="space-y-4 rounded-xl border-2 border-primary p-4"><legend className="px-2 text-xl font-bold">{row.name}の要望</legend>
+    {edit.value.imports.map(i=><div key={i.digest} className="rounded-lg bg-slate-50 p-3"><strong>Excel原文</strong><p className="whitespace-pre-wrap">{i.text}</p><small>{i.source}</small></div>)}
+    <label className="block">メール・電話・手入力の要望<textarea className={field} maxLength={4000} disabled={busy} value={edit.value.manual} onChange={e=>change({manual:e.target.value})}/></label>
+    <button className={button} disabled={busy} onClick={()=>{const s=suggestStallRequest(edit.value,rows,edit.id);change({barn:s.barn,neighborId:s.neighborId,relation:s.relation});setMessage(s.issues.join(' ／ ')||'原文から条件の候補を入力しました。内容を確認してください。')}}>原文から配置条件の候補を入力</button>
+    <div className="grid gap-3 md:grid-cols-3"><label>希望厩舎<select className={field} disabled={busy} value={edit.value.barn} onChange={e=>change({barn:e.target.value})}><option value="">指定なし</option>{stableBarns.map(b=><option key={b} value={b}>{b}厩舎</option>)}</select></label><label>相手の団体<select className={field} disabled={busy} value={edit.value.neighborId} onChange={e=>change({neighborId:e.target.value,relation:e.target.value?(edit.value.relation||'near'):''})}><option value="">指定なし</option>{rows.filter(r=>r.id!==edit.id).map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label><label>位置関係<select className={field} disabled={busy} value={edit.value.relation} onChange={e=>change({relation:e.target.value as StallRequest['relation']})}><option value="">指定なし</option><option value="near">近く（同じ棟または隣の棟）</option><option value="adjacent">隣の区画（同じ棟）</option><option value="same">同じ厩舎</option><option value="avoid">別の厩舎に離す</option></select></label></div>
+    <label className="block">配置理由・運営上の判断<textarea className={field} maxLength={1000} placeholder="例：馬運車を共用するため近くに配置／入厩日の変更に対応するためSで管理" disabled={busy} value={edit.value.reason} onChange={e=>change({reason:e.target.value})}/></label>
+    <label className="flex min-h-12 items-center gap-3"><input type="checkbox" disabled={busy} checked={edit.value.corridor} onChange={e=>change({corridor:e.target.checked})}/>この団体だけ、全頭をSに配置した場合は通路利用でTRを省略する</label>
+    <p>読み取った条件：{conditions?.barn?conditions.barn+'厩舎':'厩舎指定なし'} ／ {rows.find(r=>r.id===conditions?.neighborId)?.name||'相手指定なし'}</p>
+    <label className="flex min-h-12 items-center gap-3"><input type="checkbox" disabled={busy} checked={edit.value.confirmed} onChange={e=>change({confirmed:e.target.checked})}/>原文・理由と配置条件を確認しました</label>
+    <div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={()=>void run(async()=>{await onSave(edit.id,edit.value,edit.expected);setEdit(null);setMessage('団体の厩舎割要望を保存しました。配置案には作成・修正時に反映します。')})}>この団体の要望を保存</button><button className={button} disabled={busy} onClick={()=>{setEdit(null);setFailure('')}}>編集を取り消す</button></div>
+  </fieldset>}
+ </section>
+}

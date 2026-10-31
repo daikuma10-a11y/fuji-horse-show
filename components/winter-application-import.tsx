@@ -18,6 +18,7 @@ import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {applicationTodos,applicationClubSummary} from '@/lib/winter-application-guide'
 import {winterApplicationServices} from '@/lib/winter-application-services'
 import {applicationRegistrationKey,parseApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
+import {stallRequestReviewUpgrade} from '@/lib/winter-stall-request-upgrade'
 import {upgradeApplicationCounts} from '@/lib/winter-application-count-upgrade'
 import {credentialReviewUpgrade} from '@/lib/winter-credential-review-upgrade'
 import {WINTER_HORSE_REGISTRATION_FEE} from '@/lib/winter-horse-registration'
@@ -198,11 +199,14 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   if(record&&record.review.original.digest!==app.digest)throw new Error('同じ資料番号の原本が異なります。保存済み記録を確認してください。')
   const upgraded=credentialReviewUpgrade(app,record?.review??next,record)
   if(upgraded){next=upgraded;saved=localStorage.getItem(applicationRegistrationKey(next.reference))}
+  const requestRecord=saved?parseApplicationRegistration(saved):undefined
+  const requestUpgrade=stallRequestReviewUpgrade(app,requestRecord?.review??next,requestRecord)
+  if(requestUpgrade){next=requestUpgrade;saved=localStorage.getItem(applicationRegistrationKey(next.reference))}
   const countUpgrade=upgradeApplicationCounts(next,app,!!saved)
   if(countUpgrade)next=countUpgrade
-  expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded||!!countUpgrade)
+  expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded||!!countUpgrade||!!requestUpgrade)
   if(saved)registration.openRecord(parseApplicationRegistration(saved))
-  setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
+  setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':requestUpgrade?'同じ原本から厩舎割要望を追加しました。登録済みの出番を再照合し、重複させず要望を保存します。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
   try{await loadContext(next)}catch(e){setError('Excelは読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
  }
  function saveAndGo(next?:()=>void){void action(()=>{
@@ -247,6 +251,8 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
    if(file.size>8_000_000)throw new Error('Excelは8MB以内で選択してください')
    const app=await readWinterApplication(new Uint8Array(await file.arrayBuffer()),file.name)
    if(draft){
+    const requestUpgrade=!registration.isFrozen()?stallRequestReviewUpgrade(app,draft):null
+    if(requestUpgrade){setDraft(requestUpgrade);setDirty(true);setRevision(null);registration.invalidate();setMessage('同じ原本から厩舎割要望を読み込みました。人馬・エントリーの訂正は保持しています。');return}
     const upgraded=upgradeApplicationCounts(draft,app,registration.isFrozen())
     if(upgraded){setDraft(upgraded);setDirty(true);setRevision(null);registration.invalidate();setMessage('同じ原本から競技ごとの集計人数を読み込みました。人馬・エントリーの訂正は保持しています。黄色い集計欄を確認してください。');return}
     setRevision(app);setMessage(app.digest===draft.original.digest?'同じ原本です。現在の訂正・対応を保持しました。':'訂正版との差分を表示しました。現在の原本・訂正値を保持しています。');return}

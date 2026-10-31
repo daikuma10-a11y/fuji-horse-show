@@ -1,7 +1,9 @@
 require('./register-ts.cjs')
 const assert=require('node:assert/strict')
-const {stalls,standardTR,defaultStallOptions,createStallPlan,groupAllocation,stallPlanIssues,readStallPlan,moveStallGroup,editStall,reconcileStallGroups,stallSourceKey}=require('../lib/master/stall-allocation.ts')
+const {stalls,standardTR,defaultStallOptions:currentOptions,createStallPlan,groupAllocation,stallPlanIssues,readStallPlan,moveStallGroup,editStall,reconcileStallGroups,stallSourceKey}=require('../lib/master/stall-allocation.ts')
 const {stallPlanSvg,stallPlanPrintHtml}=require('../lib/master/stall-allocation-print.ts')
+// Preserve regression coverage of existing version-1 saved plans without extended layout.
+const defaultStallOptions=groups=>{const {layout,...old}=currentOptions(groups);return {...old,smallMax:3,useSCorridor:true}}
 const group=(id,n,name=id)=>({id,name,horses:Array.from({length:n},(_,i)=>({id:`${id}-h${i}`,name:`馬${i+1}`}))})
 assert.equal(stalls.length,224);assert.equal(stalls.filter(s=>s.wire).length,20)
 assert.equal(stalls.filter(s=>s.barn==='S').length,24)

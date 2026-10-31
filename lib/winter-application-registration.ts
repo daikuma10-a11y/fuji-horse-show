@@ -1,3 +1,4 @@
+import {reviewStallImport,readStallExpectation,stallRequestId,type StallRequestExpectation,type SavedStallRequest,type StallRequestSave} from './winter-stall-requests'
 import {reviewStableSchedule,readStableExpectation,stableScheduleRequestId,type StableExpectation,type WinterStableSchedule,type StableScheduleSave} from './winter-stable-schedules'
 import type {ApplicationImportProgress} from './master/application-import-status'
 import type {RosterCorrectionInput} from './winter-roster-correction'
@@ -14,11 +15,12 @@ import type {saveWinterInitialEntry} from './winter-initial-entry'
 
 type PersonResult={state:ImportState;entityId?:string}
 export type ApplicationRegistration={
- kind:'winter-application-registration';version:1;eventId:string;review:ApplicationDraft;stable?:StableExpectation
+ kind:'winter-application-registration';version:1;eventId:string;review:ApplicationDraft;stallRequest?:StallRequestExpectation;stable?:StableExpectation
  people:Record<string,PersonResult>;participants:{state:ImportState;clubId?:string};entries:ImportCheckpoint|null;credentials?:Record<string,CredentialExpectation>
 }
-export type ApplicationSnapshot=ImportSnapshot&{stableSchedules?:WinterStableSchedule[];roster:SharedRoster;bindings:WinterRosterBinding[];credentials:WinterCredential[];riderGrades?:JefRiderRecord[];riderGradesError?:string}
+export type ApplicationSnapshot=ImportSnapshot&{stallRequests?:SavedStallRequest[];stableSchedules?:WinterStableSchedule[];roster:SharedRoster;bindings:WinterRosterBinding[];credentials:WinterCredential[];riderGrades?:JefRiderRecord[];riderGradesError?:string}
 export type ApplicationRegistrationServices={
+ saveStallRequest?:(input:StallRequestSave)=>Promise<string>
  saveStableSchedule?:(input:StableScheduleSave)=>Promise<string>
  load:(riderNumbers?:string[])=>Promise<ApplicationSnapshot>
  savePerson:(input:Parameters<typeof saveRosterEntity>[0])=>ReturnType<typeof saveRosterEntity>
@@ -63,13 +65,14 @@ export function readApplicationRegistration(v:unknown):ApplicationRegistration{
   }
   if(Object.keys(credentials).length!==review.edited.people.filter(p=>credentialValue(p)).length)throw new Error('資格・グレードの再開記録の件数が一致しません')
  }
- return {kind:'winter-application-registration',version:1,eventId:WINTER_EVENT_ID,review,people,participants,entries,...(x.stable===undefined?{}:{stable:readStableExpectation(x.stable)}),...(x.credentials===undefined?{}:{credentials})}
+ return {kind:'winter-application-registration',version:1,eventId:WINTER_EVENT_ID,review,people,participants,entries,...(x.stallRequest===undefined?{}:{stallRequest:readStallExpectation(x.stallRequest)}),...(x.stable===undefined?{}:{stable:readStableExpectation(x.stable)}),...(x.credentials===undefined?{}:{credentials})}
 }
 export function serializeApplicationRegistration(value:ApplicationRegistration){const text=JSON.stringify(readApplicationRegistration(value));if(new TextEncoder().encode(text).byteLength>8_000_000)throw new Error('登録再開記録は8MB以内です');return text}
 export function parseApplicationRegistration(text:string){if(text.length>8_000_000)throw new Error('登録再開記録は8MB以内です');return readApplicationRegistration(JSON.parse(text))}
 export const applicationRegistrationKey=(reference:string)=>winterStorageKey('application-registration')+':'+encodeURIComponent(importReference(reference))
 export function applicationRegistrationDifferences(before:ApplicationRegistration,after:ApplicationRegistration){
  const issues:string[]=[]
+ if(before.stallRequest&&JSON.stringify(before.stallRequest)!==JSON.stringify(after.stallRequest))issues.push('厩舎割要望の保存開始記録を変更できません')
  if(before.stable&&JSON.stringify(before.stable)!==JSON.stringify(after.stable))issues.push('入退厩予定の保存開始時の照合記録を変更できません')
  if(before.credentials&&JSON.stringify(before.credentials)!==JSON.stringify(after.credentials))issues.push('資格・グレードの保存開始時の照合記録を変更できません')
  if(JSON.stringify(before.review)!==JSON.stringify(after.review))issues.push('確定時の原本・訂正・対応・金額が変わっています。既存記録を保持してください')
@@ -91,7 +94,7 @@ export function persistApplicationRegistration(storage:Pick<Storage,'getItem'|'s
 }
 function validateSnapshot(s:ApplicationSnapshot){
  assertWinterEvent(s.data.eventId)
- for(const row of [...s.data.organizations,...s.data.riders,...s.data.horses,...s.data.competitions,...s.data.entries,...s.initial,...s.roster.participants,...s.credentials,...(s.stableSchedules??[])])assertWinterEvent(row.event_id)
+ for(const row of [...s.data.organizations,...s.data.riders,...s.data.horses,...s.data.competitions,...s.data.entries,...s.initial,...s.roster.participants,...s.credentials,...(s.stableSchedules??[]),...(s.stallRequests??[])])assertWinterEvent(row.event_id)
  const keys=new Set<string>(),targets=new Set<string>()
  for(const b of s.bindings){
   const key=JSON.stringify([b.entity_id,b.club_id]),target=b.rider_id??b.horse_id
@@ -187,8 +190,9 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
   return {key:p.key,name:p.name,kind:p.kind,value,previous:current?.value??'',saved,requestId,expected:work.credentials?.[p.key]?.expected??current?.request_id??null}
  }))
  const stable=reviewStableSchedule(work.review,s.stableSchedules,s.data.organizations,work.stable)
- issues.push(...stable.issues)
- return {stable,ready:issues.length===0,issues,people:rows,clubId,participating,entries,credentials,credentialsComplete:credentials.every(c=>!c.value||c.saved),pendingRoster:prepared.pending}
+ const stallRequest=reviewStallImport(work.review,s.stallRequests,s.data.organizations,work.stallRequest)
+ issues.push(...stable.issues,...stallRequest.issues)
+ return {stallRequest,stable,ready:issues.length===0,issues,people:rows,clubId,participating,entries,credentials,credentialsComplete:credentials.every(c=>!c.value||c.saved),pendingRoster:prepared.pending}
 }
 export async function resolveUnknownApplicationPerson(value:ApplicationRegistration,key:string,entityId:string,s:ApplicationSnapshot){
  const work=readApplicationRegistration(value);validateSnapshot(s)
@@ -211,6 +215,7 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
  async function check(){const s=await deps.load(),plan=await reviewApplicationRegistration(work,s);if(!plan.ready)throw new Error(plan.issues.join('\n'));return {s,plan}}
  report('checking','保存前の内容を確認しています')
  const start=await check();report('checking','保存前の確認が終わりました',start.plan)
+ if(!work.stallRequest&&start.plan.stallRequest.expectation)work.stallRequest=start.plan.stallRequest.expectation
  if(!work.stable&&start.plan.stable.expectation)work.stable=start.plan.stable.expectation
  if(!work.credentials)work.credentials=Object.fromEntries(start.plan.credentials.filter(c=>c.value).map(c=>[c.key,{requestId:c.requestId,expected:c.expected}]))
  persist()
@@ -278,6 +283,18 @@ export async function runApplicationRegistration(value:ApplicationRegistration,d
   try{await deps.saveStableSchedule({eventId:WINTER_EVENT_ID,organizationId:stableBefore.plan.stable.organizationId,organizationName:work.review.edited.club.trim(),requestId,...work.stable,reference:work.review.reference,digest:work.review.original.digest})}catch(error){writeError=error}
   const after=await check()
   if(!after.plan.stable.complete)throw new Error((writeError instanceof Error?writeError.message:'入退厩予定の保存結果を確認できません')+'。登録結果を再確認してください')
+  s=after.s;plan=after.plan;persist()
+ }
+ if(deps.stop())return work
+ const requestBefore=await check()
+ if(requestBefore.plan.stallRequest.needed&&!requestBefore.plan.stallRequest.complete){
+  const org=requestBefore.plan.stallRequest.organizationId
+  if(!deps.saveStallRequest||!work.stallRequest||!org)throw new Error('厩舎割要望の保存先を確認できません')
+  report('participation','団体の厩舎割要望を保存しています',requestBefore.plan)
+  const requestId=await stallRequestId(org,work.stallRequest);persist();let writeError:unknown
+  try{await deps.saveStallRequest({eventId:WINTER_EVENT_ID,organizationId:org,organizationName:work.review.edited.club.trim(),requestId,...work.stallRequest})}catch(error){writeError=error}
+  const after=await check()
+  if(!after.plan.stallRequest.complete)throw new Error((writeError instanceof Error?writeError.message:'厩舎割要望の保存結果を確認できません')+'。登録結果を再確認してください。')
   s=after.s;plan=after.plan;persist()
  }
  if(deps.stop())return work

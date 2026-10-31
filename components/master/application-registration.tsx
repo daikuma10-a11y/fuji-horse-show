@@ -12,6 +12,7 @@ type ResultRow={key:string;label:string;state:string;id?:string;issues:string[]}
 export type ApplicationRegistrationPanelProps={
  feedback?:ApplicationImportFeedback
  busy:boolean;running:boolean;frozen:boolean;hasCheckpoint:boolean;hasPlan:boolean;ready:boolean
+ stallRequest?:{needed:boolean;complete:boolean;expectation?:{value:import('@/lib/master/stall-request').StallRequest}}
  stable?:{needed:boolean;complete:boolean;expectation?:{value:StableSchedule}}
  credentials?:{key:string;name:string;kind:string;value:string;previous:string;saved:boolean}[]
  showAccountConfirmation?:boolean;hasCorrections?:boolean;reviewStale?:boolean;editError?:string
@@ -110,6 +111,7 @@ export function MasterApplicationRegistration(p:ApplicationRegistrationPanelProp
     <p>資格・競技・料金にも確認事項がある場合は、②の黄色い欄を確認してください。</p>
    </div>}
    {p.frozen&&p.onRoster&&p.people.some(r=>r.issues.length>0)&&<div className="rounded-lg border p-3"><p>選択した名簿自体の名前・番号・所属が違う場合はこちら。訂正後は「Excel申込書の取り込み」へ戻り、③で再照合してください。</p><button type="button" className={button+' mt-2'} disabled={p.busy} onClick={p.onRoster}>名簿の所属を確認・訂正する</button><p className="text-sm">現在の申込内容をこの端末に保存して移動します。</p></div>}
+   {p.stallRequest?.needed&&p.stallRequest.expectation&&<div className="rounded-lg border p-3"><h4 className="text-lg font-bold">団体に保存する厩舎割要望{p.stallRequest.complete?'（保存済み）':''}</h4>{p.stallRequest.expectation.value.imports.map(i=><p key={i.digest} className="whitespace-pre-wrap">{i.text}</p>)}<p>手入力済みの要望・条件は保持します。新しい要望は入厩情報で確認してください。</p></div>}
    {p.stable?.needed&&p.stable.expectation&&<div className="rounded-lg border p-3"><h4 className="text-lg font-bold">手帳チェックに保存する入退厩予定{p.stable.complete?'（保存済み）':''}</h4><p>入厩：{stableDateLabel(p.stable.expectation.value.arrivalDate,p.stable.expectation.value.arrivalTime)||'未記載'}</p><p>退厩：{stableDateLabel(p.stable.expectation.value.departureDate,p.stable.expectation.value.departureTime)||'未記載'}</p>{p.stable.expectation.value.notes&&<p className="whitespace-pre-wrap">{p.stable.expectation.value.notes}</p>}</div>}
    {p.credentials&&<div className="rounded-lg border border-slate-300 p-3"><h4 className="text-lg font-bold">団体別一覧に保存する資格・グレード</h4><ul className="mt-2 space-y-2">{p.credentials.map(c=><li key={c.key}>{c.name} ／ {c.kind==='rider'?'所有資格級':'グレード宣言'}：{c.value?(c.saved?`${c.value}（保存済み）`:c.previous?`保存済み ${c.previous} → 今回 ${c.value}`:`今回 ${c.value} を保存`):c.previous?`${c.previous}（今回の原本は空欄・保存済みを保持）`:'記載なし・未確認'}</li>)}</ul><p className="mt-2 text-sm">申込書で確認した値を保存します。日馬連マスターの登録内容を変更する操作ではありません。</p></div>}
    {!p.reviewStale&&<><p>Winter参加登録：{p.participantState}</p>
