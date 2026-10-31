@@ -60,7 +60,7 @@ export function extractStallRequest(sheets:InputSheet[]):{stallRequest:string;st
     const entries=Object.entries(sheet.cells)
     for(const [address,cell] of entries){
       const label=norm(cell.value).replace(/[：:]/g,'')
-      if(!/^(?:ご)?(?:要望|要望欄|ご要望欄|厩舎割要望|厩舎割の要望|厩舎に関する要望|厩舎希望|希望厩舎|その他の要望)$/.test(label))continue
+      if(!/^(?:ご)?(?:要望|要望欄|ご要望欄|馬房要望|馬房要望欄|厩舎割要望|厩舎割の要望|厩舎に関する要望|厩舎希望|希望厩舎|その他の要望)$/.test(label))continue
       const row=Number(address.match(/\d+$/)![0]),col=address.replace(/\d/g,'')
       const colNumber=(s:string)=>[...s].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0)
       const candidates=entries.filter(([a,c])=>c.value.trim()&&Number(a.match(/\d+$/)![0])===row&&colNumber(a.replace(/\d/g,''))>colNumber(col))

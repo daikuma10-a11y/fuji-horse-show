@@ -48,6 +48,7 @@ assert.throws(()=>R.mergeStallImport(saved,{...imported,text:'改変'}),/異な�
 const excel=R.extractStallRequest([{name:'集計',hidden:false,cells:{B20:{value:'要望欄'},C20:{value:'4番厩舎が良い\n輸送元クラブの横にして欲しい'},B21:{value:'電話番号'},C21:{value:'000000'}}}])
 assert.equal(excel.stallRequestOrigins.length,1);assert.ok(!excel.stallRequest.includes('000000'))
 assert.equal(R.extractStallRequest([{name:'集計',hidden:false,cells:{B20:{value:'要望'},B21:{value:'4番厩舎希望'}}}]).stallRequest,'4番厩舎希望')
+assert.equal(R.extractStallRequest([{name:'集計',hidden:false,cells:{B20:{value:'馬房要望欄：'},C20:{value:'4番厩舎希望'}}}]).stallRequest,'4番厩舎希望')
 assert.equal(R.extractStallRequest([{name:'集計',hidden:false,cells:{B20:{value:'入厩予定日'},C20:{value:'2026-11-13'}}}]).stallRequest,'')
 const draft={original:{digest:'b'.repeat(64),fileName:'test.xlsx',stallRequestOrigins:[]},edited:{club:'希望棟クラブ',stallRequest:'4番厩舎希望'}}
 const rows=[{organization_id:'four',request_id:'c'.repeat(64),value:saved}]

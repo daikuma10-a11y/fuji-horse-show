@@ -1,4 +1,4 @@
--- PREPARED ONLY. Requires organizer approval before applying to the shared DB.
+-- Organizer approved this change; applied once as 20261031225850_winter_stall_requests.
 -- Common storage, Winter-only write adapter. No roster, entry or payment writes.
 create table public.fhs_stall_request_versions (
  request_id text primary key check(request_id ~ '^[0-9a-f]{64}$'),
