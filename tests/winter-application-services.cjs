@@ -3,7 +3,7 @@ require('./register-ts.cjs')
 const assert=require('node:assert/strict')
 const auth=require('../lib/supabase-rest.ts'),roster=require('../lib/shared-roster.ts')
 const data=require('../lib/winter-data.ts'),settlement=require('../lib/winter-settlement.ts'),entry=require('../lib/winter-initial-entry.ts')
-const stable=require('../lib/winter-stable-schedules.ts')
+const stable=require('../lib/winter-stable-schedules.ts'),requests=require('../lib/winter-stall-requests.ts')
 const credentials=require('../lib/winter-application-credentials.ts')
 const correction=require('../lib/winter-roster-correction.ts')
 const qualifications=require('../lib/jef-rider-qualifications.ts')
@@ -11,8 +11,8 @@ const {winterApplicationServices}=require('../lib/winter-application-services.ts
 global.fetch=()=>{throw Error('Unexpected network call')}
 let calls=[],denied=false,version=0
 auth.verifyAdminSession=async session=>{calls.push(['verify',session.accessToken]);if(denied)throw Error('admin denied');return {...session,accessToken:`synthetic-${++version}`}}
-for(const [module,name,result] of [[roster,'loadSharedRoster',{synthetic:'roster'}],[roster,'loadWinterRosterBindings',[]],[data,'loadWinterData',{synthetic:'event'}],[settlement,'loadWinterInitialCharges',[]],[credentials,'loadWinterApplicationCredentials',[]],[stable,'loadWinterStableSchedules',[]]])module[name]=async(...args)=>{calls.push([name,...args]);return result}
-for(const [module,name] of [[roster,'saveRosterEntity'],[roster,'saveWinterParticipants'],[entry,'saveWinterInitialEntry'],[credentials,'saveWinterApplicationCredential'],[correction,'saveWinterRosterCorrection'],[stable,'saveWinterStableSchedule']])module[name]=async(...args)=>{calls.push([name,...args]);return 'synthetic-result'}
+for(const [module,name,result] of [[roster,'loadSharedRoster',{synthetic:'roster'}],[roster,'loadWinterRosterBindings',[]],[data,'loadWinterData',{synthetic:'event'}],[settlement,'loadWinterInitialCharges',[]],[credentials,'loadWinterApplicationCredentials',[]],[stable,'loadWinterStableSchedules',[]],[requests,'loadWinterStallRequests',[]]])module[name]=async(...args)=>{calls.push([name,...args]);return result}
+for(const [module,name] of [[roster,'saveRosterEntity'],[roster,'saveWinterParticipants'],[entry,'saveWinterInitialEntry'],[credentials,'saveWinterApplicationCredential'],[correction,'saveWinterRosterCorrection'],[stable,'saveWinterStableSchedule'],[requests,'saveWinterStallRequest']])module[name]=async(...args)=>{calls.push([name,...args]);return 'synthetic-result'}
 qualifications.loadJefRiderQualifications=async(...args)=>{calls.push(['loadJefRiderQualifications',...args]);return []}
 async function main(){
  const sessions=[],service=winterApplicationServices({accessToken:'synthetic-start',refreshToken:'synthetic-refresh',expiresAt:0},s=>sessions.push(s))

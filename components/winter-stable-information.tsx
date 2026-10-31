@@ -1,4 +1,7 @@
 "use client"
+import {MasterStallRequestEditor} from './master/stall-request-editor'
+import {emptyStallRequest,type StallRequest} from '@/lib/master/stall-request'
+import {loadWinterStallRequests,saveWinterStallRequest,stallRequestId,type SavedStallRequest} from '@/lib/winter-stall-requests'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MasterStableInformation } from './master/stable-information'
 import {MasterStableScheduleEditor} from './master/stable-schedule-editor'
@@ -28,12 +31,13 @@ export function WinterStableInformation({ data, loading, error, session, onSessi
   }, [data])
   const [unsettled, setUnsettled] = useState<UnsettledRow[]>([]), [ledgerLoading, setLedgerLoading] = useState(true), [ledgerError, setLedgerError] = useState('')
   const [schedules,setSchedules]=useState<WinterStableSchedule[]>([]),[scheduleLoading,setScheduleLoading]=useState(true),[scheduleError,setScheduleError]=useState('')
+  const [requests,setRequests]=useState<SavedStallRequest[]>([]),[requestError,setRequestError]=useState(''),[requestLoading,setRequestLoading]=useState(true)
   const sessionRef = useRef(session); sessionRef.current = session
   useEffect(() => {
     if (!active || !data || loading || error) return
     let alive = true
     setLedgerLoading(true); setLedgerError(''); setUnsettled([])
-    setScheduleLoading(true); setScheduleError('')
+    setScheduleLoading(true); setScheduleError('');setRequestLoading(true);setRequestError('')
     async function refresh() {
       try {
         const verified = await verifyAdminSession(sessionRef.current)
@@ -41,15 +45,28 @@ export function WinterStableInformation({ data, loading, error, session, onSessi
         onSession(verified)
         await Promise.all([
           loadWinterSettlement(verified.accessToken).then(ledger => { if (alive) setUnsettled(winterUnsettledRows(data!, ledger)) }).catch(reason => { if (alive) setLedgerError(reason instanceof Error ? reason.message : '精算状況を取得できませんでした。') }).finally(() => { if (alive) setLedgerLoading(false) }),
+          loadWinterStallRequests(verified.accessToken).then(rows=>{if(alive)setRequests(rows)}).catch(e=>{if(alive)setRequestError(e instanceof Error?e.message:'要望を取得できません')}).finally(()=>{if(alive)setRequestLoading(false)}),
           loadWinterStableSchedules(verified.accessToken).then(rows => { if (alive) setSchedules(rows) }).catch(reason => { if (alive) setScheduleError(reason instanceof Error ? reason.message : '入退厩予定を取得できませんでした。') }).finally(() => { if (alive) setScheduleLoading(false) }),
         ])
       } catch (reason) {
-        if (alive) { const message = reason instanceof Error ? reason.message : '本部ログインを確認できません'; setLedgerError(message); setScheduleError(message); setLedgerLoading(false); setScheduleLoading(false) }
+        if (alive) { const message = reason instanceof Error ? reason.message : '本部ログインを確認できません'; setLedgerError(message); setScheduleError(message); setLedgerLoading(false); setScheduleLoading(false);setRequestError(message);setRequestLoading(false) }
       }
     }
     void refresh()
     return () => { alive = false }
   }, [active, data, loading, error, revision, onSession])
+  async function reloadRequests(){
+    setRequestLoading(true);setRequestError('')
+    try{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);const rows=await loadWinterStallRequests(verified.accessToken);setRequests(rows);return rows}
+    catch(e){setRequestError(e instanceof Error?e.message:'要望を取得できません');throw e}finally{setRequestLoading(false)}
+  }
+  async function saveRequest(id:string,value:StallRequest,expected:string|null){
+    const org=data?.organizations.find(o=>o.id===id);if(!org)throw new Error('団体を確認できません')
+    const requestId=await stallRequestId(id,{expected,value}),verified=await verifyAdminSession(sessionRef.current);onSession(verified);let failure:unknown
+    try{await saveWinterStallRequest({eventId:WINTER_EVENT_ID,organizationId:id,organizationName:org.name,requestId,expected,value},verified.accessToken)}catch(e){failure=e}
+    const after=await reloadRequests(),saved=after.find(r=>r.organization_id===id)
+    if(saved?.request_id!==requestId)throw new Error((failure instanceof Error?failure.message:'要望の保存結果を確認できません')+'。入力は保持しています。')
+  }
   async function reloadSchedules(){
     setScheduleLoading(true);setScheduleError('')
     try{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);const rows=await loadWinterStableSchedules(verified.accessToken);setSchedules(rows);return rows}
@@ -78,7 +95,7 @@ export function WinterStableInformation({ data, loading, error, session, onSessi
     return unsettledPrintHtml(winterUnsettledRows(fresh, ledger), WINTER_EVENT_NAME, printedAt())
   }
   return <MasterStableInformation groups={view.groups} eventName={WINTER_EVENT_NAME} loading={pending} error={problem} loadForPrint={async () => winterStableGroups(await loadWinterData())}
-    allocation={<MasterStallAllocation groups={view.groups} eventName={WINTER_EVENT_NAME} active={active&&!pending&&!problem} onLoad={async()=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);const [fresh,saved]=await Promise.all([loadWinterData(),loadWinterStallPlan(verified.accessToken)]);return {groups:winterStableGroups(fresh),saved}}} onSave={async(plan,expected)=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);return saveWinterStallPlan(plan,expected,verified.accessToken)}}/>}
+    allocation={<><MasterStallRequestEditor rows={(data?.organizations??[]).map(g=>{const r=requests.find(r=>r.organization_id===g.id);return {id:g.id,name:g.name,value:r?.value??emptyStallRequest(),revision:r?.request_id??null}})} loading={pending||requestLoading} error={problem||requestError} onReload={async()=>{await reloadRequests()}} onSave={saveRequest}/><MasterStallAllocation requestSource={Object.fromEntries(requests.filter(r=>view.groups.some(g=>g.id===r.organization_id)).map(r=>[r.organization_id,{value:r.value,revision:r.request_id}]))} groups={view.groups} eventName={WINTER_EVENT_NAME} active={active&&!pending&&!problem} onLoad={async()=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);const [fresh,saved,latestRequests]=await Promise.all([loadWinterData(),loadWinterStallPlan(verified.accessToken),loadWinterStallRequests(verified.accessToken)]);setRequests(latestRequests);return {groups:winterStableGroups(fresh),saved,requestSource:Object.fromEntries(latestRequests.map(r=>[r.organization_id,{value:r.value,revision:r.request_id}]))}}} onSave={async(plan,expected)=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);return saveWinterStallPlan(plan,expected,verified.accessToken)}}/></>}
     reports={<><MasterStableScheduleEditor rows={view.groups.map(g=>{const row=schedules.find(s=>s.organization_id===g.id);return {id:g.id,name:g.name,value:row?.value??emptyStableSchedule(),revision:row?.request_id??null}})} loading={pending||scheduleLoading} error={problem||scheduleError} year="2026" onReload={async()=>{await reloadSchedules()}} onSave={saveSchedule} onReadExcel={async file=>{const app=await readWinterApplication(new Uint8Array(await file.arrayBuffer()),file.name);return {club:app.club,value:app.stable??emptyStableSchedule()}}}/>
     <MasterStableReports booklets={bookletRows(view.groups,schedules.map(row=>({id:row.organization_id,value:row.value})))} bookletLoading={scheduleLoading} bookletError={scheduleError} unsettled={unsettled} loading={pending} error={problem} unsettledLoading={ledgerLoading} unsettledError={ledgerError}
       loadBookletPrint={loadBookletPrint} loadUnsettledPrint={loadUnsettledPrint}/></>}/>
