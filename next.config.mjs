@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async headers() {
+    return [{
+      source: '/winter/sw.js',
+      headers: [{ key: 'Service-Worker-Allowed', value: '/winter' }],
+    }]
+  },
   outputFileTracingIncludes: {
     '/api/official-excel': ['./templates/autumn-*.xlsm'],
   },
