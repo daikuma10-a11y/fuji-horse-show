@@ -37,3 +37,17 @@ UIで外部解析への送信と原本確認を案内する。APIには1イン�
 - Vercel接続試験：専用プレビューの `FHS_PHOTO_SMOKE_TEST=1` のときだけ、固定の架空PNGを解析する。`scripts/verify-winter-photo.cjs` は実データやDBを使わない。通常ビルド/Productionでは解析を呼ばない。接続結果は後段に記録する。
 
 現時点の限界：本物の手書き写真による精度、ログイン済み実端末の操作、実登録はこの試験の証拠に含めない。元Workの実行状態・未保存変更は引き続き未確認。保存版の続きから作業し、回収結果が届いたら照合する。
+
+## 接続試験の結果・再開点
+
+実装保存版：`74bad677c437beb822410dde2c392d9945a520a3`、[PR #29](https://github.com/daikuma10-a11y/fuji-horse-show/pull/29)（Draft、未マージ）。
+
+2026-11-03の専用Preview `dpl_7fxZeAHj8QXqPnHyf8EjNP4wZd2w` はコンパイルとオフラインシェル生成に成功。その後、架空PNGを使った接続試験でAI Gatewayから `customer_verification_required` が返り、ビルドを停止した。画像解析の成功や手書き精度の確認を意味しない。Vercel公式FAQでも、この応答は無料クレジットを使う前にチームの有効な支払い方法の確認が必要な状態とされる：https://vercel.com/docs/ai-gateway/faq
+
+本人の確認が必要な部分：Vercelの `daikuma10-7300` チームで、AI Gatewayの案内に従って支払い方法の確認を行う。こちらではカード登録、クレジット購入、自動チャージ、予算変更をしていない。
+
+再開時は、まず上記PR・base/headの最新状態を照合する。専用ブランチの `FHS_PHOTO_SMOKE_TEST`（ID `TtnQEflYoUw60Rk8`）は現在 `0` に戻し、自動再試行を止めている。確認完了後、担当がこれを一時的に `1` にして専用Previewを再配備し、固定PNGの読み取りを検証する。条件を満たさないモデル利用や追加購入が必要なら、その部分だけ確認する。成功後は試験設定を止め、最新base/headを再確認して通常マージ、既存WinterPreviewへの反映、認証/読取結果の照合へ進む。
+
+停止時点で `prep/winter-2026` は `4707dc5999d06e0ee652c9ebaeb44a2416016323`、既存Winter配備 `dpl_AvFWUCX8csvfBaUukdsbg1fgtSXK` はREADYのまま。`main` は `a44b46421f3d094209c61bc32d03918c9b4fff7a` のまま。今回の実登録、入金、DB構造/権限変更はなし。
+
+最終追加確認：共有事前登録画面の旧アダプター互換、厩舎割要望の取り込み/編集、写真API境界がPASS。TypeScriptと通常ビルドがPASS。写真接続試験だけは上記理由で未完了。通常ビルドの成功を画像解析の成功とは扱わない。
