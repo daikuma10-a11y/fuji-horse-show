@@ -1,3 +1,4 @@
+import {photoReviewComplete} from './master/application-photo'
 import {extractStallRequest} from './master/stall-request'
 import {extractWinterStableSchedule} from './winter-stable-extraction'
 import {stableScheduleIssues} from './master/stable-schedule'
@@ -92,7 +93,7 @@ export function applicationReview(app:Application,paid:string,checked:boolean){
  countIssues.push(...[...countAssignments.values()].filter(a=>a.reason).map(a=>a.reason))
  const stableIssues=stableScheduleIssues(app.stable)
  for(const key of ['arrivalDate','departureDate'] as const)if(app.stable?.[key]&&!app.stable[key].startsWith('2026-'))stableIssues.push('入退厩日は2026年の日付で確認してください。')
- return {report,amounts,credentialIssues,entryCounts,countAssignments,countIssues,stableIssues,ready:!stableIssues.length&&!countIssues.length&&!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
+ return {report,amounts,credentialIssues,entryCounts,countAssignments,countIssues,stableIssues,ready:photoReviewComplete(app)&&!stableIssues.length&&!countIssues.length&&!credentialIssues.length&&!app.issues.length&&report.entriesReady&&report.accountsReady&&amounts.every(a=>!a.reason)}
 }
 export function rosterCandidates(person:ApplicationPerson,data:SharedRoster,club:string,options:{similar?:boolean;search?:string}={}){
  const clubNames=new Map(data.clubs.map(c=>[c.id,c.name]))

@@ -1,5 +1,7 @@
 # Winter Excel import — checkpoint 4 (not released)
 
+2026-11-03: 写真申込書の追加は [winter-photo-import-20261103.md](winter-photo-import-20261103.md) を参照。既存のExcel抽出・確認・登録パイプラインを再利用し、写真の原本照合を追加する。以下は既存実装時点の記録。
+
 Checkpoint 1 (`3923b25`) is preserved and reused. Checkpoint 2 (`05848af`) connected its extraction/review helpers to Winter admin → 事前登録 → 申込書の読み込み: local Excel selection/drop, explicit reading, source/edited comparison, roster candidate selection, fee/revision review and review-only JSON/local checkpoints. Checkpoint 3 (`77dd40a`) added the registration runner, result codec and existing-service adapters. None of these commits has been recreated or published. The existing CSV/TSV registration flow is unchanged.
 
 Checkpoint 4 connects the runner to explicit admin confirmation, authoritative result display, stop/resume, unknown-person resolution and registration JSON controls in the common master. The flow has been tested with real component/controller/registration functions and synthetic in-memory services, never the live database. No actual participant registration or payment operation has been performed.

@@ -1,3 +1,4 @@
+import {applicationOriginLabel} from './master/application'
 import { WINTER_EVENT_ID, assertWinterEvent } from './winter-event'
 import { winterRpc } from './winter-reception'
 import { emptyStallRequest, mergeStallImport, readStallRequest, type StallRequest } from './master/stall-request'
@@ -43,7 +44,7 @@ export function reviewStallImport(draft:ApplicationDraft,rows:SavedStallRequest[
  if(!rows)issues.push('保存済みの厩舎割要望を読み込んでから再確認してください。')
  if(orgs.length>1)issues.push('厩舎割要望の団体を一意に確認できません。')
  let merged=emptyStallRequest()
- try{merged=mergeStallImport(current?.value??merged,{digest:draft.original.digest,text,source:draft.original.fileName+' '+(draft.original.stallRequestOrigins??[]).map(o=>o.sheet+'!'+o.cell).join('、')})}catch(e){issues.push(e instanceof Error?e.message:'要望を確認してください。')}
+ try{merged=mergeStallImport(current?.value??merged,{digest:draft.original.digest,text,source:draft.original.fileName+' '+(draft.original.stallRequestOrigins??[]).map(applicationOriginLabel).join('、')})}catch(e){issues.push(e instanceof Error?e.message:'要望を確認してください。')}
  const expected=expectation??{expected:current?.request_id??null,value:merged}
  const complete=!!current&&JSON.stringify(current.value)===JSON.stringify(expected.value)
  if(expectation&&!complete&&(current?.request_id??null)!==expected.expected)issues.push('厩舎割要望が別の操作で更新されています。最新の要望を確認してください。')

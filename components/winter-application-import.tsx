@@ -1,6 +1,9 @@
 'use client'
 
 import {useEffect,useMemo,useRef,useState} from 'react'
+import {MasterApplicationPhotoInput,MasterApplicationPhotoReview} from './master/application-photo-input'
+import {prepareApplicationPhotos,photoApplicationDigest,loadApplicationPhotos,saveApplicationPhotos,photoReviewSignature,type ApplicationPhotoPage} from '@/lib/master/application-photo'
+import {verifyAdminSession} from '@/lib/supabase-rest'
 import {prepareApplicationRoster,applicationRosterChanges,retainRosterPreparation} from '@/lib/winter-application-roster-stage'
 import {addApplicationEntry,addApplicationCountEntry,addApplicationPerson,removeApplicationAddition,type ApplicationCountEntryInput} from '@/lib/master/application-additions'
 import {applicationEntryTarget,applicationPersonTarget} from '@/lib/master/application-guide'
@@ -14,7 +17,7 @@ import {applicationDifferences,applicationReview,readWinterApplication,rosterCan
 import {applicationDraftKey,createApplicationDraft,parseApplicationDraft,persistApplicationDraft,readApplicationDraft,serializeApplicationDraft,type ApplicationDraft} from '@/lib/winter-application-draft'
 import {type SharedRoster} from '@/lib/shared-roster'
 import {type AdminSession} from '@/lib/supabase-rest'
-import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
+import {WINTER_EVENT_ID,WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
 import {applicationTodos,applicationClubSummary} from '@/lib/winter-application-guide'
 import {winterApplicationServices} from '@/lib/winter-application-services'
 import {applicationRegistrationKey,parseApplicationRegistration,type ApplicationSnapshot} from '@/lib/winter-application-registration'
@@ -26,18 +29,20 @@ import preparation from '@/config/winter-2026-preparation.json'
 
 function download(draft:ApplicationDraft){
  const url=URL.createObjectURL(new Blob([serializeApplicationDraft(draft)],{type:'application/json'}))
- const a=document.createElement('a');a.href=url;a.download='Winter-Excel確認再開.json';a.click()
+ const a=document.createElement('a');a.href=url;a.download=draft.original.photo?'Winter-写真確認再開.json':'Winter-Excel確認再開.json';a.click()
  setTimeout(()=>URL.revokeObjectURL(url),1000)
 }
 /** Winter source and service adapter; all presentation remains in the common master. */
 export function WinterApplicationImport({session,onSession,onStartlist,onSettlement,onChanges,onRoster,onChanged}:{session:AdminSession;onSession:(session:AdminSession)=>void;onStartlist?:()=>void;onSettlement?:()=>void;onChanges?:()=>void;onRoster?:()=>void;onChanged?:()=>void}){
  const [file,setFile]=useState<File|null>(null),[draft,setDraft]=useState<ApplicationDraft|null>(null)
+ const [photoPages,setPhotoPages]=useState<ApplicationPhotoPage[]>([])
  const [revision,setRevision]=useState<Application|null>(null),[roster,setRoster]=useState<SharedRoster|null>(null)
  const [context,setContext]=useState<ApplicationSnapshot|null>(null)
  const [candidateSearch,setCandidateSearch]=useState<Record<string,string>>({})
  const [intent,setIntent]=useState<'addition'|''>('')
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[dirty,setDirty]=useState(false)
  const lock=useRef(false),expectedSaved=useRef<string|null>(null)
+ useEffect(()=>{let live=true;setPhotoPages([]);if(draft?.original.photo)void loadApplicationPhotos(draft.original.digest).then(c=>{if(live&&c)setPhotoPages(c.pages)}).catch(()=>{});return()=>{live=false}},[draft?.original.digest])
  const registration=useWinterApplicationRegistration({draft,session,onSession,isReviewBusy:()=>lock.current,
   canReplaceReview:()=>!dirty||window.confirm('現在の未保存の確認入力を登録再開記録で置き換えます。続けますか？'),
   onAdopt:value=>{setDraft(value);setFile(null);setRevision(null);setRoster(null);expectedSaved.current=null;setDirty(false)},
@@ -129,7 +134,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const differences=useMemo(()=>draft&&revision?applicationDifferences(draft.original,revision):null,[draft,revision])
  const clubSummary=draft&&context?applicationClubSummary(draft,context):null
  const todos=draft?applicationTodos(draft,roster!==null).filter(t=>draft.rosterPreparation||registration.frozen||t.target.startsWith('application-person-')||['application-club','application-source','application-reference'].includes(t.target)):[]
- if(clubSummary?.state==='registered'&&intent!=='addition')todos.push({label:'Excelの取込方法',message:'「登録済みの出番を残して、このExcelを取り込む」にチェックしてください。新規・追加の出番や資格級・グレード宣言の保存に進めます。',target:'application-club',blocking:true})
+ if(clubSummary?.state==='registered'&&intent!=='addition')todos.push({label:'申込書の取込方法',message:'「登録済みの出番を残して、この申込書を取り込む」にチェックしてください。新規・追加の出番や資格級・グレード宣言の保存に進めます。',target:'application-club',blocking:true})
  if(clubSummary?.state==='ambiguous')todos.push({label:'団体名',message:clubSummary.detail,target:'application-club',blocking:true})
  if(context?.riderGradesError)todos.push({label:'資格の自動補完',message:context.riderGradesError,target:'application-club',blocking:false})
  const rosterChanges=draft&&context?applicationRosterChanges(draft,context):[]
@@ -206,8 +211,8 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   if(countUpgrade)next=countUpgrade
   expectedSaved.current=stored;setDraft(next);setRevision(null);setDirty(!stored||needsReference||!!upgraded||!!countUpgrade||!!requestUpgrade)
   if(saved)registration.openRecord(parseApplicationRegistration(saved))
-  setMessage(saved?'このExcelの取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':requestUpgrade?'同じ原本から厩舎割要望を追加しました。登録済みの出番を再照合し、重複させず要望を保存します。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
-  try{await loadContext(next)}catch(e){setError('Excelは読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
+  setMessage(saved?'この申込書の取り込み記録があります。③の「登録結果を再確認」で現在の結果を確認してください。':requestUpgrade?'同じ原本から厩舎割要望を追加しました。登録済みの出番を再照合し、重複させず要望を保存します。':upgraded?'原本から資格・グレードの確認欄を追加しました。②で確認して③へ進んでください。登録済みの出番は重複して取り込みません。':app.photo?'写真を読み込みました。原本と見比べ、②で誤読や抜けを訂正してください。読み込んだだけでは登録しません。':'Excelを読み込みました。②の確認箇所から順に確認してください。読み込んだだけでは登録しません。')
+  try{await loadContext(next)}catch(e){setError('申込書は読み込めましたが、既存登録の確認に失敗しました。「既存登録を再確認」を押してください。\n'+(e instanceof Error?e.message:''))}
  }
  function saveAndGo(next?:()=>void){void action(()=>{
   if(draft&&!registration.isFrozen()){expectedSaved.current=persistApplicationDraft(localStorage,draft,expectedSaved.current);setDirty(false)}
@@ -219,7 +224,32 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   setDraft(null);setFile(null);setRevision(null);setRoster(null);setContext(null);setIntent('');expectedSaved.current=null;setDirty(false)
   setMessage('確認途中をこの端末に保存しました。次の申込書を選んでください。')
  })}
+ function readPhotos(files:File[]){void action(async()=>{
+  if(draft&&!draft.original.photo)throw new Error('確認中のExcelを保存して「次の申込書へ」から写真を開いてください')
+  const pages=await prepareApplicationPhotos(files),digest=await photoApplicationDigest(pages,WINTER_EVENT_ID)
+  if(draft){
+   if(digest!==draft.original.digest)throw new Error('確認中の原本とは別の写真です。現在の内容を保存してから次の申込書を開いてください')
+   const ordered=draft.original.photo!.pages.map(p=>({...pages.find(x=>x.digest===p.digest)!,name:p.name}))
+   const cached=await saveApplicationPhotos({digest,pages:ordered,application:draft.original});setPhotoPages(cached.pages);setMessage('原本写真を表示しました。現在の訂正内容は保持しています。');return
+  }
+  const cached=await loadApplicationPhotos(digest)
+  if(cached){const clean=readApplicationDraft(createApplicationDraft(cached.application)).original;await begin(clean);setPhotoPages(cached.pages);return}
+  if(!navigator.onLine)throw new Error('写真の読み取りには通信が必要です。接続してから読み込んでください')
+  const current=await verifyAdminSession(session);onSession(current)
+  const response=await fetch('/api/winter-application/photo',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${current.accessToken}`},cache:'no-store',signal:AbortSignal.timeout(150000),body:JSON.stringify({pages})})
+  const body=await response.json()
+  if(!response.ok)throw new Error(body.error||'写真を読み取れませんでした。写真を保持して再試行してください')
+  const app=readApplicationDraft(createApplicationDraft(body.application)).original
+  if(app.digest!==digest||!app.photo||app.photo.pages.length!==pages.length||app.photo.pages.some(p=>!pages.some(x=>x.digest===p.digest)))throw new Error('写真と読み取り結果の対応を確認できません')
+  const saved=await saveApplicationPhotos({digest,pages,application:app})
+  await begin(saved.application);setPhotoPages(saved.pages)
+ })}
  return <MasterApplicationReview
+  photoInput={<MasterApplicationPhotoInput key={draft?.original.digest??'new'} busy={busy||registration.busy||registration.frozen} hasDraft={!!draft} onRead={readPhotos}/>}
+  photoReview={draft?.edited.photo?<MasterApplicationPhotoReview app={draft.edited} pages={photoPages} busy={busy||registration.busy||registration.frozen}
+   onStallRequest={value=>edit(d=>({...d,edited:{...d.edited,stallRequest:value}}))}
+   onConfirm={checked=>edit(d=>({...d,edited:{...d.edited,photoConfirmation:checked?photoReviewSignature(d.edited):''}}))}/>:undefined}
+
   busy={busy||registration.busy} frozen={registration.frozen} registration={<MasterApplicationRegistration {...registration.panel} onStartlist={onStartlist?()=>saveAndGo(onStartlist):undefined} onSettlement={onSettlement?()=>saveAndGo(onSettlement):undefined} onNext={!registration.frozen?nextApplication:undefined}
    onCorrectPerson={(key,patch)=>person(key,patch)} onCorrectChoice={(key,id)=>choose(key,id,registration.panel.people.find(r=>r.key===key)?.correction?.candidates)} onUseExisting={useExisting} onUseOriginal={key=>{const source=draft?.original.people.find(p=>p.key===key);if(source)person(key,{name:source.name,reading:source.reading,jef:source.jef})}}
    onCorrectAffiliation={(key,value)=>edit(d=>({...d,accountChecked:false,rosterEdits:{...d.rosterEdits,[key]:value}}))}

@@ -5,12 +5,13 @@
   "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack && node scripts/build-winter-offline.cjs",
+    "build": "next build --webpack && node scripts/build-winter-offline.cjs && node scripts/verify-winter-photo.cjs",
     "start": "next start"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@vercel/analytics": "1.6.1",
+    "@vercel/oidc": "^4.0.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fflate": "0.8.2",
