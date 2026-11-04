@@ -5,7 +5,8 @@ import type {RosterCorrectionInput} from './winter-roster-correction'
 import {projectPreparedRoster,preparedCorrectionSaved} from './winter-application-roster-stage'
 import {credentialValue,credentialLabel,credentialRequestId,credentialHash,validCredential,type WinterCredential,type CredentialExpectation,type CredentialSave} from './winter-application-credentials'
 import {readApplicationDraft,type ApplicationDraft} from './winter-application-draft'
-import {applicationReview,applicationSource,normalizeApplicationName,rosterCandidates} from './winter-application'
+import {applicationReview,applicationSource} from './winter-application'
+import {newApplicationIdentityIssue} from './master/application-identity'
 import {assertWinterEvent,WINTER_EVENT_ID,winterCompetition,winterStorageKey} from './winter-event'
 import {importBindingKey,importCheckpointDifferences,importReference,readImportCheckpoint,reviewImportRegistration,runImportRegistration,type ImportCheckpoint,type ImportSnapshot,type ImportState} from './winter-import-registration'
 import type {ApplicationPerson} from './master/application'
@@ -158,7 +159,7 @@ export async function reviewApplicationRegistration(value:ApplicationRegistratio
    problems.push(...identityIssues(p,result.entityId,clubId,s,chosen==='new'))
   }else if(result.state!=='unregistered')problems.push(`${p.name}：新規登録の結果が不明です。再送せず、既存名簿を照合して保存された人馬を明示選択してください`)
   else if(chosen!=='new')problems.push(`${p.name}：既存人馬か新規登録かを明示選択してください`)
-  else if(rosterCandidates(p,s.roster,app.club).length||s.roster.entities.some(e=>e.kind===p.kind&&e.archived_at&&(normalizeApplicationName(e.name)===normalizeApplicationName(p.name)||p.jef&&e.jef_number===p.jef)))problems.push(`${p.name}：既存または削除済みの候補があります。同じ人馬の訂正なら既存候補を選び、正しい内容を保存してください`)
+  else {const issue=newApplicationIdentityIssue(p,s.roster.entities);if(issue)problems.push(issue)}
   if(p.jef&&!/^\d+$/.test(p.jef.trim()))problems.push(`${p.name}：日馬連番号は数字または空欄です`)
   issues.push(...problems)
   return {key:p.key,name:p.name,entityId:result.entityId,state:result.entityId&&!problems.length?'registered' as const:result.state,issues:problems}

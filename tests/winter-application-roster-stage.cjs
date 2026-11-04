@@ -69,7 +69,7 @@ async function main(){
   await assert.rejects(()=>runApplicationRegistration(work,env.deps));assert.deepEqual(env.posts,{person:0,participants:0,entry:0},kind);assert.equal(env.correctionPosts,0,kind)
  }
  // Duplicate identifiers and unselected/ambiguous identities never merge automatically.
- ;({env,d}=selected());d.choices.r1='new';assert.throws(()=>prepareApplicationRoster(d,env.snapshot,uuid),/既存の候補/)
+ ;({env,d}=selected());d.choices.r1='new';assert(prepareApplicationRoster(d,env.snapshot,uuid).rosterPreparation)
  d.choices.r1=env.snapshot.roster.entities[0].id;d.edited.people[0].jef='123'
  env.addPerson({kind:'rider',name:'別人',reading:'ベツジン',jefNumber:'123',clubName:d.edited.club});assert.throws(()=>prepareApplicationRoster(d,env.snapshot,uuid),/別の既存候補/)
  ;({env,d}=selected({cosmetic:true}));d.edited.entries[0].rider='';d.edited.entries[0].horse=''
