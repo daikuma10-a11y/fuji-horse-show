@@ -26,7 +26,7 @@ async function main(){
  assert.equal((await reviewApplicationRegistration(result,e.snapshot)).entries.rows[0].state,'registered')
  await runApplicationRegistration(parseApplicationRegistration(e.raw),e.deps)
  assert.deepEqual(e.posts,{person:2,participants:1,entry:1})
- await assert.rejects(runApplicationRegistration(e.work,e.deps),/候補/)
+ await assert.rejects(runApplicationRegistration(e.work,e.deps),/保存結果を変更・巻戻し/)
  assert.deepEqual(e.posts,{person:2,participants:1,entry:1})
  // A second explicit mapping/reference may discover the same stored pair, never rebill it.
  const remap=copy(e.work.review);for(const p of remap.edited.people)remap.choices[p.key]=result.people[p.key].entityId

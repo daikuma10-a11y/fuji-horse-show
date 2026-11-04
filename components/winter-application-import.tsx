@@ -135,7 +135,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
  const rosterChanges=draft&&context?applicationRosterChanges(draft,context):[]
  if(draft&&!draft.rosterPreparation&&!registration.isFrozen())todos.push({label:'人馬の仮確定',message:'先に人馬の内容と登録先を仮確定してください。その人馬でエントリーを確認できます。',target:'application-roster-stage',blocking:true})
  for(const row of rosterChanges)for(const change of row.changes)todos.push({label:row.name,message:`取り込み時に${change.label}を反映：${change.before||'なし'} → ${change.after||'なし'}`,target:applicationPersonTarget(row.key),blocking:false,fields:[change.field]})
- for(const person of draft?.edited.people??[]){const options=candidates[person.key]??[];if(options.length&&(!draft?.choices[person.key]||draft.choices[person.key]==='new'))todos.push({label:person.name,message:`登録済みの候補が${options.length}件あります。番号・所属を確認して登録先を選んでください。`,target:applicationPersonTarget(person.key),blocking:false,fields:['choice']})}
+ for(const person of draft?.edited.people??[]){const options=candidates[person.key]??[];if(options.length&&!draft?.choices[person.key])todos.push({label:person.name,message:`登録済みの候補が${options.length}件あります。番号・所属を確認して登録先を選んでください。`,target:applicationPersonTarget(person.key),blocking:false,fields:['choice']})}
  const qualificationNotes=Object.fromEntries((draft?.edited.people??[]).filter(p=>p.kind==='rider'&&p.jef).map(p=>[p.key,context?.riderGrades&&!context.riderGradesError?jefRiderQualification(p,context.riderGrades).message:'']))
  async function loadContext(target:ApplicationDraft|null=draft){
   setRoster(null);setContext(null)

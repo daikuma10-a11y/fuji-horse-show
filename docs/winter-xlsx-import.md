@@ -1,4 +1,16 @@
-# Winter Excel import — checkpoint 4 (not released)
+# Winter Excel import
+
+## 2026-11-04: same-name identities in Winter imports
+
+The organizer approved accepting distinct people/horses with identical names, especially without JEF registration. Selecting `新しい人馬として登録` now permits matching names/readings at both roster preparation and the final registration review. Same-name rows in one workbook remain separate source keys; their entry bindings must identify the intended row. The name-match notice is informational and never merges identities. A nonempty duplicate JEF number remains blocked per rider/horse kind, including archived registrations. Duplicate source IDs and duplicate entry pairs remain blocked.
+
+The existing review JSON format and explicit new/existing choices are unchanged. Before refreshing an open review, use `作業を中断・別の申込書へ` → `確認途中をこの端末に保存` and `別の端末用に確認再開JSONを保存`. After updating the page, select the same original Excel and open `この端末の確認途中を開く`, or restore the JSON through `対応するExcel・途中から再開`. Review and re-prepare identities before final import. Saving a review is not a database registration.
+
+Read-only inspection of the deployed roster/participant RPC definitions and indexes confirmed that names are not unique, while `(kind,jef_number)` is unique. No DB structure, permissions, real participants or payments were changed. Synthetic regression tests cover same-name/readings, numbered/unnumbered and archived candidates, multiple namesakes in one workbook, distinct saved identities and entry bindings, JEF-number conflicts, retained old identities, saved-review roundtrip, resume without repeated charges, and blocking retries after an uncertain new-person write.
+
+Validation passed: `winter-application-same-name`, `winter-application-roster-stage`, `winter-application-registration`, `winter-application-components`, `winter-import-review`, `winter-import-registration`, `winter-application-registration-components`, `winter-application-guide`, `winter-application-candidate-search`, and `winter-application-table` (all `.cjs` under `tests/`), standalone TypeScript, and Next.js production build including the offline shell. Component checks use synthetic services; the user's live import is not executed by these tests.
+
+The historical checkpoints below retain their original scope and limitations.
 
 Checkpoint 1 (`3923b25`) is preserved and reused. Checkpoint 2 (`05848af`) connected its extraction/review helpers to Winter admin → 事前登録 → 申込書の読み込み: local Excel selection/drop, explicit reading, source/edited comparison, roster candidate selection, fee/revision review and review-only JSON/local checkpoints. Checkpoint 3 (`77dd40a`) added the registration runner, result codec and existing-service adapters. None of these commits has been recreated or published. The existing CSV/TSV registration flow is unchanged.
 

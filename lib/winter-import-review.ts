@@ -80,7 +80,11 @@ export function reviewWinterImport(source: ImportSource) {
   const keys = new Set<string>(), names = new Set<string>(), jefs = new Set<string>()
   people.forEach((p,index) => {
     for (const [key,set,label] of [[`${p.kind}:${p.id}`,keys,'識別番号'],[`${p.kind}:${p.org}:${p.name.normalize('NFKC').replace(/\s/g,'')}`,names,'同一所属の名前'],...(p.jef ? [[`${p.kind}:${p.jef}`,jefs,'日馬連番号']] : [])] as [string,Set<string>,string][]) {
-      if (set.has(key)) issue('名簿', p.row, `${label}が重複しています：${p.name}。自動で同一人馬に統合しません`,'error',[label==='日馬連番号'?'jef':'name']); set.add(key)
+      if (set.has(key)) {
+        const sameName=label==='同一所属の名前'&&p.kind!=='団体'
+        issue('名簿', p.row, sameName?`同一所属に同名の${p.kind}があります：${p.name}。識別番号ごとに別の人馬として扱います。出番の対応を確認してください`:`${label}が重複しています：${p.name}。自動で同一人馬に統合しません`,sameName?'warning':'error',[label==='日馬連番号'?'jef':'name'])
+      }
+      set.add(key)
     }
   })
   const orgs = new Map(people.filter(p=>p.kind==='団体').map(p=>[p.id,p])), riders = new Map(people.filter(p=>p.kind==='選手').map(p=>[p.id,p])), horses = new Map(people.filter(p=>p.kind==='馬').map(p=>[p.id,p]))

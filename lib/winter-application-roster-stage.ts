@@ -1,7 +1,8 @@
 import type {ApplicationDraft} from './winter-application-draft'
 import type {ApplicationSnapshot} from './winter-application-registration'
 import type {ApplicationPerson} from './master/application'
-import {normalizeApplicationName,rosterCandidates} from './winter-application'
+import {normalizeApplicationName} from './winter-application'
+import {newApplicationIdentityIssue} from './master/application-identity'
 import {splitApplicationRiders} from './master/application-entry-input'
 import {rosterCorrectionExpectation,rosterCorrectionInput,type RosterCorrectionInput} from './winter-roster-correction'
 import {applicationTodos} from './winter-application-guide'
@@ -65,7 +66,8 @@ export function prepareApplicationRoster(d:ApplicationDraft,s:ApplicationSnapsho
   if(!p.name.trim()||p.jef&&!/^\d+$/.test(p.jef.trim()))throw new Error(`${p.name||'名前未入力'}：名前と日馬連番号を確認してください`)
   const chosen=next.choices[p.key]
   if(chosen==='new'){
-   if(rosterCandidates(p,s.roster,next.edited.club).length||s.roster.entities.some(e=>e.kind===p.kind&&e.archived_at&&(normalizeApplicationName(e.name)===normalizeApplicationName(p.name)||p.jef&&e.jef_number===p.jef)))throw new Error(`${p.name}：既存の候補があります。同じ人馬なら登録済みの候補を選んでください`)
+   const issue=newApplicationIdentityIssue(p,s.roster.entities)
+   if(issue)throw new Error(issue)
    continue
   }
   const e=s.roster.entities.find(e=>e.id===chosen&&e.kind===p.kind&&!e.archived_at)
