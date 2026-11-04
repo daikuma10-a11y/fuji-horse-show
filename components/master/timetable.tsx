@@ -1,14 +1,17 @@
 "use client"
 import {useState,type ReactNode} from 'react'
 
+import {usePrintDocument} from './use-print-document'
 import type {MasterTimetableItem} from '@/lib/master/timetable'
 export function MasterCompetitionTime({inspection,start,phase}:{inspection?:string|null;start?:string|null;phase?:'provisional'|'final'}){
  return <p className="my-2 flex flex-wrap gap-x-5 gap-y-1 text-base font-semibold"><span>下見開始：{inspection||'未定'}</span><span>競技開始：{start||'未定'} {phase==='final'?'（確定）':'（予定）'}</span></p>
 }
-export function MasterTimetable({title,dates,items,renderEditor}:{title:string;dates:readonly {value:string;label:string}[];items:MasterTimetableItem[];renderEditor:(id:string)=>ReactNode}){
+export function MasterTimetable({title,dates,items,renderEditor,loadPrint}:{loadPrint?:(date?:string)=>Promise<string>;title:string;dates:readonly {value:string;label:string}[];items:MasterTimetableItem[];renderEditor:(id:string)=>ReactNode}){
+ const printer=usePrintDocument()
  const[editing,setEditing]=useState<string[]>([])
  return <div className="space-y-6"><h2 className="text-2xl font-bold">タイムテーブル</h2><p className="font-semibold">{title}</p><p className="print-hide">各競技の「時間を編集」から下見・開始時間を変更し、「時間を保存」を押してください。保存後、出番表・印刷・モニターへ反映されます。未定は空欄にします。</p>
- {dates.map(date=><section key={date.value} className="space-y-2"><h3 className="text-xl font-bold">{date.label}</h3><div className="overflow-x-auto"><table className="w-full min-w-[620px] border-collapse bg-card"><caption className="sr-only">{date.label}のタイムテーブル</caption><thead><tr>{['競技種目','下見開始','競技開始','頭数','操作'].map(label=><th scope="col" key={label} className={`border p-2 text-left ${label==='操作'?'print-hide':''}`}>{label}</th>)}</tr></thead><tbody>{items.filter(item=>item.date===date.value).map(item=><TimetableRow key={item.id} item={item} editing={editing.includes(item.id)} onEdit={()=>setEditing(ids=>ids.includes(item.id)?ids.filter(id=>id!==item.id):[...ids,item.id])} editor={renderEditor(item.id)}/>)}</tbody></table></div>{!items.some(item=>item.date===date.value)&&<p>競技が登録されていません。</p>}</section>)}
+ {loadPrint&&<div className="print-hide space-y-2 rounded-xl border-2 p-4"><p>障害・馬場を左右に並べたA4横のタイムテーブルを、日付ごとに印刷できます。編集中の時間は先に保存してください。印刷には最新の保存済み内容を使用します。</p><button type="button" className="min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50" disabled={printer.busy} onClick={()=>void printer.print(()=>loadPrint(),'横')}>全日程を印刷・PDF保存</button>{printer.notice&&<p role="status">{printer.notice}</p>}{printer.error&&<p role="alert" className="text-red-800">{printer.error}</p>}</div>}
+ {dates.map(date=><section key={date.value} className="space-y-2"><h3 className="text-xl font-bold">{date.label}</h3>{loadPrint&&<button type="button" className="print-hide min-h-12 rounded-lg border-2 px-3 font-bold disabled:opacity-50" disabled={printer.busy} onClick={()=>void printer.print(()=>loadPrint(date.value),'横')}>{date.label}を印刷・PDF保存</button>}<div className="overflow-x-auto"><table className="w-full min-w-[620px] border-collapse bg-card"><caption className="sr-only">{date.label}のタイムテーブル</caption><thead><tr>{['競技種目','下見開始','競技開始','出場数','操作'].map(label=><th scope="col" key={label} className={`border p-2 text-left ${label==='操作'?'print-hide':''}`}>{label}</th>)}</tr></thead><tbody>{items.filter(item=>item.date===date.value).map(item=><TimetableRow key={item.id} item={item} editing={editing.includes(item.id)} onEdit={()=>setEditing(ids=>ids.includes(item.id)?ids.filter(id=>id!==item.id):[...ids,item.id])} editor={renderEditor(item.id)}/>)}</tbody></table></div>{!items.some(item=>item.date===date.value)&&<p>競技が登録されていません。</p>}</section>)}
  <p className="text-sm font-semibold">競技の進行により開始時間を変更する場合があります。最新のタイムテーブルをご確認ください。</p></div>
 }
 function TimetableRow({item,editing,onEdit,editor}:{item:MasterTimetableItem;editing:boolean;onEdit:()=>void;editor:ReactNode}){

@@ -7,10 +7,11 @@ const requests=[{event_id:ev,entry_id:'e0',request_type:'add',status:'reflected'
 const model=winterStartListModel(data,'c',requests),entries=model.entriesByCompetition('c');assert.equal(entries.length,20);assert.equal(entries[0].adminChangeMark,'added');assert.deepEqual(entries[0].adminChangeFields,['horse']);assert.equal(entries[1].adminChangeMark,undefined)
 const ids=entries.map(e=>e.id);ids.reverse();const html=renderToStaticMarkup(React.createElement(MasterStartRows,{model,competitionId:'c',readOnly:true,showAdminChanges:true,adminReorder:true,compact:true,dense:true,orderedIds:ids,onReorder:()=>{}}));assert.equal((html.match(/data-start-entry-id=/g)||[]).length,20);assert.ok(html.indexOf('data-start-entry-id="e19"')<html.indexOf('data-start-entry-id="e0"'));assert.equal((html.match(/title="押したまま上下に動かす"/g)||[]).length,20);assert.ok(html.includes('lg:min-h-5'));assert.ok(html.includes('番号'));assert.ok(html.includes('選手の確認'));assert.ok(html.includes('馬の確認'));assert.ok(html.includes('追加・馬変更'));assert.ok(html.includes('OP：先乗り'));assert.ok(html.includes('bg-green-50'));assert.ok(!html.includes('e20"'))
 assert.throws(()=>winterStartListModel({...data,eventId:'autumn'},'c',requests));assert.deepEqual(model.entriesByCompetition('autumn'),[])
-// Captured from the validated Autumn renderer before extraction (remote cf76d59).
-assert.equal(require('node:crypto').createHash('sha256').update(html).digest('hex'),'4541bc5264c7ea93428d36cb489eb9d46eda247cbc1b5028cef7fdb6c85c7061','Shared master must preserve validated Autumn markup with equivalent fixture data')
+// Shared markup baseline after the approved repeated-participant name badges (2026-11-05).
+// Existing row/gesture/mark assertions above and cross-adapter equality below remain required.
+assert.equal(require('node:crypto').createHash('sha256').update(html).digest('hex'),'b97c85ae3e52a08fd90f664a1e87c95e7c148678cf3eef110382ba4b2dcf141e','Shared master must preserve validated Autumn markup with equivalent fixture data')
 const load=Module._load;Module._load=function(id,...args){if(id==='@/lib/store')return {useStore:()=>({...model,moveEntry:async()=>{},reorderSaving:false})};return load.call(this,id,...args)}
 const renderProps={competitionId:'c',readOnly:true,showAdminChanges:true,adminReorder:true,compact:true,dense:true,orderedIds:ids,onReorder:()=>{}}
 const {StartList}=require('../components/start-list.tsx');assert.equal(renderToStaticMarkup(React.createElement(StartList,renderProps)),html,'Autumn adapter and Winter model use the same master')
 Module._load=load
-console.log('PASS: exact original Autumn markup and both adapters, 20 compact rows, draft order, mouse/touch handles, columns, accumulated marks, OP, withdrawal exclusion and Winter isolation')
+console.log('PASS: shared highlighted markup and both adapters, 20 compact rows, draft order, mouse/touch handles, columns, accumulated marks, OP, withdrawal exclusion and Winter isolation')
