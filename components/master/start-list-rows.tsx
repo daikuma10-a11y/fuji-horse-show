@@ -3,6 +3,8 @@
 import { ArrowDown, ArrowUp, GripVertical } from "lucide-react"
 import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from "react"
 import { entryChangeLabel } from "@/lib/entry-change-marks"
+import { startListRepeats } from '@/lib/master/start-list-repeats'
+import { StartRepeatName } from './start-repeat-name'
 import type { StartEntry } from "@/lib/types"
 
 // Shared UI master derived from the validated Autumn StartList. No event data or API calls here.
@@ -11,7 +13,9 @@ type DragPreview = { top: number; left: number; width: number; height: number; o
 export function MasterStartRows({ model, reorderSaving=false, riderKeys=new Map(), horseKeys=new Map(), competitionId, selectedId, onSelect, readOnly = false, showAdminChanges = false, adminReorder = false, compact = false, dense = false, organizationId, hideWithdrawn = false, orderedIds, onReorder, draftEntries, onNameSelect }: { model: import("@/lib/master/start-list").MasterStartListSource; reorderSaving?:boolean; riderKeys?:Map<string,string>; horseKeys?:Map<string,string>; competitionId: string; selectedId?: string; onSelect?: (entry: StartEntry) => void; readOnly?: boolean; showAdminChanges?: boolean; adminReorder?: boolean; compact?: boolean; dense?: boolean; organizationId?: string; hideWithdrawn?: boolean; orderedIds?: string[]; onReorder?: (sourceId: string, targetId: string) => void; draftEntries?: StartEntry[]; onNameSelect?: (entry: StartEntry) => void }) {
   const { entriesByCompetition, getPlayer, getHorse, getOrg } = model
   const moveEntry=(id:string,direction:"up"|"down")=>model.moveEntry?.(id,direction)
-  const baseEntries = (draftEntries ?? entriesByCompetition(competitionId)).filter(entry => {
+  const competitionEntries = draftEntries ?? entriesByCompetition(competitionId)
+  const repeats = showAdminChanges || adminReorder ? startListRepeats(competitionEntries, competitionId, riderKeys, horseKeys) : null
+  const baseEntries = competitionEntries.filter(entry => {
     if (hideWithdrawn && entry.withdrawn) return false
     if (!organizationId) return true
     const orgId = entry.organizationId ?? getHorse(entry.horseId)?.orgId
@@ -118,7 +122,7 @@ export function MasterStartRows({ model, reorderSaving=false, riderKeys=new Map(
     <span className="flex shrink-0 items-center gap-1"><span className={`flex shrink-0 items-center justify-center bg-secondary font-bold text-secondary-foreground ${compact?(dense?"size-8 rounded-md text-base lg:size-5 lg:rounded-sm lg:text-xs":"size-8 rounded-md text-base"):"size-14 rounded-xl text-2xl"}`}>{displayOrder}</span>{e.isOp&&<span title="OP：先乗り・正式成績の対象外" aria-label="OP：正式成績の対象外" className={`shrink-0 rounded bg-slate-800 font-bold text-white ${dense?"px-1 py-0.5 text-[10px] lg:px-0.5 lg:text-[9px]":"px-1.5 py-0.5 text-xs"}`}>OP</span>}</span>
     <span className={`flex min-w-0 flex-1 ${dense?"lg:contents":""} ${compact?"flex-col gap-1 sm:flex-row sm:items-center sm:gap-2":"flex-col"}`}>
       <span className={`flex min-w-0 flex-wrap items-center gap-1 ${dense?"lg:contents":""}`}>
-        <span className={`min-w-0 truncate font-bold ${compact?(dense?"text-base lg:text-xs":"text-base"):"text-2xl"} ${e.withdrawn?"text-destructive":"text-foreground"}`}>{onNameSelect?<button type="button" onPointerDown={event=>event.stopPropagation()} onTouchStart={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();onNameSelect(e)}} className="text-left underline decoration-primary/30 underline-offset-2 hover:text-primary" aria-label={`${player?.name??"選手"}の変更・棄権`}>{player?.name??"—"}</button>:player?.name??"—"}</span>
+        <span className={`min-w-0 truncate font-bold ${compact?(dense?"text-base lg:text-xs":"text-base"):"text-2xl"} ${e.withdrawn?"text-destructive":"text-foreground"}`}><StartRepeatName kind="rider" repeat={repeats?.riders.get(e.id)} name={player?.name??"選手"}>{onNameSelect?<button type="button" onPointerDown={event=>event.stopPropagation()} onTouchStart={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();onNameSelect(e)}} className="text-left underline decoration-primary/30 underline-offset-2 hover:text-primary" aria-label={`${player?.name??"選手"}の変更・棄権`}>{player?.name??"—"}</button>:player?.name??"—"}</StartRepeatName></span>
         <span className={dense?"min-w-0 flex flex-wrap items-center gap-0.5 lg:min-h-5 lg:leading-tight":"min-w-0"}>{e.withdrawn?<span className="rounded-md bg-destructive px-1 font-bold text-white lg:text-[10px]">棄権</span>:showAdminChanges&&e.adminChangeMark&&<span className={`rounded-md px-1 font-bold ${e.adminChangeMark==="added"?"bg-green-700 text-white":"bg-blue-700 text-white"} ${dense?"text-xs lg:text-[10px]":"text-base"}`}>{changeLabel}</span>}</span>
         <span className={`flex min-w-0 flex-wrap items-center gap-1 ${dense?"lg:flex-nowrap lg:overflow-hidden":""}`}>
           {riderGaps.has(e.id)&&<span className={`rounded-md bg-amber-100 font-bold text-amber-950 ${dense?"px-1 text-xs lg:truncate lg:text-[10px]":"px-2 py-1 text-base"}`}>選手：間に{riderGaps.get(e.id)}頭（要確認）</span>}
@@ -126,7 +130,7 @@ export function MasterStartRows({ model, reorderSaving=false, riderKeys=new Map(
         </span>
       </span>
       <span className={`flex min-w-0 flex-wrap items-center gap-1 ${dense?"lg:contents":""} ${compact?"text-sm lg:text-xs":"text-xl"} ${e.withdrawn?"text-destructive":"text-foreground"}`}>
-        <span className="min-w-0 truncate">{onNameSelect?<button type="button" onPointerDown={event=>event.stopPropagation()} onTouchStart={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();onNameSelect(e)}} className="text-left underline decoration-primary/30 underline-offset-2 hover:text-primary" aria-label={`${horse?.name??"馬"}の変更・棄権`}>{horse?.name??"—"}</button>:compact?horse?.name??"—":`馬：${horse?.name??"—"}`}</span>
+        <span className="min-w-0 truncate"><StartRepeatName kind="horse" repeat={repeats?.horses.get(e.id)} name={horse?.name??"馬"}>{onNameSelect?<button type="button" onPointerDown={event=>event.stopPropagation()} onTouchStart={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();onNameSelect(e)}} className="text-left underline decoration-primary/30 underline-offset-2 hover:text-primary" aria-label={`${horse?.name??"馬"}の変更・棄権`}>{horse?.name??"—"}</button>:compact?horse?.name??"—":`馬：${horse?.name??"—"}`}</StartRepeatName></span>
         <span className="min-w-0 truncate">{horseGaps.has(e.id)&&<span className={`rounded-md bg-amber-100 px-1 font-bold text-amber-950 ${dense?"text-xs lg:text-[10px]":"text-base"}`}>馬：間に{horseGaps.get(e.id)}頭（要確認）</span>}</span>
       </span>
       <span className={`${showAdminChanges?"block":dense?"hidden lg:block":"hidden xl:block"} min-w-0 truncate text-muted-foreground ${dense?"lg:text-[11px]":"text-xs"}`}>{org?.name??"—"}</span>
