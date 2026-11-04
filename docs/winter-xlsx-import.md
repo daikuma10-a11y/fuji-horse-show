@@ -1,5 +1,11 @@
 # Winter Excel import
 
+## 2026-11-04: entry table height safeguard
+
+The organizer reported a Windows Chrome screen showing 15 entries and calculated totals, with the entry table reduced to a thin line. The exact device/browser state has not been inspected and the spontaneous collapse was not reproduced locally. The entry table now reserves at least `min(24rem,70vh)` when entries exist, while retaining the existing 70vh maximum and scroll behavior. This prevents a zero/near-zero auto-height result from hiding every row; no parsing, identity, fee, draft format or database behavior changes.
+
+`tests/winter-application-layout.cjs` uses the real shared component, compiled CSS and 15 synthetic entries. Chromium 129 and 153 passed five viewport sizes, hidden-to-visible transitions, access to the first/last entry controls and preserved totals. An explicitly injected zero height verifies the minimum-height safeguard; it is not evidence that the original PC fault was reproduced. The existing 60-entry component/table checks, standalone TypeScript and production/offline build passed. The user's PC must still confirm visibility after installing the update. Save the current review locally and as a review JSON before refreshing, then restore that review rather than starting a new import.
+
 ## 2026-11-04: same-name identities in Winter imports
 
 The organizer approved accepting distinct people/horses with identical names, especially without JEF registration. Selecting `新しい人馬として登録` now permits matching names/readings at both roster preparation and the final registration review. Same-name rows in one workbook remain separate source keys; their entry bindings must identify the intended row. The name-match notice is informational and never merges identities. A nonempty duplicate JEF number remains blocked per rider/horse kind, including archived registrations. Duplicate source IDs and duplicate entry pairs remain blocked.
