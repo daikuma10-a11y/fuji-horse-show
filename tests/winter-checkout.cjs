@@ -7,7 +7,7 @@ assert.equal(api.validateWinterSettlementRecord(record,'org'),record)
 assert.throws(()=>api.validateWinterCheckoutAccount({...account,total:27000}),/合計/)
 assert.throws(()=>api.validateWinterSettlementRecord(record,'other'),/一致/)
 assert.throws(()=>api.validateWinterSettlementRecord({...record,event_id:'autumn'},'org'),/Winter/)
-const html=print.winterCheckoutPrintHtml(record);assert(html.includes('Fuji Horse Show 精算書'));assert(!html.includes('精算確認用（仮）'));assert(!html.includes('精算内容の確定は行っていません'));assert(html.includes('保存済み精算内容'));assert(html.includes('saved-id'));assert(html.includes('現金・振込の選択は入金済みを示しません'));assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(html.includes('¥2,000'));assert(!html.includes('Bearer'))
+const html=print.winterCheckoutPrintHtml(record);assert(html.includes('Fuji Horse Show 精算書'));assert(!html.includes('精算確認用（仮）'));assert(!html.includes('精算内容の確定は行っていません'));assert(!html.includes('保存済み精算内容'));assert(html.includes('saved-id'));assert(html.includes('支払い予定の確認書です'));assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(html.includes('¥2,000'));assert(!html.includes('Bearer'))
 const zero={...record,payment_method:'no_payment_due',account:{...account,extraPaid:2000,remaining:0}}
 assert(print.winterCheckoutPrintHtml(zero).includes('<td>お支払い不要</td>'))
 const source=fs.readFileSync('components/winter-self-settlement.tsx','utf8');const reprint=source.slice(source.indexOf(' function print()'),source.indexOf(' const viewAccount'))

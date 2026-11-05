@@ -37,6 +37,7 @@ const html=bookletPrintHtml(booklets,'Winter','2026/10/29 12:00')
 assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('合計 2頭'))
 for(const label of ['手帳受取日','入厩日時','退厩日時','手帳返却日','備考'])assert.ok(html.includes(label))
 const uh=unsettledPrintHtml(unpaid,'Winter','2026/10/29 12:00')
+assert.ok(!html.includes('保存済みの申込内容から自動反映'));assert.ok(!uh.includes('精算画面と同じ'));assert.ok(html.includes('色付きボールペン'))
 assert.ok(uh.includes('20,000円'));assert.ok(uh.includes('要確認'));assert.ok(uh.includes('size:A4 portrait'))
 assert.ok(unsettledPrintHtml([],'Winter','現在').includes('未精算・要確認の団体はありません'))
 const props={booklets,unsettled:unpaid,loading:false,error:'',unsettledLoading:false,unsettledError:'',loadBookletPrint:async()=>html,loadUnsettledPrint:async()=>uh}

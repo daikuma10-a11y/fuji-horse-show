@@ -38,7 +38,7 @@ global.fetch=async(url,options)=>{
 }
 ;(async()=>{
  const tree=WinterTimetable({data,session:{},onSession(){},onChanged(){}})
- const refreshed=await tree.props.loadPrint(['2026-11-15']);assert(refreshed.includes('16:45')&&!refreshed.includes('15:00'),'reload saved times rather than stale editor props');assert.equal(requests.length,5)
+ const refreshed=await tree.props.loadPrint(['2026-11-15']);assert(refreshed.includes('<td>16:45</td>')&&!refreshed.includes('<td>15:00</td>'),'reload saved times rather than stale editor props');assert.equal(requests.length,5)
  global.fetch=async()=>{throw Error('offline')};await assert.rejects(tree.props.loadPrint(['2026-11-15']),/offline/)
  if(process.env.TIMETABLE_TEST_OUTPUT){fs.mkdirSync(process.env.TIMETABLE_TEST_OUTPUT,{recursive:true});fs.writeFileSync(path.join(process.env.TIMETABLE_TEST_OUTPUT,'timetable.html'),html)
  for(let mask=1;mask<8;mask++){
