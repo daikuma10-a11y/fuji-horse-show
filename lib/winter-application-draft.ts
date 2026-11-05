@@ -1,3 +1,4 @@
+import {readPhotoSource} from './master/application-photo'
 import {stableScheduleKeys, type StableSchedule} from './master/stable-schedule'
 import type {Application,ApplicationPerson,ApplicationEntry,ApplicationEntryCount,Origin,RosterAffiliationEdit} from './master/application'
 import {WINTER_EVENT_ID,winterStorageKey} from './winter-event'
@@ -25,7 +26,7 @@ function list(v:unknown,max:number){if(!Array.isArray(v)||v.length>max)throw fai
 function source(v:unknown):Origin{
  const o=object(v),cell=string(o.cell,10)
  if(!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(cell))throw failure()
- return {sheet:string(o.sheet,100),cell,value:string(o.value,4000),...(o.formula===undefined?{}:{formula:string(o.formula,4000)})}
+ return {sheet:string(o.sheet,100),cell,value:string(o.value,4000),...(o.formula===undefined?{}:{formula:string(o.formula,4000)}),...(o.location===undefined?{}:{location:string(o.location,300)})}
 }
 function application(v:unknown):Application{
  const a=object(v),digest=string(a.digest,64)
@@ -62,7 +63,7 @@ function application(v:unknown):Application{
  const amount=object(a.amounts),origins=object(a.amountOrigins)
  const stable=a.stable===undefined?undefined:Object.fromEntries(stableScheduleKeys.map(key=>[key,string(object(a.stable)[key],key==='notes'?1000:200)])) as StableSchedule
  const stableOrigins=a.stableOrigins===undefined?undefined:{arrival:list(object(a.stableOrigins).arrival,10).map(source),departure:list(object(a.stableOrigins).departure,10).map(source),notes:list(object(a.stableOrigins).notes,20).map(source)}
- return {...(a.stallRequest===undefined?{}:{stallRequest:string(a.stallRequest,4000)}),...(a.stallRequestOrigins===undefined?{}:{stallRequestOrigins:list(a.stallRequestOrigins,100).map(source)}),...(stable?{stable}:{}),...(stableOrigins?{stableOrigins}:{}),fileName:string(a.fileName,255),digest,eventId:WINTER_EVENT_ID,club:string(a.club,100),clubOrigin:source(a.clubOrigin),people,entries,...(entryCounts===undefined?{}:{entryCounts}),...(entryCountCorrections===undefined?{}:{entryCountCorrections}),
+ return {...(a.photo===undefined?{}:{photo:readPhotoSource(a.photo)}),...(a.photoConfirmation===undefined?{}:{photoConfirmation:string(a.photoConfirmation,1_000_000)}),...(a.stallRequest===undefined?{}:{stallRequest:string(a.stallRequest,4000)}),...(a.stallRequestOrigins===undefined?{}:{stallRequestOrigins:list(a.stallRequestOrigins,100).map(source)}),...(stable?{stable}:{}),...(stableOrigins?{stableOrigins}:{}),fileName:string(a.fileName,255),digest,eventId:WINTER_EVENT_ID,club:string(a.club,100),clubOrigin:source(a.clubOrigin),people,entries,...(entryCounts===undefined?{}:{entryCounts}),...(entryCountCorrections===undefined?{}:{entryCountCorrections}),
   amounts:{horse:string(amount.horse,100),jump:string(amount.jump,100),dressage:string(amount.dressage,100),total:string(amount.total,100)},
   amountOrigins:Object.fromEntries(['horse','jump','dressage','total'].map(k=>[k,source(origins[k])])),
   issues:list(a.issues,10000).map(x=>string(x,4000)),sheets:list(a.sheets,32).map(x=>string(x,100))}
@@ -79,7 +80,7 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
  const d=object(v)
  if(d.kind!=='winter-application-review'||d.version!==1||d.eventId!==WINTER_EVENT_ID)throw failure()
  const original=application(d.original),edited=application(d.edited),rawChoices=object(d.choices),choices:Record<string,string>={}
- if(original.digest!==edited.digest||original.fileName!==edited.fileName)throw failure()
+ if(original.digest!==edited.digest||original.fileName!==edited.fileName||JSON.stringify(original.photo)!==JSON.stringify(edited.photo)||original.photoConfirmation!==undefined||!original.photo&&edited.photoConfirmation!==undefined)throw failure()
  // Source rows remain immutable; clearly marked manual rows may be added between them.
  for(const section of ['people','entries'] as const){
   if(original[section].some(p=>p.added||p.sourceKey))throw failure()
@@ -95,7 +96,8 @@ export function readApplicationDraft(v:unknown):ApplicationDraft{
  original.people.forEach(p=>{const e=edited.people.find(e=>e.key===p.key)!;if(p.kind!==e.kind||JSON.stringify(p.credentialOrigin)!==JSON.stringify(e.credentialOrigin))throw failure()})
  original.entries.forEach(p=>{const e=edited.entries.find(e=>e.key===p.key)!;if(p.countBlock!==undefined||p.rawRider!==e.rawRider||p.rawHorse!==e.rawHorse)throw failure()})
  for(const e of edited.entries.filter(e=>e.added))if(e.rawRider||e.rawHorse)throw failure()
- for(const key of ['clubOrigin','amountOrigins','issues','sheets','entryCounts','stableOrigins','stallRequestOrigins','stallRequest'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
+ for(const key of ['clubOrigin','amountOrigins','issues','sheets','entryCounts','stableOrigins','stallRequestOrigins'] as const)if(JSON.stringify(original[key])!==JSON.stringify(edited[key]))throw failure()
+ if(!original.photo&&original.stallRequest!==edited.stallRequest)throw failure()
  for(const key of Object.keys(rawChoices)){
   if(!edited.people.some(p=>p.key===key))throw failure()
   const choice=string(rawChoices[key],36)

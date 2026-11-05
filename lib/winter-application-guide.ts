@@ -1,3 +1,5 @@
+import {applicationOriginLabel} from './master/application'
+import {photoReviewComplete} from './master/application-photo'
 import {entryCountTarget,applicationCountMessage} from './master/application-entry-counts'
 import {validHorseDeclaration} from './master/application-credentials'
 import type {ApplicationDraft} from './winter-application-draft'
@@ -12,14 +14,15 @@ export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):Applic
  const add=(label:string,message:string,target:string,blocking=true,fields?:ApplicationIssueField[])=>{if(!items.some(t=>t.target===target&&t.message===message&&JSON.stringify(t.fields)===JSON.stringify(fields)))items.push({label,message,target,blocking,...(fields?{fields}:{})})}
  for(const p of app.people)if(p.kind==='horse'&&!validHorseDeclaration(p.horseGrade??''))add(p.name,'グレード宣言を原本で確認して選択してください。',applicationPersonTarget(p.key),true,['horseGrade'])
  for(const message of review.stableIssues)add('入退厩予定',message,'application-stable')
- for(const message of app.issues)add('Excel原本',message,'application-source')
+ if(!photoReviewComplete(app))add('写真原本','写真の全ページと要確認箇所を確認・訂正し、写真欄の確認にチェックしてください。','application-photo-review')
+ for(const message of app.issues)add('申込書原本',message,'application-source')
  if(!rosterLoaded)add('既存登録の確認','登録済みの団体・人馬を読み込んでください。','application-club')
  for(const p of app.people)if(!d.choices[p.key])add(p.name||'名前未入力','既存の人馬を選ぶか、新規登録を選んでください。',applicationPersonTarget(p.key),true,['choice'])
  if(!d.reference.trim())add('資料番号','自動発行された資料番号を入力してください。','application-reference')
  for(const issue of review.report.issues){
   const person=issue.section==='名簿'?app.people[issue.row-3]:undefined
   const entry=issue.section==='出番表'?app.entries[issue.row-2]:undefined
-  add(person?.name??(entry?`${entry.origin.sheet}!${entry.origin.cell}・第${entry.competition}競技`:issue.section),issue.message,
+  add(person?.name??(entry?`${applicationOriginLabel(entry.origin)}・第${entry.competition}競技`:issue.section),issue.message,
    person?applicationPersonTarget(person.key):entry?applicationEntryTarget(entry.key):issue.section==='事前精算'?'application-payment':'application-club',issue.severity==='error',issue.fields)
   for(const related of issue.related??[]){const person=app.people.find(p=>p.key===related.personId);if(person)add(person.name,related.message,applicationPersonTarget(person.key),issue.severity==='error',[related.field])}
  }
@@ -29,7 +32,7 @@ export function applicationTodos(d:ApplicationDraft,rosterLoaded:boolean):Applic
   for(const key of row.entryKeys)add(`第${row.competition}競技`,applicationCountMessage(bucket),applicationEntryTarget(key),true,['fee'])
  }
  for(const row of review.amounts)if(row.reason)add(row.label,row.reason,`application-amount-${row.key}`)
- if(!app.entries.length)add('エントリー','Excelに出場する人馬が入力されているか確認してください。','application-entries')
+ if(!app.entries.length)add('エントリー','申込書に出場する人馬が入力されているか確認してください。','application-entries')
  return items
 }
 
@@ -42,7 +45,7 @@ export function applicationClubSummary(d:ApplicationDraft,s:ApplicationSnapshot)
  const entries=org?s.data.entries.filter(e=>e.organization_id===org.id).map(e=>({id:e.entry_id,
   label:`第${e.competition_no}競技 ／ ${s.data.riders.find(r=>r.id===e.rider_id)?.name??'選手未確認'} ／ ${s.data.horses.find(h=>h.id===e.horse_id)?.name??'馬未確認'}${e.is_op?' ／ OP':''}`,
   status:['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権済み':'登録済み'})):[]
- if(org||participants.length)return {state:'registered',label:'この団体はWinterに登録済みです',detail:`既存の出番 ${entries.length}件。今回のExcelと照合し、同じ出番は重複登録しません。`,entries}
+ if(org||participants.length)return {state:'registered',label:'この団体はWinterに登録済みです',detail:`既存の出番 ${entries.length}件。今回の申込書と照合し、同じ出番は重複登録しません。`,entries}
  if(club)return {state:'known',label:'共通名簿に登録済みの団体です',detail:'Winterの参加登録はまだありません。既存の人馬を確認して選んでください。',entries}
  const similar=s.roster.clubs.some(c=>normalizeApplicationName(c.name)===normalizeApplicationName(name))||s.data.organizations.some(o=>normalizeApplicationName(o.name)===normalizeApplicationName(name))
  return similar?{state:'ambiguous',label:'表記の似た登録済み団体があります',detail:'団体名の空白・全半角などを確認してください。別団体としての作成は照合後に判断します。',entries:[]}:
