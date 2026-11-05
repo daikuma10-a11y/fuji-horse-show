@@ -6,6 +6,12 @@ import {entryValues} from './official-excel'
 export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip'
 export const winterWorkbookName=(date:string)=>'2026Winter_'+date.slice(5).replace('-','')+'_出番表・成績表.xlsx'
 
+// Excel identifiers are text. Older rosters can contain only the significant digits.
+function workbookJefNumber(number: string | null) {
+  const value = String(number ?? '').trim()
+  return /^\d+$/.test(value) ? value.padStart(6, '0') : value
+}
+
 export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnType<typeof loadWinterData>>, date: string) {
   assertWinterEvent(data.eventId)
   for (const rows of [data.competitions,data.entries,data.riders,data.horses]) for (const row of rows) assertWinterEvent(row.event_id)
@@ -17,7 +23,7 @@ export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnTy
     const entries=data.entries.filter(e=>e.competition_id===c.id).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id)).map(e=>{
       const rider=riders.get(e.rider_id), horse=horses.get(e.horse_id)
       if (!rider || !horse || !e.organization_name || !Number.isSafeInteger(e.start_order)) throw new Error('保存済みの出番・人馬・所属を確認してください')
-      return entryValues({...e,rider_name:rider.name,jef_member_no:rider.jef_member_no,horse_name:horse.name,jef_registration_no:horse.jef_registration_no})
+      return entryValues({...e,rider_name:rider.name,jef_member_no:workbookJefNumber(rider.jef_member_no),horse_name:horse.name,jef_registration_no:workbookJefNumber(horse.jef_registration_no)})
     })
     return {name:c.name, number:c.competition_no, venue:section.venue, official:c.official, dressage:section.id==='dressage', entries}
   })
