@@ -4,6 +4,11 @@ const {timetablePrintHtml}=require('../lib/master/timetable-print.ts'),{winterTi
 const prep=require('../config/winter-2026-preparation.json'),ev=prep.eventId
 function fixture(){return{eventId:ev,competitions:prep.competitions.map(c=>({id:'c'+c.number,event_id:ev,competition_no:c.number,competition_date:c.date,name:c.name,official:c.official})),entries:prep.competitions.flatMap(c=>['active','active','withdrawn'].map((status,i)=>({entry_id:c.number+'-'+i,event_id:ev,competition_id:'c'+c.number,status,is_op:i===1}))),timetable:prep.competitions.map(c=>({event_id:ev,competition_id:'c'+c.number,inspection_time:'組み換え時間',start_time:c.number==='32'?'15:00':'前競技に引き続き',phase:'provisional'}))}}
 const data=fixture(),original=JSON.stringify(data),mapped=winterTimetablePrintData(data),html=timetablePrintHtml(mapped,'2026/11/5 09:00')
+const [jumpTable, dressageTable] = [...html.matchAll(/<table>([\s\S]*?)<\/table>/g)].map(match => match[1])
+assert(jumpTable.includes('<th>下見開始</th>') && jumpTable.includes('<td>組み換え時間</td>'))
+assert(!dressageTable.includes('下見') && !dressageTable.includes('組み換え時間'))
+assert(dressageTable.includes('<th>競技開始</th>') && dressageTable.includes('<td>15:00</td>'))
+assert(!dressageTable.includes('colspan="5"') && dressageTable.includes('colspan="4"'))
 assert.equal(mapped.items.length,40);assert.equal(mapped.items.filter(i=>i.section==='dressage').length,9)
 assert(mapped.items.every(i=>i.count===2),'OP counted and withdrawn excluded')
 assert.equal((html.match(/data-timetable-sheet/g)||[]).length,1);assert.equal((html.match(/data-competition-id=/g)||[]).length,40)

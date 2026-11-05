@@ -1,5 +1,5 @@
 import type { loadWinterData } from './winter-data'
-import { assertWinterEvent } from './winter-event'
+import { assertWinterEvent, winterTimetableSection } from './winter-event'
 import { winterCompetitionLabel } from './winter-display-order'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
@@ -24,11 +24,12 @@ export function exportWinterCsv(data: Data, kind: WinterExportKind) {
  const result:(string|number|null)[][]=[['日付','競技','下見時間','開始時間','時間区分','出番','状態','選手所属','選手名','馬所属','馬名','OP','出番ID','選手ID','馬ID']]
  for(const competition of data.competitions){
   const time=data.timetable.find(t=>t.competition_id===competition.id)
+  const inspection = winterTimetableSection(competition.competition_no)?.showInspection === false ? '' : time?.inspection_time ?? ''
   const date=new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',weekday:'short'}).format(new Date(competition.competition_date+'T00:00:00+09:00'))
   for(const entry of data.entries.filter(e=>e.competition_id===competition.id).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id))){
    const rider=riders.get(entry.rider_id),horse=horses.get(entry.horse_id)
    if(!rider||!horse)throw new Error('出番表の人馬を確認できません')
-   result.push([date,winterCompetitionLabel(competition),time?.inspection_time??'',time?.start_time??'',time?(time.phase==='final'?'確定':'仮'):'未設定',entry.start_order,entry.status==='wd'?'棄権':entry.status==='active'?'出場':entry.status,organization(rider.organization_id),rider.name,organization(horse.organization_id),horse.name,entry.is_op?'OP':'',entry.entry_id,rider.id,horse.id])
+   result.push([date,winterCompetitionLabel(competition),inspection,time?.start_time??'',time?(time.phase==='final'?'確定':'仮'):'未設定',entry.start_order,entry.status==='wd'?'棄権':entry.status==='active'?'出場':entry.status,organization(rider.organization_id),rider.name,organization(horse.organization_id),horse.name,entry.is_op?'OP':'',entry.entry_id,rider.id,horse.id])
   }
  }
  return winterCsv(result)

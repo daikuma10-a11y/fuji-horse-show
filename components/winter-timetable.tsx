@@ -1,7 +1,7 @@
 "use client"
 import {MasterTimetable} from './master/timetable'
 import {WinterTimetableEditor} from './winter-timetable-editor'
-import {WINTER_DATES,WINTER_EVENT_NAME} from '@/lib/winter-event'
+import {WINTER_DATES,WINTER_EVENT_NAME,winterTimetableSection} from '@/lib/winter-event'
 import {winterCompetitionLabel} from '@/lib/winter-display-order'
 import {timetablePrintHtml} from '@/lib/master/timetable-print'
 import {winterTimetablePrintData} from '@/lib/winter-timetable-print'
@@ -13,5 +13,25 @@ export function WinterTimetable({data,session,onSession,onChanged}:{data:Awaited
   const latest=await loadWinterData(AbortSignal.timeout(20000))
   return timetablePrintHtml(winterTimetablePrintData(latest),new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}),dates)
  }
- return <MasterTimetable loadPrint={loadPrint} title={WINTER_EVENT_NAME} dates={dates} items={data.competitions.map(c=>{const t=data.timetable.find(t=>t.competition_id===c.id);return{id:c.id,date:c.competition_date,competition:winterCompetitionLabel(c),official:c.official,count:data.entries.filter(e=>e.competition_id===c.id&&!['wd','withdrawn'].includes(e.status.toLowerCase())).length,inspection:t?.inspection_time??null,start:t?.start_time??null,phase:t?.phase}})} renderEditor={id=><WinterTimetableEditor competitionId={id} initial={data.timetable.find(t=>t.competition_id===id)??null} session={session} onSession={onSession} onChanged={onChanged}/>}/>
+ const items = data.competitions.map(competition => {
+   const time = data.timetable.find(row => row.competition_id === competition.id)
+   const entries = data.entries.filter(entry => entry.competition_id === competition.id && !['wd', 'withdrawn'].includes(entry.status.toLowerCase()))
+   return {
+     id: competition.id,
+     date: competition.competition_date,
+     competition: winterCompetitionLabel(competition),
+     timingSection: winterTimetableSection(competition.competition_no),
+     official: competition.official,
+     count: entries.length,
+     inspection: time?.inspection_time ?? null,
+     start: time?.start_time ?? null,
+     phase: time?.phase,
+   }
+ })
+ return <MasterTimetable title={WINTER_EVENT_NAME} dates={dates} items={items} loadPrint={loadPrint}
+   renderEditor={(id, showInspection) =>
+     <WinterTimetableEditor competitionId={id} showInspection={showInspection}
+       initial={data.timetable.find(time => time.competition_id === id) ?? null}
+       session={session} onSession={onSession} onChanged={onChanged}/>
+   }/>
 }

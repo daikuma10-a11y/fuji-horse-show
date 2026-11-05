@@ -39,6 +39,21 @@ global.fetch=async url=>{const name=new URL(url).pathname.split('/').at(-1);cons
   const monitor=renderToStaticMarkup(React.createElement(WinterMonitorView,{state:refreshed}));assert(monitor.includes(v)&&monitor.includes(start))
   assert(exportWinterCsv(loaded,'entries').includes('"'+v+'","'+start+'"'))
  }
+ // Existing dressage records may already have an inspection time. Suppress it only in the presentation.
+ data.competitions[0].competition_no='32'
+ inspection='08:15'
+ start='13:42'
+ const dressageData=await loadWinterData()
+ const dressageTable=renderToStaticMarkup(React.createElement(WinterTimetable,{data:dressageData,session:{},onSession(){},onChanged(){}}))
+ assert(!dressageTable.includes('下見開始') && !dressageTable.includes('下見時間') && !dressageTable.includes('08:15'))
+ assert(dressageTable.includes('13:42') && dressageTable.includes('競技開始') && dressageTable.includes('確定'))
+ const heading=renderToStaticMarkup(React.createElement(MasterCompetitionTime,{showInspection:false,inspection,start,phase:'final'}))
+ assert(!heading.includes('下見') && !heading.includes('08:15') && heading.includes(start))
+ const legacyMonitor={...reconcileWinterMonitor(state,dressageData),inspectionTime:'08:15'}
+ const monitorHtml=renderToStaticMarkup(React.createElement(WinterMonitorView,{state:legacyMonitor}))
+ assert(!monitorHtml.includes('下見') && !monitorHtml.includes('08:15') && monitorHtml.includes(start))
+ assert(exportWinterCsv(dressageData,'entries').includes('"","13:42"'))
+ assert.equal(dressageData.timetable[0].inspection_time,'08:15')
  inspection='前競技に引き続き';await assert.rejects(loadWinterData(),/時間設定/)
  inspection='08:15';start='オープン';await assert.rejects(loadWinterData(),/時間設定/)
  console.log('PASS: shared clock/instruction field, strict per-field validation, real loader, daily table/start heading, monitor refresh/render and CSV preserve instructions; wrong-field values rejected')

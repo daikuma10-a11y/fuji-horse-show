@@ -1,4 +1,5 @@
-export type MasterTimetableItem={id:string;date:string;competition:string;official:boolean;count:number;inspection:string|null;start:string|null;phase?:'provisional'|'final'}
+export type TimetableSection = {id: string; label: string; showInspection: boolean}
+export type MasterTimetableItem={timingSection?:TimetableSection;id:string;date:string;competition:string;official:boolean;count:number;inspection:string|null;start:string|null;phase?:'provisional'|'final'}
 
 export const masterTimetableChoices = {
  inspection: ['オープン', '組み換え時間'],
