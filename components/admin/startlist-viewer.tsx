@@ -183,7 +183,7 @@ export function StartListViewer({ canReorder = true }: { canReorder?: boolean })
     </div>
     <div className="print-only hidden">
       <h1 className="mb-2 text-xl font-bold">Fuji Horse Show 出番表</h1>
-      <p className="mb-4 font-bold">{COMPETITION_DATES.find(item => item.value === date)?.label} ／ 正式DBの出番順</p>
+      <p className="mb-4 font-bold">{COMPETITION_DATES.find(item => item.value === date)?.label}</p>
       {(printScope === "competition" && selected ? [selected] : comps).map(comp => <section key={comp.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">第{comp.number}競技 {comp.name}{comp.official ? "（公認）" : ""}</h2><table className="w-full border-collapse text-sm"><thead><tr><th className="border p-1 text-left">出番</th><th className="border p-1 text-left">選手</th><th className="border p-1 text-left">馬</th><th className="border p-1 text-left">所属</th><th className="border p-1 text-left">備考</th></tr></thead><tbody>{entriesByCompetition(comp.id).sort((a,b) => a.order-b.order).map(entry => <tr key={entry.id}><td className="border p-1">{entry.order}</td><td className="border p-1">{getPlayer(entry.playerId)?.name ?? "要確認"}</td><td className="border p-1">{getHorse(entry.horseId)?.name ?? "要確認"}</td><td className="border p-1">{getOrg(entry.organizationId ?? "")?.name ?? "要確認"}</td><td className="border p-1">{entry.isOp ? "OP " : ""}{entry.withdrawn ? "棄権 " : ""}{!entry.withdrawn ? entryChangeLabel(entry) : ""}</td></tr>)}</tbody></table></section>)}
     </div>
   </div>

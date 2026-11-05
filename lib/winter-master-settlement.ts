@@ -17,6 +17,6 @@ export function winterMasterSettlementAccount(value:WinterCheckoutAccount,issued
 export function winterMasterSavedSettlement(value:WinterSettlementRecord,orgId:string):MasterSavedSettlement{
  const record=validateWinterSettlementRecord(value,orgId)
  const document=winterMasterSettlementAccount(record.account,new Date(record.created_at),record.payment_method)
- document.document.notice=`保存済み精算内容／精算番号：${record.id}。現金・振込の選択は入金済みを示しません。この精算書は領収書ではありません。`
+ document.document.notice=`精算番号：${record.id}`
  return {id:record.id,organization_key:record.organization_key,confirmed_by:record.confirmer_name,payment_method:record.payment_method,amount:record.account.remaining,created_at:record.created_at,document}
 }

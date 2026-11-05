@@ -8,6 +8,7 @@ The organizer requires a shared application master based on the validated Autumn
 - Improvements to common behavior belong in the master and require checking both adapters. Do not discard Autumn fixes when preparing another tournament.
 - Keep Winter event isolation, server fee calculation, admin authorization, stable retry IDs and payment audit behavior. UI reuse never authorizes an Autumn API call from Winter.
 - Preserve shared identities and multiple club affiliations. Do not merge people or horses solely by names.
+- Treat printed documents and PDFs as handouts. Keep operator instructions, configuration and data-source explanations on screen. Print the event, competition and payment details and notices the recipient needs.
 - Commit and push each completed checkpoint. Do not deploy Autumn production `fhsfix.vercel.app` while working on Winter previews.
 - Record incomplete master migrations honestly; configuration scaffolding does not mean that every older screen has been migrated.
 

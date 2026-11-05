@@ -88,7 +88,7 @@ export function WinterAdminDashboard(){
  <WinterAdminNavigation tab={tab} onSelect={select}/>
  <p role="status" className="print-hide mb-3">{liveStatus}</p>
  {tab!=='startlist'&&<> <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div></>}
- {dataError&&<p role="alert" className="mb-4 rounded-xl bg-red-100 p-4 text-xl">{dataError}</p>}
+ {dataError&&<p role="alert" className="print-hide mb-4 rounded-xl bg-red-100 p-4 text-xl">{dataError}</p>}
  {tab!=='startlist'&&tab!=='stable'&&<WinterExportPanel session={session} onSession={updateSession}/>}
  {/* Visited panels remain mounted so tab changes preserve unsaved inputs and monitor state. */}
  {winterAdminTabs.filter(t=>visited.includes(t.id)).map(t=><section key={t.id} role="tabpanel" id={`winter-panel-${t.id}`} aria-labelledby={`winter-tab-${t.id}`} tabIndex={-1} hidden={tab!==t.id} className="space-y-5">

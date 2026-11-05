@@ -39,6 +39,7 @@ if(!output)throw Error('Set TIMETABLE_TEST_OUTPUT to the fixture output director
     assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length,1,'all selected dates must share a single sheet')
     const printed=normalize(execFileSync('pdftotext',['-raw',filename,'-'],{encoding:'utf8'}))
     assert(!printed.includes('印刷・PDF保存'),'the screen toolbar must not be printed')
+    for(const internalText of ['「確定」の表示がないもの','未設定は','保存済みの時間','OPを含む出番の件数'])assert(!printed.includes(internalText))
     for(const name of names)assert(printed.includes(normalize(name)),`PDF must contain the entire competition name: ${name}`)
     assert(printed.includes('最新のタイムテーブルをご確認ください。'),'the last footer must be in the PDF itself')
    }
