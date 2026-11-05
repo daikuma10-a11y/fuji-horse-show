@@ -1,6 +1,6 @@
 import {winterRpc} from './winter-reception'
 import {winterDraftSummary,type WinterDraft} from './winter-batch'
-import {itemPayload,stableJson,draftContext,type WinterData,type OfflineItem} from './winter-offline'
+import {itemPayload,matchesOfflineQuote,draftContext,type WinterData,type OfflineItem} from './winter-offline'
 export type ReceivedSource={draft:WinterDraft;item:ReturnType<typeof itemPayload>['p_items'][number];context:Record<string,unknown>;total:number}
 export type ReceivedReception={request_id:string;receipt_id:string;source:ReceivedSource;status:'review';message:string;received_at:string;revision:number}
 export type InboxSummary={pending:number;review:number}
@@ -16,8 +16,7 @@ export async function loadWinterInbox(token:string){
   if(!Array.isArray(page))throw Error('受信一覧を確認できません')
   for(const r of page){
    if(!r||r.status!=='review'||!Number.isSafeInteger(r.revision)||r.revision<1||!r.source||winterDraftSummary(r.source.draft).id!==r.request_id)throw Error('受信内容の番号を確認できません。本部の保存記録は保持しています')
-   const payload=itemPayload({draft:r.source.draft} as OfflineItem)
-   if(stableJson(payload.p_items[0])!==stableJson(r.source.item)||payload.p_expected_total!==r.source.total)throw Error('受信内容と申請情報が一致しません。本部の保存記録は保持しています')
+   if(!matchesOfflineQuote(r.source.draft,r.source.item,r.source.total))throw Error('受信内容と申請情報が一致しません。本部の保存記録は保持しています')
    rows.push(r)
   }
   if(page.length<100)return rows

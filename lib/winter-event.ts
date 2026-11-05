@@ -20,6 +20,11 @@ export function winterTimetableSection(competitionNo: string) {
   return timetableSectionsByNumber.get(competitionNo)
 }
 
+const friendshipNumbers = new Set(preparation.competitions.filter(c=>c.name.startsWith('フレンドシップ')).map(c=>c.number))
+export function winterFreeFriendshipChange(from: string | number | undefined, to: string | number | undefined) {
+  return friendshipNumbers.has(String(from)) && friendshipNumbers.has(String(to))
+}
+
 export type WinterCompetition = {
   number: string; name: string; date: string; arena: string; official: boolean
   fee: number; opFee: number | null; memberFee: number | null; nonmemberFee: number | null

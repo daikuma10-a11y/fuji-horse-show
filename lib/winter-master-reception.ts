@@ -1,3 +1,4 @@
+import {winterFreeFriendshipChange} from './winter-event'
 import type {loadWinterData} from './winter-data'
 import {WINTER_DATES,assertWinterEvent,winterCompetition,winterEntryPrice,type WinterFeeSelection} from './winter-event'
 import type {MasterFormCompetition,MasterRosterSource,MasterAddState,MasterChangeState} from './master/reception-form'
@@ -34,6 +35,7 @@ export function winterMasterAddFee(data:Data,id:string,selection:WinterFeeSelect
 export function winterMasterChangeFee(data:Data,state:MasterChangeState,fromSelection:WinterFeeSelection,selection:WinterFeeSelection):FeeBreakdown{
  if(!state.fromCompetition||!state.toCompetition)throw new Error('変更前と変更後の競技を選択してください')
  const before=winterMasterPrice(data,state.fromCompetition.id,{...fromSelection,isOp:!!state.entry.isOp}),after=winterMasterPrice(data,state.toCompetition.id,{...selection,isOp:state.toIsOp})
+ if(winterFreeFriendshipChange(state.fromCompetition.number,state.toCompetition.number))return {addBase:0,addEntry:0,changeBase:0,competitionDiff:0,total:0}
  const addBase=state.treatedAsWithdrawAdd?3000:0,addEntry=state.treatedAsWithdrawAdd?after:0,changeBase=state.treatedAsWithdrawAdd?0:2000,competitionDiff=state.treatedAsWithdrawAdd?0:Math.max(0,after-before)
  return {addBase,addEntry,changeBase,competitionDiff,total:addBase+addEntry+changeBase+competitionDiff}
 }

@@ -40,6 +40,7 @@ export interface MasterChangeAdapter extends Omit<MasterAddAdapter,'getFee'|'inp
  inputFields?:(state:MasterChangeState)=>ReactNode
  confirmFields?:(state:MasterChangeState)=>ReactNode
  canReview?:(state:MasterChangeState)=>boolean
+ freeChange?:(from:MasterFormCompetition,to:MasterFormCompetition)=>boolean
  hasExtraChanges?:(state:MasterChangeState)=>boolean
  onEntrySelected?:(entry:StartEntry)=>void
  onRestore?:(entry:StartEntry)=>void

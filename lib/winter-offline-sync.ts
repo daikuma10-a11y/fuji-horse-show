@@ -7,7 +7,7 @@ export function offlineStamp(receiptId:string,item:OfflineItem){const p=itemPayl
 export function inspectOfflineItem(receiptId:string,item:OfflineItem,data:WinterData,requests:WinterRequestRow[],receipts:WinterOfflineReceipt[]):OfflineItem{
  if(item.handoff||item.status==='cancelled')return item
  const summary=winterDraftSummary(item.draft),saved=requests.find(r=>r.id===summary.id)
- if(saved){const stamp=(saved.payload as Record<string,unknown>).offlineReception;if(stableJson(stamp)===stableJson(offlineStamp(receiptId,item))&&saved.fee_amount===summary.total)return {...item,status:'sent',message:'本部で申請の保存を確認しました。出番表への反映は本部操作です',locked:true};return {...item,status:'review',locked:true,message:'同じ申請IDの本部記録を確認しましたが内容の一致を確認できません。新しい受付として送らず、本部で確認してください'}}
+ if(saved){const stamp=(saved.payload as Record<string,unknown>).offlineReception;if(stableJson(stamp)===stableJson(offlineStamp(receiptId,item))&&saved.fee_amount===itemPayload(item).p_expected_total)return {...item,status:'sent',message:'本部で申請の保存を確認しました。出番表への反映は本部操作です',locked:true};return {...item,status:'review',locked:true,message:'同じ申請IDの本部記録を確認しましたが内容の一致を確認できません。新しい受付として送らず、本部で確認してください'}}
  if(item.status==='sent')return {...item,status:'review',locked:true,message:'以前確認した本部記録を取得できません。再送せず本部で確認してください'}
  try{
   if(stableJson(item.context)!==stableJson(draftContext(item.draft,data)))throw new Error('受付時から出番・所属・参加情報・競技料金のいずれかが変わっています。内容を確認・訂正してください')

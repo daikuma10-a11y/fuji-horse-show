@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server'
 import {ReceptionError,receptionProxy} from '@/lib/winter-reception-proxy'
-import {itemPayload,stableJson} from '@/lib/winter-offline'
+import {matchesOfflineQuote} from '@/lib/winter-offline'
 import {winterDraftSummary} from '@/lib/winter-batch'
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'no-store'}})
@@ -15,8 +15,8 @@ export async function POST(req:NextRequest){
   try{
    body=JSON.parse(raw)
    if(!uuid.test(body.receiptId)||!body.source?.draft||!body.source.context||typeof body.source.context!=='object'||Array.isArray(body.source.context))throw Error()
-   const payload=itemPayload({draft:body.source.draft} as Parameters<typeof itemPayload>[0]),summary=winterDraftSummary(body.source.draft)
-   if(!uuid.test(summary.id)||!summary.visitorName.trim()||payload.p_expected_total!==body.source.total||stableJson(payload.p_items[0])!==stableJson(body.source.item))throw Error()
+   const summary=winterDraftSummary(body.source.draft)
+   if(!uuid.test(summary.id)||!summary.visitorName.trim()||!matchesOfflineQuote(body.source.draft,body.source.item,body.source.total))throw Error()
   }catch{return json({error:'受付内容と番号を確認してください'},400)}
   const result=await receptionProxy('reception-offline',token,{receiptId:body.receiptId,source:body.source})
   if(result.receiptId!==body.receiptId||result.requestId!==body.source.item.args.p_id||result.total!==body.source.total||!['registered','review','cancelled'].includes(result.status)||!Number.isFinite(Date.parse(result.receivedAt)))throw Error('本部の受信結果を確認できません。同じ番号で自動再確認します')

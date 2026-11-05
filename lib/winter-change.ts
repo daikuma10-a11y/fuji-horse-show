@@ -1,7 +1,7 @@
 import {reviewWinterInitialEntry} from './winter-initial-entry'
 import type { WinterEntryRow } from './winter-data'
 import { reviewWinterAdd, winterRpc, type WinterAddInput } from './winter-reception'
-import { assertWinterEvent, winterCompetition, winterEntryPrice, type WinterFeeSelection } from './winter-event'
+import { assertWinterEvent, winterCompetition, winterFreeFriendshipChange, winterEntryPrice, type WinterFeeSelection } from './winter-event'
 
 export type WinterChangeInput = {
   original: WinterEntryRow
@@ -30,11 +30,12 @@ export function reviewWinterChange(input: WinterChangeInput, options:{allowCross
   if(options.allowCrossClub&&((options.requireVisitor!==false&&!target.visitorName.trim())||target.visitorName.trim().length>100))throw new Error('受付担当者名を入力してください')
   const next = options.allowCrossClub?reviewWinterInitialEntry(target):reviewWinterAdd(target,options)
   // Match Autumn: OP is not counted toward the two-item withdrawal + addition rule.
-  const treatedAsWithdrawAdd = changedFields.filter(field => ['competition', 'player', 'horse'].includes(field)).length >= 2
+  const free = winterFreeFriendshipChange(from.competition_no,target.competition.competition_no)
+  const treatedAsWithdrawAdd = !free && changedFields.filter(field => ['competition', 'player', 'horse'].includes(field)).length >= 2
   const addBase = treatedAsWithdrawAdd ? 3000 : 0
   const addEntry = treatedAsWithdrawAdd ? next.entryFee : 0
-  const changeBase = treatedAsWithdrawAdd ? 0 : 2000
-  const competitionDiff = treatedAsWithdrawAdd ? 0 : Math.max(0, next.entryFee - oldPrice)
+  const changeBase = free || treatedAsWithdrawAdd ? 0 : 2000
+  const competitionDiff = free || treatedAsWithdrawAdd ? 0 : Math.max(0, next.entryFee - oldPrice)
   return { changedFields, treatedAsWithdrawAdd, fromEntryFee: oldPrice, toEntryFee: next.entryFee,
     fee: { addBase, addEntry, changeBase, competitionDiff, total: addBase + addEntry + changeBase + competitionDiff } }
 }
