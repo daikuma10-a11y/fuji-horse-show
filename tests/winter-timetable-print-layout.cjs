@@ -1,7 +1,7 @@
 // Run winter-timetable-print.cjs first with TIMETABLE_TEST_OUTPUT set.
 // Synthetic HTML only; all seven date combinations plus overflowing names.
 require('./register-ts.cjs')
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{chromium}=require('playwright')
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process'),{chromium}=require('playwright')
 const {fitTimetablePrint}=require('../lib/master/timetable-print.ts')
 const output=process.env.TIMETABLE_TEST_OUTPUT
 if(!output)throw Error('Set TIMETABLE_TEST_OUTPUT to the fixture output directory')
@@ -28,9 +28,21 @@ if(!output)throw Error('Set TIMETABLE_TEST_OUTPUT to the fixture output director
    })
    assert(bounds.inside,'every competition and all notes fit within the printable sheet; no clipping')
    assert(bounds.scale>0&&bounds.scale<=1)
-   const pdf=await page.pdf({path:path.join(output,fixture+'.pdf'),preferCSSPageSize:true,printBackground:true})
-   assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length,1,'all selected dates must share a single sheet')
-   console.log(`PASS: ${fixture}; ${expected} competitions; 1 A4 page; scale ${bounds.scale.toFixed(3)}; every row/footer visible`)
+   // Exercise the real beforeprint hook from screen media, including browser headers/footers.
+   await page.emulateMedia({media:null})
+   await page.evaluate(`window.onbeforeprint=()=>(${fitTimetablePrint.toString()})(document)`)
+   const names=await page.locator('[data-competition-id] td:nth-child(2)').allTextContents()
+   const normalize=value=>value.replace(/\s/g,'')
+   for(const headers of [false,true]){
+    const filename=path.join(output,fixture+(headers?'-headers':'')+'.pdf')
+    const pdf=await page.pdf({path:filename,preferCSSPageSize:true,printBackground:true,displayHeaderFooter:headers,headerTemplate:'<span class="date" style="font-size:8px"></span>',footerTemplate:'<span class="pageNumber" style="font-size:8px"></span>/<span class="totalPages" style="font-size:8px"></span>'})
+    assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length,1,'all selected dates must share a single sheet')
+    const printed=normalize(execFileSync('pdftotext',['-raw',filename,'-'],{encoding:'utf8'}))
+    assert(!printed.includes('印刷・PDF保存'),'the screen toolbar must not be printed')
+    for(const name of names)assert(printed.includes(normalize(name)),`PDF must contain the entire competition name: ${name}`)
+    assert(printed.includes('最新のタイムテーブルをご確認ください。'),'the last footer must be in the PDF itself')
+   }
+   console.log(`PASS: ${fixture}; ${expected} competition names and footer in both PDFs; 1 A4 page with/without headers; scale ${bounds.scale.toFixed(3)}`)
   }
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})
