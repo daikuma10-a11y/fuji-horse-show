@@ -18,23 +18,35 @@ export function timetablePrintHtml(data: TimetablePrintData, generatedAt: string
     return `<tbody data-timetable-date="${esc(d.value)}"><tr class="date"><th colspan="5" scope="rowgroup">${esc(d.label)}</th></tr>${rows.length ? rows.map(item => `<tr data-competition-id="${esc(item.id)}"><td class="center">${esc(item.number)}</td><td>${esc(item.name)}${item.official ? '<span class="official"> ★公認</span>' : ''}</td><td class="center">${item.count}</td><td>${esc(item.inspection || '未定')}</td><td>${esc(item.start || '未定')}${item.phase === 'final' ? '<small>（確定）</small>' : ''}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">この日の競技登録はありません。</td></tr>'}</tbody>`
   }).join('')}</table></section>`).join('')
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(data.title)} タイムテーブル</title><style>
-*{box-sizing:border-box}body{margin:0;background:#e5e7eb;color:#111;font-family:Arial,"Yu Gothic",Meiryo,sans-serif}.toolbar{display:flex;flex-wrap:wrap;gap:12px;padding:12px;align-items:center}.toolbar button{padding:12px 20px;font-size:16px}.timetable-sheet{position:relative;overflow:hidden;background:#fff;width:281mm;height:190mm;margin:12px auto}.timetable-content{position:absolute;top:0;left:0;width:281mm;display:flow-root;transform-origin:top left}header{text-align:center;border-bottom:2px solid #222;padding-bottom:1mm}h1{font-size:15pt;margin:0 0 1mm}h2{font-size:11pt;margin:0}p{font-size:8pt;margin:1mm 0}h3{font-size:11pt;margin:2mm 0 1mm;text-align:center}.venue{font-size:9pt;font-weight:normal}.columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5mm}.columns>section{min-width:0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt}th,td{border:1px solid #555;padding:.45mm 1mm;vertical-align:middle;overflow-wrap:anywhere;line-height:1.2}th{background:#edf1f5;font-size:8pt}.date th{text-align:left;font-size:9pt;background:#dbe6f2;padding:.7mm 1mm}small{font-size:7.5pt;white-space:nowrap}.official{font-size:7.5pt;white-space:nowrap}.center{text-align:center}.empty{padding:1.5mm;text-align:center}footer{margin-top:2mm;border-top:1px solid #777;padding-top:1mm}thead{display:table-header-group}tr{break-inside:avoid}
+*{box-sizing:border-box}body{margin:0;background:#e5e7eb;color:#111;font-family:Arial,"Yu Gothic",Meiryo,sans-serif}.toolbar{display:flex;flex-wrap:wrap;gap:12px;padding:12px;align-items:center}.toolbar button{padding:12px 20px;font-size:16px}.timetable-sheet{background:#fff;width:281mm;height:190mm;margin:12px auto}.timetable-content{width:281mm;display:flow-root;margin:0 auto}header{text-align:center;border-bottom:2px solid #222;padding-bottom:1mm}h1{font-size:15pt;margin:0 0 1mm}h2{font-size:11pt;margin:0}p{font-size:8pt;margin:1mm 0}h3{font-size:11pt;margin:2mm 0 1mm;text-align:center}.venue{font-size:9pt;font-weight:normal}.columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5mm}.columns>section{min-width:0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt}th,td{border:1px solid #555;padding:.45mm 1mm;vertical-align:middle;overflow-wrap:anywhere;line-height:1.2}th{background:#edf1f5;font-size:8pt}.date th{text-align:left;font-size:9pt;background:#dbe6f2;padding:.7mm 1mm}small{font-size:7.5pt;white-space:nowrap}.official{font-size:7.5pt;white-space:nowrap}.center{text-align:center}.empty{padding:1.5mm;text-align:center}footer{margin-top:2mm;border-top:1px solid #777;padding-top:1mm}thead{display:table-header-group}tr{break-inside:avoid}
 @page{size:A4 landscape;margin:8mm}@media print{body{background:white}.toolbar{display:none}.timetable-sheet{margin:0;break-inside:avoid}}
 </style></head><body><nav class="toolbar"><button id="stable-print" type="button">印刷・PDF保存</button><button id="stable-close" type="button">閉じる</button><span>選択した${dates.length}日分をA4横1ページにまとめます。印刷先で「PDFに保存」も選べます。</span></nav><main class="timetable-sheet" data-timetable-sheet><div class="timetable-content" data-timetable-content><header><h1>${esc(data.title)}</h1><h2>タイムテーブル　${dates.map(d => esc(d.label)).join(' ／ ')}</h2><p>${esc(generatedAt)} 作成 ／ 保存済みの時間・出場数</p></header><div class="columns">${columns}</div><footer><p>時間は「確定」の表示がないものは予定です。未設定は「未定」と表示します。</p><p>★公認：日本馬術連盟の公認種目。出場数は棄権を除き、OPを含む出番の件数です。</p><p>競技の進行により開始時間を変更する場合があります。最新のタイムテーブルをご確認ください。</p></footer></div></main></body></html>`
 }
 
-/** Measure after fonts load and before each print; scale the complete document, never clip rows. */
+/** Fit the layout itself so print pagination uses the scaled size, without clipping. */
 export function fitTimetablePrint(doc: Document) {
   const sheet = doc.querySelector<HTMLElement>('[data-timetable-sheet]')
   const content = doc.querySelector<HTMLElement>('[data-timetable-content]')
   if (!sheet || !content) throw new Error('印刷用タイムテーブルを確認できません。')
-  content.style.transform = 'none'
-  content.style.left = '0'
+  // Reset before every measurement; a previous print must not compound the scale.
+  sheet.style.height = '190mm'
+  content.style.zoom = '1'
   const width = Math.max(content.scrollWidth, content.offsetWidth)
   const height = Math.max(content.scrollHeight, content.offsetHeight)
-  if (!width || !height || !sheet.clientWidth || !sheet.clientHeight) throw new Error('印刷サイズを確認できません。もう一度開いてください。')
-  const scale = Math.min(1, (sheet.clientWidth - 2) / width, (sheet.clientHeight - 2) / height)
-  content.style.transform = `scale(${scale})`
-  content.style.left = `${Math.max(0, (sheet.clientWidth - width * scale) / 2)}px`
-  sheet.dataset.printScale = String(scale)
+  const availableWidth = sheet.clientWidth - 2
+  const availableHeight = sheet.clientHeight - 2
+  if (!width || !height || availableWidth <= 0 || availableHeight <= 0) throw new Error('印刷サイズを確認できません。もう一度開いてください。')
+  let scale = Math.min(1, availableWidth / width, availableHeight / height)
+  // Zoom changes layout and may round font metrics. Recheck the rendered result.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    content.style.zoom = String(scale)
+    const bounds = content.getBoundingClientRect()
+    if (bounds.width <= availableWidth && bounds.height <= availableHeight) {
+      sheet.style.height = `${Math.ceil(bounds.height) + 1}px`
+      sheet.dataset.printScale = String(scale)
+      return
+    }
+    scale *= Math.min(availableWidth / bounds.width, availableHeight / bounds.height) * .995
+  }
+  throw new Error('1ページに収まる印刷サイズを確認できません。もう一度開いてください。')
 }
