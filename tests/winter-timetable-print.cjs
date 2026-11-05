@@ -6,10 +6,16 @@ function fixture(){return{eventId:ev,competitions:prep.competitions.map(c=>({id:
 const data=fixture(),original=JSON.stringify(data),mapped=winterTimetablePrintData(data),html=timetablePrintHtml(mapped,'2026/11/5 09:00')
 assert.equal(mapped.items.length,40);assert.equal(mapped.items.filter(i=>i.section==='dressage').length,9)
 assert(mapped.items.every(i=>i.count===2),'OP counted and withdrawn excluded')
-assert.equal((html.match(/class="day"/g)||[]).length,3);assert.equal((html.match(/data-competition-id=/g)||[]).length,40)
+assert.equal((html.match(/data-timetable-sheet/g)||[]).length,1);assert.equal((html.match(/data-competition-id=/g)||[]).length,40)
 assert(html.includes('第1競技場')&&html.includes('第2競技場')&&html.includes('15:00'));assert(!html.includes('2025'))
-const single=timetablePrintHtml(mapped,'now','2026-11-15');assert.equal((single.match(/class="day"/g)||[]).length,1);assert.equal((single.match(/data-competition-id=/g)||[]).length,18)
-assert.throws(()=>timetablePrintHtml(mapped,'now','2025-12-12'),/日付/)
+const single=timetablePrintHtml(mapped,'now',['2026-11-15']);assert.equal((single.match(/data-timetable-sheet/g)||[]).length,1);assert.equal((single.match(/data-competition-id=/g)||[]).length,18)
+assert.throws(()=>timetablePrintHtml(mapped,'now',['2025-12-12']),/日付/)
+assert.throws(()=>timetablePrintHtml(mapped,'now',[]),/日付/)
+const weekend=timetablePrintHtml(mapped,'now',['2026-11-15','2026-11-14'])
+assert.equal((weekend.match(/data-competition-id=/g)||[]).length,36)
+assert(!weekend.includes('2026-11-13'))
+assert(weekend.indexOf('data-timetable-date="2026-11-14"')<weekend.indexOf('data-timetable-date="2026-11-15"'),'selected dates retain calendar order')
+assert.equal((timetablePrintHtml(mapped,'now',['2026-11-14','2026-11-14']).match(/data-competition-id=/g)||[]).length,18)
 assert.throws(()=>winterTimetablePrintData({...data,eventId:'autumn'}),/Winter/)
 assert.throws(()=>winterTimetablePrintData({...data,competitions:[{...data.competitions[0],competition_no:'unknown'}]}),/会場設定/)
 const unknown=winterTimetablePrintData({...data,timetable:[]});assert(timetablePrintHtml(unknown,'now').includes('未定'))
@@ -27,9 +33,15 @@ global.fetch=async(url,options)=>{
 }
 ;(async()=>{
  const tree=WinterTimetable({data,session:{},onSession(){},onChanged(){}})
- const refreshed=await tree.props.loadPrint('2026-11-15');assert(refreshed.includes('16:45')&&!refreshed.includes('15:00'),'reload saved times rather than stale editor props');assert.equal(requests.length,5)
- global.fetch=async()=>{throw Error('offline')};await assert.rejects(tree.props.loadPrint(),/offline/)
- if(process.env.TIMETABLE_TEST_OUTPUT){fs.mkdirSync(process.env.TIMETABLE_TEST_OUTPUT,{recursive:true});fs.writeFileSync(path.join(process.env.TIMETABLE_TEST_OUTPUT,'timetable.html'),html)}
- console.log('PASS: all 40 competitions in configured arenas/dates, named times, unknown times, active/OP counts, per-day print, escaped content, event guards, fresh saved-data loader and fail-closed offline; no writes')
+ const refreshed=await tree.props.loadPrint(['2026-11-15']);assert(refreshed.includes('16:45')&&!refreshed.includes('15:00'),'reload saved times rather than stale editor props');assert.equal(requests.length,5)
+ global.fetch=async()=>{throw Error('offline')};await assert.rejects(tree.props.loadPrint(['2026-11-15']),/offline/)
+ if(process.env.TIMETABLE_TEST_OUTPUT){fs.mkdirSync(process.env.TIMETABLE_TEST_OUTPUT,{recursive:true});fs.writeFileSync(path.join(process.env.TIMETABLE_TEST_OUTPUT,'timetable.html'),html)
+ for(let mask=1;mask<8;mask++){
+  const dates=mapped.dates.filter((d,i)=>mask&(1<<i)).map(d=>d.value)
+  fs.writeFileSync(path.join(process.env.TIMETABLE_TEST_OUTPUT,`selection-${mask}.html`),timetablePrintHtml(mapped,'2026/11/5 09:00',dates))
+ }
+ const long={...mapped,items:mapped.items.map((i,n)=>({...i,name:`確認番号${n+1} ${i.name} 長い競技名の改行と公認表示を含む用紙の収まりを確認`,phase:'final'}))}
+ fs.writeFileSync(path.join(process.env.TIMETABLE_TEST_OUTPUT,'long.html'),timetablePrintHtml(long,'2026/11/5 09:00'))}
+ console.log('PASS: all 40 competitions in configured arenas/dates, named times, unknown times, active/OP counts, multi-date one-sheet content, escaped content, event guards, fresh saved-data loader and fail-closed offline; no writes')
 })().catch(e=>{console.error(e);process.exitCode=1})
 module.exports={fixture}
