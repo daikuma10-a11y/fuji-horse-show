@@ -54,3 +54,12 @@ console.log('PASS: Winter change fees, positive difference only, multi-field rul
  await assert.rejects(load('lib/winter-change.ts', {'./winter-event':event, './winter-reception':api}).submitWinterChange(input,''),/本部ログイン/)
  console.log('PASS: change snapshot, server-price check, authenticated submission, stable retries and explicit response failures')
 })().catch(error=>{console.error(error);process.exitCode=1})
+
+input=base();input.from=comp('①');input.original.competition_id=input.from.id;input.original.competition_no='①'
+input.target.competition=comp('①')
+assert.equal(review(input).fee.total,0)
+input.target.competition=comp('②');input.target.horse={...horse,id:'other-horse'}
+assert.equal(review(input).fee.total,0);assert.equal(review(input).treatedAsWithdrawAdd,false)
+assert.equal(api.reviewWinterAdd(input.target).total,10000)
+input.target.competition=comp('1')
+assert.equal(review(input).fee.total,11000);assert.equal(review(input).treatedAsWithdrawAdd,true)

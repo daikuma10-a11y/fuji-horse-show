@@ -1,4 +1,5 @@
 import {readDeviceRecord,writeDeviceRecord,listDeviceRecords,type DeviceRecord} from './master/device-reception-store'
+import {reviewWinterChange} from './winter-change'
 import {WINTER_EVENT_ID,WINTER_EVENT_NAME} from './winter-event'
 import {loadWinterData,type WinterEntryRow} from './winter-data'
 import {emptyWinterQueue,readWinterQueue,writeWinterQueue,validateWinterQueue,stageWinterDraft,winterDraftSummary,winterBatchPayload,type WinterQueue,type WinterDraft} from './winter-batch'
@@ -6,7 +7,7 @@ export type WinterData=Awaited<ReturnType<typeof loadWinterData>>
 export const preparationId=`${WINTER_EVENT_ID}:preparation`
 export type WinterPreparation=DeviceRecord&{kind:'preparation';schema:1;eventName:string;retrievedAt:string;build:string;data:WinterData}
 export type OfflineStatus='queued'|'review'|'unknown'|'sent'|'cancelled'
-export type OfflineItem={draft:WinterDraft;status:OfflineStatus;message:string;attempts:number;locked?:boolean;handoff?:{receivedAt:string;status:'registered'|'review'|'cancelled'};context:Record<string,unknown>;history:{at:string;note:string;draft?:WinterDraft}[]}
+export type OfflineItem={draft:WinterDraft;feeVersion?:2;status:OfflineStatus;message:string;attempts:number;locked?:boolean;handoff?:{receivedAt:string;status:'registered'|'review'|'cancelled'};context:Record<string,unknown>;history:{at:string;note:string;draft?:WinterDraft}[]}
 export type WinterOfflineReceipt=DeviceRecord&{kind:'receipt';schema:1;createdAt:string;snapshotAt:string;sourceDigest:string;items:OfflineItem[]}
 export const offlineStatusLabel:Record<OfflineStatus,string>={queued:'未送信',review:'要確認',unknown:'結果確認待ち',sent:'送信済み',cancelled:'端末内で取下げ'}
 export const offlineUrgentNotice='通信断中・送信待ちの受付は、本部に届いていない場合があります。出番が迫る申請は、本部・審判へ電話や係員を通じて別途連絡してください。'
@@ -100,7 +101,7 @@ export async function archiveReception(queue:WinterQueue,p:WinterPreparation){
  validateWinterQueue(queue);if(!queue.attempted||!queue.items.length)throw new Error('受付内容とお名前を確認してください')
  const id=receiptId(queue),sourceDigest=await digest(queue),existing=await readDeviceRecord<WinterOfflineReceipt>(id)
  if(existing){if(existing.sourceDigest!==sourceDigest)throw new Error('同じ受付番号の保存内容が異なります。管理者に確認してください');return existing}
- const receipt:WinterOfflineReceipt={id,revision:1,kind:'receipt',schema:1,eventId:WINTER_EVENT_ID,createdAt:new Date().toISOString(),snapshotAt:queue.snapshotAt??p.retrievedAt,sourceDigest,items:queue.items.map(draft=>({draft,status:queue.localOnly?'queued':'unknown',message:queue.localOnly?'本部への送信待ち':'以前の送信結果を本部で確認してください',attempts:queue.localOnly?0:1,locked:!queue.localOnly,context:queue.contexts?.[winterDraftSummary(draft).id]??draftContext(draft,p.data),history:[]}))}
+ const receipt:WinterOfflineReceipt={id,revision:1,kind:'receipt',schema:1,eventId:WINTER_EVENT_ID,createdAt:new Date().toISOString(),snapshotAt:queue.snapshotAt??p.retrievedAt,sourceDigest,items:queue.items.map(draft=>({draft,feeVersion:2,status:queue.localOnly?'queued':'unknown',message:queue.localOnly?'本部への送信待ち':'以前の送信結果を本部で確認してください',attempts:queue.localOnly?0:1,locked:!queue.localOnly,context:queue.contexts?.[winterDraftSummary(draft).id]??draftContext(draft,p.data),history:[]}))}
  return writeDeviceRecord(receipt,null)
 }
 /** A crash after durable archive but before resetting the input must not expose/re-send the old visitor. */
@@ -111,7 +112,27 @@ export async function recoverSealedInput(){
  writeWinterQueue(localStorage,emptyWinterQueue());if(readWinterQueue(localStorage).items.length)throw new Error('保存済みですが入力欄を戻せません。係員に確認してください')
  window.dispatchEvent(new Event('winter-queue-changed'))
 }
-export function itemPayload(item:OfflineItem){return winterBatchPayload({version:1,eventId:WINTER_EVENT_ID,attempted:true,items:[item.draft]})}
+export function itemPayload(item: Pick<OfflineItem,'draft'|'feeVersion'>, legacy=false) {
+ const p=winterBatchPayload({version:1,eventId:WINTER_EVENT_ID,attempted:true,items:[item.draft]})
+ // Items sealed before the fee change must replay the exact original payload.
+ if ((legacy || ('status' in item && item.feeVersion!==2)) && item.draft.type==='change' && p.p_expected_total===0) {
+  const review=reviewWinterChange(item.draft.input)
+  const twoFields=review.changedFields.filter(f=>['competition','horse','player'].includes(f)).length>=2
+  const oldTotal=twoFields?3000+review.toEntryFee:2000+Math.max(0,review.toEntryFee-review.fromEntryFee)
+  p.p_expected_total=oldTotal
+  const args=p.p_items[0].args
+  if (!('p_expected_total' in args)) throw new Error('変更申請の料金を確認できません')
+  args.p_expected_total=oldTotal
+ }
+ return p
+}
+export function matchesOfflineQuote(draft:WinterDraft,item:unknown,total:unknown) {
+ const matches=(legacy:boolean)=>{
+  const p=itemPayload({draft},legacy)
+  return p.p_expected_total===total && stableJson(p.p_items[0])===stableJson(item)
+ }
+ return matches(false)||matches(true)
+}
 
 export function stageReceptionDraft(draft:WinterDraft,scope:'reception'|'meeting',data:WinterData&{offlinePreparedAt?:string}){
  stageWinterDraft(draft,scope,scope==='reception'?{context:draftContext(draft,data),snapshotAt:data.offlinePreparedAt}:undefined)

@@ -1,0 +1,26 @@
+import type {loadWinterData} from './winter-data'
+import {WINTER_DATES, WINTER_EVENT_NAME, assertWinterEvent, winterTimetableSection} from './winter-event'
+import {buildLinkedEventWorkbook} from './master/linked-event-workbook'
+import {entryValues} from './official-excel'
+
+export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip'
+export const winterWorkbookName=(date:string)=>'2026Winter_'+date.slice(5).replace('-','')+'_出番表・成績表.xlsx'
+
+export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnType<typeof loadWinterData>>, date: string) {
+  assertWinterEvent(data.eventId)
+  for (const rows of [data.competitions,data.entries,data.riders,data.horses]) for (const row of rows) assertWinterEvent(row.event_id)
+  if (!WINTER_DATES.some(d=>d===date)) throw new Error('Winterの開催日を選択してください')
+  const riders=new Map(data.riders.map(r=>[r.id,r])), horses=new Map(data.horses.map(h=>[h.id,h]))
+  const competitions=data.competitions.filter(c=>c.competition_date===date).map(c=>{
+    const section=winterTimetableSection(c.competition_no)
+    if (!section) throw new Error('競技番号と会場を確認してください：'+c.competition_no)
+    const entries=data.entries.filter(e=>e.competition_id===c.id).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id)).map(e=>{
+      const rider=riders.get(e.rider_id), horse=horses.get(e.horse_id)
+      if (!rider || !horse || !e.organization_name || !Number.isSafeInteger(e.start_order)) throw new Error('保存済みの出番・人馬・所属を確認してください')
+      return entryValues({...e,rider_name:rider.name,jef_member_no:rider.jef_member_no,horse_name:horse.name,jef_registration_no:horse.jef_registration_no})
+    })
+    return {name:c.name, number:c.competition_no, venue:section.venue, official:c.official, dressage:section.id==='dressage', entries}
+  })
+  if (!competitions.length || new Set(competitions.map(c=>c.number)).size!==competitions.length) throw new Error('開催日の競技一覧を確認してください')
+  return buildLinkedEventWorkbook(layouts,WINTER_EVENT_NAME,date,competitions)
+}
