@@ -14,6 +14,7 @@ const contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml
 const xml = (v: Value) => String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 const sheetRef = (name: string) => "'"+name.replace(/'/g,"''")+"'"
 const literal = (value: Value): Cell => ({value})
+const startsPerPage = 40
 function link(sheet: string, address: string, value: Value): Cell {
   const source = sheetRef(sheet)+'!'+address
   return {value, formula:'IF('+source+'="","",'+source+')'}
@@ -49,23 +50,26 @@ function scoreCells(row: number, last: number, dressage: boolean) {
   return cells
 }
 
-function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompetition, isStart: boolean) {
+function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompetition, isStart: boolean, printedRows: number) {
   const firstResult = comp.dressage ? 13 : 14
   const first = isStart ? 14 : firstResult
-  const count = Math.max(comp.dressage ? 30 : 60, comp.entries.length)
+  const count = Math.max(comp.dressage ? 30 : 60, printedRows)
+  const finalOrder = Number(comp.entries.at(-1)?.[1] ?? 0)
   const pattern = new RegExp('<row r="'+first+'"[^>]*>[\\s\\S]*?</row>(?=</sheetData>)')
   const prototype = layout.match(pattern)?.[0]
   if (!prototype) throw new Error('公式用紙の明細行を確認できません')
   const rows = Array.from({length: count}, (_, i) => {
     const row = first+i, cells = isStart ? {} as Record<string,Cell> : scoreCells(row,first+count-1,comp.dressage)
     Array.from('ABCDEFG').forEach((col, index) => {
-      const value=comp.entries[i]?.[index] ?? ''
+      const reserveOrder = col === 'B' && i >= comp.entries.length && i < printedRows
+      const value = reserveOrder ? finalOrder + i - comp.entries.length + 1 : comp.entries[i]?.[index] ?? ''
       cells[col+row]=isStart ? link(comp.number,col+(firstResult+i),value) : literal(value)
     })
     const template = prototype.replace(/\br="([A-Z]*)\d+"/g,(_, col:string) => 'r="'+col+row+'"')
     return putCells(template,cells)
   })
-  return putCells(layout.replace(prototype,'<!--entries-->'),header).replace('<!--entries-->',()=>rows.join(''))
+  const printableLayout = layout.replace('fitToHeight="0"', 'fitToHeight="1"')
+  return putCells(printableLayout.replace(prototype,'<!--entries-->'),header).replace('<!--entries-->',()=>rows.join(''))
 }
 
 export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, date: string, competitions: FormCompetition[]) {
@@ -89,14 +93,21 @@ export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, dat
       const kind=comp.dressage?'dressage':comp.official&&!isStart?'official':'jump'
       const layout=assets[kind+(isStart?'-start.xml':'-result.xml')]
       const id=sheets.length+1, file='worksheets/sheet'+id+'.xml'
-      files['xl/'+file]=strToU8(fillSheet(strFromU8(layout),headers,comp,isStart))
+      const pages = Math.max(1, Math.ceil(comp.entries.length / startsPerPage))
+      const printedRows = pages * startsPerPage
+      files['xl/'+file]=strToU8(fillSheet(strFromU8(layout),headers,comp,isStart,printedRows))
       sheets.push('<sheet name="'+xml(name)+'" sheetId="'+id+'" r:id="rId'+id+'"/>')
       rels.push('<Relationship Id="rId'+id+'" Type="'+relationships+'/worksheet" Target="'+file+'"/>')
       types.push('<Override PartName="/xl/'+file+'" ContentType="'+contentType+'worksheet+xml"/>')
-      const first=isStart?6:2, headerEnd=!isStart&&comp.dressage?12:13, last=headerEnd+Math.max(10,comp.entries.length)
+      const first=isStart?6:2, headerEnd=!isStart&&comp.dressage?12:13
       const column=isStart?'G':comp.dressage?'S':'T'
       const sheet=xml(sheetRef(name))+'!'
-      areas.push('<definedName name="_xlnm.Print_Area" localSheetId="'+(id-1)+'">'+sheet+'$A$'+first+':$'+column+'$'+last+'</definedName>')
+      // Each print area fits a single page; print titles repeat on later blocks.
+      const printAreas = Array.from({length:pages}, (_, page) => {
+        const top = page === 0 ? first : headerEnd + page * startsPerPage + 1
+        return sheet+'$A$'+top+':$'+column+'$'+(headerEnd + (page+1)*startsPerPage)
+      })
+      areas.push('<definedName name="_xlnm.Print_Area" localSheetId="'+(id-1)+'">'+printAreas.join(',')+'</definedName>')
       areas.push('<definedName name="_xlnm.Print_Titles" localSheetId="'+(id-1)+'">'+sheet+'$'+first+':$'+headerEnd+'</definedName>')
     }
   }
