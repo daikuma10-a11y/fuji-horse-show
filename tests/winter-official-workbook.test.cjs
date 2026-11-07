@@ -30,11 +30,15 @@ test('Winter番号の先頭ゼロと手書き枠を成績表から出番表・�
  const files=unzipSync(exportWinterWorkbook(layouts,data,date))
  const start=strFromU8(files['xl/worksheets/sheet1.xml']), result=strFromU8(files['xl/worksheets/sheet2.xml'])
  const cell=(sheet,at)=>sheet.match(new RegExp('<c r="'+at+'"[^>]*(?:/>|>.*?</c>)'))?.[0]
- assert.match(cell(result,'D13'),/t="inlineStr".*?>001234</)
- assert.match(cell(start,'D14'),/t="str".*?<v>001234<\/v>/)
- assert.match(cell(result,'F14'),/>0001234</)
- assert.match(cell(start,'F15'),/<v>0001234<\/v>/)
- for(const col of ['D','F'])assert.match(cell(start,col+'16'),/<v><\/v>/)
+ assert.match(cell(result,'D13'),/t="inlineStr".*?>01234</)
+ assert.match(cell(start,'D14'),/t="str".*?<v>01234<\/v>/)
+ assert.match(cell(result,'F14'),/>01234</)
+ assert.match(cell(start,'F15'),/<v>01234<\/v>/)
+ for(const col of ['D','F']){
+  assert.match(cell(start,col+'16'),/<v>-<\/v>/)
+  assert.match(cell(result,col+'15'),/>-<\/t>/)
+  assert.match(cell(start,col+'53'),/<v><\/v>/)
+ }
  assert.match(cell(result,'B16'),/<v>6<\/v>/)
  assert.match(cell(start,'B53'),/'15'!B52.*?<v>42<\/v>/)
  assert.match(cell(start,'C53'),/<v><\/v>/)

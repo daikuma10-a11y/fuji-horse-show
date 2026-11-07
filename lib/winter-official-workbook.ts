@@ -3,13 +3,17 @@ import {WINTER_DATES, WINTER_EVENT_NAME, assertWinterEvent, winterTimetableSecti
 import {buildLinkedEventWorkbook} from './master/linked-event-workbook'
 import {entryValues} from './official-excel'
 
-export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip'
+export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip?v=jef5'
 export const winterWorkbookName=(date:string)=>'2026Winter_'+date.slice(5).replace('-','')+'_出番表・成績表.xlsx'
 
 // Excel identifiers are text. Older rosters can contain only the significant digits.
 function workbookJefNumber(number: string | null) {
-  const value = String(number ?? '').trim()
-  return /^\d+$/.test(value) ? value.padStart(6, '0') : value
+  const value = String(number ?? '').normalize('NFKC').trim()
+  if (!value || /^(?:[-ー－―—]+|なし|無し|未登録|未確認)$/.test(value)) return '-'
+  if (!/^\d+$/.test(value)) return value
+  const digits = value.replace(/^0+(?=\d)/, '')
+  if (digits.length > 5) throw new Error('日馬連番号が5桁を超えています。登録内容を確認してください：'+value)
+  return digits.padStart(5, '0')
 }
 
 export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnType<typeof loadWinterData>>, date: string) {

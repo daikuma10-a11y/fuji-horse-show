@@ -13,6 +13,7 @@ import {WINTER_DATES, WINTER_EVENT_NAME, winterTimetableSection} from '@/lib/win
 import {loadWinterReadingList} from '@/lib/winter-reading-list'
 import type {ReadingList} from '@/lib/master/reading-list'
 import {MasterReadingList} from './master/reading-list'
+import {usePrintDocument} from './master/use-print-document'
 import {exportWinterCsv} from '@/lib/winter-export'
 import {WinterMonitorView} from './winter-monitor-view'
 import {WinterTimetableEditor} from './winter-timetable-editor'
@@ -69,22 +70,36 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  function print(scope:'day'|'competition'|'readings'){if(scope==='readings'&&!readingList)return;if(scope!=='readings'&&hasDrafts()){setError('未保存の出番順があります。保存または取消後に印刷してください');return}setPrintScope(scope);setTimeout(()=>window.print(),0)}
  function exportCsv(){if(hasDrafts()){setError('未保存の出番順があります。保存または取消後に出力してください');return}const url=URL.createObjectURL(new Blob([exportWinterCsv(data,'entries')],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='Winter_startlist.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)}
  const [excelBusy,setExcelBusy]=useState(false)
- async function exportExcel(){
-  if(hasDrafts()){setError('未保存の出番順があります。保存または取消後に出力してください');return}
-  if(excelBusy)return
-  setExcelBusy(true);setError('')
+ const dayPrinter=usePrintDocument()
+ async function dayWorkbook(){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000)
   try{
    onSession(await verifyAdminSession(session))
    const {WINTER_LAYOUT_URL,exportWinterWorkbook,winterWorkbookName}=await import('@/lib/winter-official-workbook')
    const [current,layout]=await Promise.all([loadWinterData(controller.signal),fetch(WINTER_LAYOUT_URL,{signal:controller.signal})])
    if(!layout.ok)throw new Error('出番表・成績表の様式を取得できません')
-   const bytes=exportWinterWorkbook(new Uint8Array(await layout.arrayBuffer()),current,date)
+   return {bytes:exportWinterWorkbook(new Uint8Array(await layout.arrayBuffer()),current,date),name:winterWorkbookName(date)}
+  }finally{clearTimeout(timeout)}
+ }
+ async function exportExcel(){
+  if(hasDrafts()){setError('未保存の出番順があります。保存または取消後に出力してください');return}
+  if(excelBusy)return
+  setExcelBusy(true);setError('')
+  try{
+   const {bytes,name}=await dayWorkbook()
    const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}))
-   const a=document.createElement('a');a.href=url;a.download=winterWorkbookName(date);document.body.appendChild(a);a.click();a.remove()
+   const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove()
    setTimeout(()=>URL.revokeObjectURL(url),10000)
   }catch(reason){setError(reason instanceof Error?reason.message:'Excelを出力できません')}
-  finally{clearTimeout(timeout);setExcelBusy(false)}
+  finally{setExcelBusy(false)}
+ }
+ function printDay(){
+  if(hasDrafts()){setError('未保存の出番順があります。保存または取消後に印刷してください');return}
+  setError('')
+  void dayPrinter.print(async()=>{
+   const [{bytes,name},{linkedStartPrintHtml}]=await Promise.all([dayWorkbook(),import('@/lib/master/linked-start-print')])
+   return linkedStartPrintHtml(bytes,name.replace(/\.xlsx$/,''))
+  },'縦')
  }
  const timetable=data.timetable.find(row=>row.competition_id===compId)
  const monitor:WinterMonitorState|null=competition?{version:1,eventId:data.eventId,competitionId:competition.id,competitionNo:competition.competition_no,competitionName:competition.name,date:competition.competition_date,inspectionTime:timetable?.inspection_time,startTime:timetable?.start_time,timePhase:timetable?.phase,page,draft:dirty,updatedAt:new Date().toISOString(),rows:ids.map((id,index)=>{const e=data.entries.find(row=>row.entry_id===id);const mark=model.entriesByCompetition(compId).find(e=>e.id===id)?.adminChangeMark;return{id,number:index+1,rider:data.riders.find(r=>r.id===e?.rider_id)?.name??'要確認',horse:data.horses.find(h=>h.id===e?.horse_id)?.name??'要確認',organization:e?.organization_name??'要確認',isOp:!!e?.is_op,mark:mark==='added'?'追加':mark==='changed'?'変更':''}})}:null
@@ -95,7 +110,8 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  async function save(){if(lock.current||!competition||!ids.length||stale)return;lock.current=true;setBusy(true);setError('');try{const verified=await verifyAdminSession(session);onSession(verified);setSaved(await saveWinterOrder(competition.id,ids,original,verified.accessToken));setBaseline(JSON.stringify(ids));setDrafts(v=>{const next={...v};delete next[compId];return next});onChanged()}catch(reason){setError(reason instanceof Error?reason.message:'保存できません')}finally{lock.current=false;setBusy(false)}}
  function move(from:string,to:string){if(busy||stale)return;setIds(value=>moveWinterEntry(value,from,to));setSaved('')}
  return <div className={`${masterStartViewClass(wideView)}${printScope==='readings'?' reading-list-print-root':''}`}>
- <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" className={button} disabled={readingBusy} onClick={()=>void prepareReadings()}>{readingBusy?'フリガナを読み込み中…':'人馬のフリガナ一覧'}</button><button type="button" className={button} disabled={busy||excelBusy} onClick={()=>void exportExcel()}>{excelBusy?'Excelを作成中…':'この日の出番表・成績表（Excel）'}</button><button className={button} onClick={exportCsv}>出番表を出力（CSV）</button><a className={button} href="/winter/monitor" target="_blank" rel="noopener">モニター表示</a><button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary" onClick={()=>print('day')}>この日の出番表を印刷</button>{competition&&<button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50" disabled={dirty} onClick={()=>print('competition')}>この競技を印刷</button>}</div>
+ {dayPrinter.error&&<p className="print-hide text-destructive" role="alert">{dayPrinter.error}</p>}
+ <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" className={button} disabled={readingBusy} onClick={()=>void prepareReadings()}>{readingBusy?'フリガナを読み込み中…':'人馬のフリガナ一覧'}</button><button type="button" className={button} disabled={busy||excelBusy} onClick={()=>void exportExcel()}>{excelBusy?'Excelを作成中…':'この日の出番表・成績表（Excel）'}</button><button className={button} onClick={exportCsv}>出番表を出力（CSV）</button><a className={button} href="/winter/monitor" target="_blank" rel="noopener">モニター表示</a><button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary" disabled={busy||excelBusy||dayPrinter.busy} onClick={printDay}>この日の出番表を印刷</button>{competition&&<button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50" disabled={dirty} onClick={()=>print('competition')}>この競技を印刷</button>}</div>
  {readingOpen&&<section className="print-hide rounded-xl border-2 border-primary bg-card p-4" aria-label="人馬のフリガナ一覧">
   <div className="mb-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={readingBusy||!readingList} onClick={()=>print('readings')}>フリガナ一覧を印刷（A4）</button><button type="button" className="min-h-12 rounded-lg border-2 px-4 font-bold" onClick={()=>setReadingOpen(false)}>一覧を閉じる</button></div>
   {readingBusy?<p role="status">登録済みのフリガナを読み込んでいます…</p>:readingError?<div role="alert"><p className="font-bold text-destructive">{readingError}</p><button type="button" className={button} onClick={()=>void prepareReadings()}>再読み込み</button></div>:readingList?<MasterReadingList list={readingList} eventName={WINTER_EVENT_NAME}/>:<p>出番表が更新されました。上の「人馬のフリガナ一覧」を押して再読み込みしてください。</p>}

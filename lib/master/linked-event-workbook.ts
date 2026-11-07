@@ -63,7 +63,14 @@ function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompe
     Array.from('ABCDEFG').forEach((col, index) => {
       const reserveOrder = col === 'B' && i >= comp.entries.length && i < printedRows
       const value = reserveOrder ? finalOrder + i - comp.entries.length + 1 : comp.entries[i]?.[index] ?? ''
-      cells[col+row]=isStart ? link(comp.number,col+(firstResult+i),value) : literal(value)
+      const sourceRow = firstResult+i
+      if (isStart && (col === 'D' || col === 'F')) {
+        const ref = sheetRef(comp.number)+'!'
+        const id = ref+col+sourceRow, name = ref+(col==='D'?'C':'E')+sourceRow
+        cells[col+row] = {value, formula:'IF('+id+'="",IF('+name+'="","","-"),IF(ISNUMBER('+id+'),TEXT('+id+',"00000"),'+id+'))'}
+      } else {
+        cells[col+row] = isStart ? link(comp.number,col+sourceRow,value) : literal(value)
+      }
     })
     const template = prototype.replace(/\br="([A-Z]*)\d+"/g,(_, col:string) => 'r="'+col+row+'"')
     return putCells(template,cells)
