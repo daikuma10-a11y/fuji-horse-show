@@ -21,7 +21,7 @@ export function MasterPreRegistration({ selected, onSelect, roster, entries, app
         {([
           ['roster', '人馬の登録', '① 団体を選び、参加する選手・馬を登録'],
           ['entries', '出番表の登録', '② 選手・馬・競技を組み合わせて登録'],
-          ...(application ? [['application', '申込書の読み込み', 'Excelから人馬・エントリー・金額を確認'] as const] : []),
+          ...(application ? [['application', '申込書の読み込み', '申込書から人馬・エントリー・金額を確認'] as const] : []),
           ...(overview ? [['overview', '団体別の登録内容', '登録済みの選手・馬・エントリーを一覧で確認'] as const] : []),
         ] as const).map(([id, label, description]) => <button key={id} type="button" aria-pressed={selected === id} aria-controls={`pre-registration-${id}`} onClick={() => onSelect(id)} className={`min-h-24 rounded-xl border-2 border-blue-800 p-4 text-left focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-blue-800 ${selected === id ? 'bg-blue-800 text-white' : 'bg-white text-blue-900 hover:bg-blue-100'}`}>
           <span className="block text-2xl font-bold">{label}</span>
