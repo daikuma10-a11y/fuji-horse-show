@@ -1,7 +1,7 @@
 require('./register-ts.cjs')
 const assert=require('node:assert/strict')
 const R=require('../lib/master/stall-request.ts'),A=require('../lib/master/stall-allocation.ts')
-const {stallPlanSvg}=require('../lib/master/stall-allocation-print.ts')
+const {stallPlanSvg,stallPlanLegendHtml}=require('../lib/master/stall-allocation-print.ts')
 const {reviewStallImport,stallRequestId}=require('../lib/winter-stall-requests.ts')
 const g=(id,n,name=id)=>({id,name,horses:Array.from({length:n},(_,i)=>({id:id+'h'+i,name:'検証馬'+i}))})
 const groups=[g('fuji',8,'輸送元クラブ'),g('near',6,'輸送共用クラブ'),g('flex',3,'日程調整クラブ'),g('four',5,'希望棟クラブ'),g('next',3,'隣接希望クラブ')]
@@ -12,7 +12,13 @@ assert.deepEqual(A.stallPlanIssues(p),[]);assert.equal(p.corridors.length,0)
 assert.deepEqual(A.groupAllocation(p,groups[2]).barns,['S']);assert.deepEqual(A.groupAllocation(p,groups[3]).barns,['4']);assert.deepEqual(A.groupAllocation(p,groups[4]).barns,['4'])
 for(const group of groups)for(const b of A.groupAllocation(p,group).barns)assert.equal(A.zoneComponents(p,group.id,b).length,1)
 assert.ok(!A.stalls.some(s=>s.wire&&p.cells[s.id]?.kind==='horse'))
-assert.equal((stallPlanSvg(p,'合成試験').match(/data-zone-label=/g)||[]).length,groups.length)
+const svg=stallPlanSvg(p,'合成試験'),legend=stallPlanLegendHtml(p)
+for(const group of groups){
+  assert.ok(legend.includes('<strong>'+group.name+'</strong>'))
+  assert.ok(!svg.replace(/<title>.*?<\/title>/g,'').includes('>'+group.name+'<'), 'club names must be outside the bays')
+}
+assert.equal((svg.match(/>TR<\/text>/g)||[]).length,Object.values(p.cells).filter(c=>c.kind==='tr').length)
+assert.ok(!svg.includes('data-zone-label='))
 const corridorOptions=structuredClone(o);corridorOptions.layout.requests.flex.corridor=true
 const corridorPlan=A.createStallPlan(groups,corridorOptions);assert.equal(A.groupAllocation(corridorPlan,groups[2]).corridor,true);assert.equal(A.groupAllocation(corridorPlan,groups[0]).corridor,false)
 const sameOptions=structuredClone(o);sameOptions.layout.requests.next.relation='same';assert.deepEqual(A.stallPlanIssues(A.createStallPlan(groups,sameOptions)),[])
