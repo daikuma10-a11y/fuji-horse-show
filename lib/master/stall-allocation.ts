@@ -5,13 +5,18 @@ import type { StableGroup } from './stable-information'
  * Normal barns have 18 numbered stalls AND two unnumbered braced TR bays. */
 export const STALL_TEMPLATE = 'gotemba-2025-v1'
 export const barnIds = ['S', ...Array.from({ length: 10 }, (_, i) => String(i + 1))]
-export type Stall = { id: string; barn: string; number: number | null; side: number; row: number; wire: boolean }
+export type Stall = { id: string; barn: string; number: number; side: number; row: number; wire: boolean }
 export const stalls: Stall[] = barnIds.flatMap(barn => Array.from({ length: barn === 'S' ? 24 : 20 }, (_, i) => {
   const side = Math.floor(i / (barn === 'S' ? 12 : 10)), row = i % (barn === 'S' ? 12 : 10)
   const wire = barn !== 'S' && row === 4
-  const number = wire ? null : barn === 'S' ? i + 1 : side * 9 + row + 1 - (row > 4 ? 1 : 0)
-  return { id: `${barn}:${wire ? `TR${side + 1}` : number}`, barn, number, side, row, wire }
+  // Saved plans address physical bays by their original keys, independent of the printed number.
+  const savedKey = wire ? `TR${side + 1}` : barn === 'S' ? i + 1 : side * 9 + row + 1 - Number(row > 4)
+  return { id: `${barn}:${savedKey}`, barn, number: i + 1, side, row, wire }
 }))
+export function stallLocation(id: string | undefined): string {
+  const slot = stalls.find(s => s.id === id)
+  return slot ? `${slot.barn}厩舎 ${slot.number}番` : '未配置'
+}
 export const tentIds = barnIds.slice(1).flatMap(b => [`${b}:tent1`, `${b}:tent2`])
 export type StallUse = { kind: 'horse' | 'tr' | 'blocked'; groupId: string; horseId: string; note: string }
 export type StallLayout = {enabledBarns:string[];normalHorseLimit:number;extraTR:boolean;requests:Record<string,StallRequest>;requestVersions:Record<string,string>}
@@ -133,6 +138,26 @@ export function editStall(p: StallPlan, slotId: string, value: StallUse|null, al
   next.wireHorseSlots=next.wireHorseSlots.filter(id=>next.cells[id]?.kind==='horse'&&id!==slotId)
   if(value?.kind==='horse'&&slot.wire&&allowWire)next.wireHorseSlots.push(slotId)
   return readStallPlan(next)
+}
+/** Prepare both sides of a move together. The caller applies this draft only after any swap or wire confirmation. */
+export function previewStallMove(plan: StallPlan, fromId: string, toId: string) {
+  const from = stalls.find(slot => slot.id === fromId)
+  const to = stalls.find(slot => slot.id === toId)
+  const moving = plan.cells[fromId], occupant = plan.cells[toId]
+  if (!from || !to || from === to || !moving || moving.kind === 'blocked')
+    throw new Error('馬またはTRがある馬房から、別の馬房へドラッグしてください。')
+  if (occupant?.kind === 'blocked') throw new Error('移動先は使用不可の馬房です。')
+  const enabled = plan.options.layout?.enabledBarns
+  if (enabled && (!enabled.includes(to.barn) || (occupant && !enabled.includes(from.barn))))
+    throw new Error('予備棟には配置できません。使用する厩舎を確認してください。')
+
+  const next = clone(plan)
+  if (occupant) next.cells[fromId] = clone(occupant)
+  else delete next.cells[fromId]
+  next.cells[toId] = clone(moving)
+  const wireSlots = [from, to].filter(slot => slot.wire && next.cells[slot.id]?.kind === 'horse')
+  next.wireHorseSlots = next.wireHorseSlots.filter(id => id !== fromId && id !== toId).concat(wireSlots.map(slot => slot.id))
+  return { next: readStallPlan(next), swap: Boolean(occupant), wireSlots }
 }
 export function reconcileStallGroups(p: StallPlan, groups: StableGroup[]): StallPlan {
   const n=clone(p);n.groups=clone(groups)

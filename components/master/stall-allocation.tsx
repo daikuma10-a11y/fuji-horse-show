@@ -2,8 +2,9 @@
 import type {StallRequest} from '@/lib/master/stall-request'
 import { useEffect, useRef, useState } from 'react'
 import type { StableGroup } from '@/lib/master/stable-information'
-import { barnIds, stalls, tentIds, createStallPlan, defaultStallOptions, editStall, groupAllocation, horseTotal, moveStallGroup, readStallPlan, reconcileStallGroups, stallPlanIssues, stallSourceKey, standardTR, type SavedStallPlan, type StallOptions, type StallPlan, type StallUse } from '@/lib/master/stall-allocation'
-import { stallPlanPrintHtml, stallPlanSvg } from '@/lib/master/stall-allocation-print'
+import { barnIds, stalls, stallLocation, previewStallMove, tentIds, createStallPlan, defaultStallOptions, editStall, groupAllocation, horseTotal, moveStallGroup, readStallPlan, reconcileStallGroups, stallPlanIssues, stallSourceKey, standardTR, type SavedStallPlan, type StallOptions, type StallPlan, type StallUse } from '@/lib/master/stall-allocation'
+import { StallMap } from './stall-map'
+import { stallPlanPrintHtml } from '@/lib/master/stall-allocation-print'
 import { usePrintDocument } from './use-print-document'
 
 const primary='min-h-14 rounded-xl border-2 border-primary bg-primary px-5 py-3 text-lg font-bold text-primary-foreground disabled:opacity-40'
@@ -65,7 +66,27 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
     const valid=readStallPlan(plan),r=await onSave(valid,saved?.requestId??null)
     if(!alive.current)return;setSaved(r);setPlan(r.plan);setNotice(`保存が完了しました（${new Date(r.savedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}）。`)
   })}
-  function selectSlot(id:string){if(!plan)return;const s=stalls.find(s=>s.id===id);if(!s)return;const c=plan.cells[id];setSlotId(id);setBarn(s.barn);setKind(c?.kind??'empty');setGroupId(c?.groupId??'');setHorseId(c?.horseId??'');setNote(c?.note??'');setWire(plan.wireHorseSlots.includes(id));setError('')}
+  function selectSlot(id:string, selectedPlan=plan){if(!selectedPlan)return;const s=stalls.find(s=>s.id===id);if(!s)return;const c=selectedPlan.cells[id];setSlotId(id);setBarn(s.barn);setKind(c?.kind??'empty');setGroupId(c?.groupId??'');setHorseId(c?.horseId??'');setNote(c?.note??'');setWire(selectedPlan.wireHorseSlots.includes(id));setError('')}
+  function moveSlot(fromId: string, toId: string) {
+    if (!plan || pending || lock.current) return
+    function occupantName(cell: StallUse) {
+      const group = plan!.groups.find(g => g.id === cell.groupId)
+      if (cell.kind === 'tr') return (group?.name ?? '') + 'のTR'
+      return group?.horses.find(h => h.id === cell.horseId)?.name ?? '馬'
+    }
+    try {
+      const {next, swap, wireSlots} = previewStallMove(plan, fromId, toId)
+      const source = stallLocation(fromId), destination = stallLocation(toId)
+      const message = swap
+        ? [source + 'の' + occupantName(plan.cells[fromId]) + 'と、' + destination + 'の' + occupantName(plan.cells[toId]) + 'を入れ替えます。']
+        : []
+      for (const slot of wireSlots) message.push(stallLocation(slot.id) + 'にはワイヤーがあります。現場を確認して馬を配置しますか？')
+      if (message.length && !window.confirm(message.join('\n'))) return
+      change(next)
+      selectSlot(toId, next)
+      setNotice(source + ' → ' + destination + (swap ? '：入れ替えました。' : '：移動しました。') + 'まだ保存していません。')
+    } catch (e) {setError(e instanceof Error ? e.message : '馬房を移動できませんでした。')}
+  }
   function applySlot(){if(!plan||!slotId)return;try{
     if((kind==='horse'||kind==='tr')&&!groupId)throw new Error('団体を選んでください。')
     if(kind==='horse'&&!horseId)throw new Error('馬を選んでください。')
@@ -102,18 +123,18 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
       {stale&&<div role="alert" className="rounded-lg bg-amber-100 p-4"><p className="font-bold">登録団体・馬が作成時から変わっています。保存・印刷の前に更新してください。</p><button className={secondary} disabled={pending} onClick={()=>void run('最新の参加馬を確認中…',async()=>{const r=await loadRef.current();setSource(r.groups);change(reconcileStallGroups(plan,r.groups))})}>最新の団体・頭数を反映（配置を維持）</button></div>}
       <p className="font-bold">{dirty?'編集中・未保存':'保存済み'} ／ 未配置 {horseTotal(plan.groups)-Object.values(plan.cells).filter(c=>c.kind==='horse').length}頭 ／ 要確認 {issues.length}件</p>
       {!!issues.length&&<div role="alert" className="rounded-xl border-2 border-amber-500 bg-amber-50 p-4"><strong>次の箇所を修正してください。未完成のまま下書き保存できます。</strong><ul className="list-disc pl-5">{issues.map((v,i)=><li key={i}>{v}</li>)}</ul></div>}
-      {!!plan.wireHorseSlots.length&&<p className="rounded-lg bg-amber-50 p-3">ワイヤー区画に手動配置した馬があります：{plan.wireHorseSlots.join('、')}</p>}
-      <h4 className="text-xl font-bold">全体図</h4><p>図の馬房を押すと、その区画を下の編集欄で変更できます。</p>
-      <div className="rounded-lg border bg-white" onClick={e=>{if(!pending){const id=(e.target as Element).closest('[data-slot]')?.getAttribute('data-slot');if(id)selectSlot(id)}}} onKeyDown={e=>{if(!pending&&(e.key==='Enter'||e.key===' ')){const id=(e.target as Element).closest('[data-slot]')?.getAttribute('data-slot');if(id){e.preventDefault();selectSlot(id)}}}} dangerouslySetInnerHTML={{__html:stallPlanSvg(plan,eventName)}}/>
+      {!!plan.wireHorseSlots.length&&<p className="rounded-lg bg-amber-50 p-3">ワイヤー区画に手動配置した馬があります：{plan.wireHorseSlots.map(stallLocation).join('、')}</p>}
+      <h4 className="text-xl font-bold">全体図</h4><p>馬やTRを移動先の馬房へドラッグしてください。馬房をクリックすると、下の編集欄が開きます。</p>
+      <StallMap plan={plan} eventName={eventName} disabled={pending} onSelect={selectSlot} onMove={moveSlot}/>
       <details className="rounded-xl border-2 p-4" open><summary className="cursor-pointer text-xl font-bold">団体別の割り当て・まとめて移動</summary>
         <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>団体</th><th>配置／頭数</th><th>厩舎</th><th>屋内TR</th><th>テント</th><th>S通路利用</th><th>要望の反映</th></tr></thead><tbody>{plan.groups.map(g=>{const a=groupAllocation(plan,g);return <tr key={g.id} className="border-t"><td className="py-3">{g.name}</td><td>{a.horses}／{g.horses.length}</td><td>{a.barns.join('・')||'未配置'}</td><td>{a.indoor}（必要{a.needed??'未設定'}）</td><td>{a.tent}</td><td><label><input aria-label={`${g.name}のS通路利用`} type="checkbox" disabled={pending} checked={plan.corridors.includes(g.id)} onChange={e=>change({...plan,corridors:e.target.checked?[...plan.corridors,g.id]:plan.corridors.filter(id=>id!==g.id)})}/>利用</label>{plan.corridors.includes(g.id)&&!a.corridor&&<small className="block text-amber-800">全頭をSに配置すると有効</small>}</td><td>{!plan.options.layout?.requests[g.id]?'指定なし':requestsStale?'更新あり':issues.some(i=>i.startsWith(g.name+'：'))?'未反映・要確認':'条件を満たしています'}</td></tr>})}</tbody></table></div>
         <div className="mt-4 grid gap-3 md:grid-cols-3"><label>移動する団体<select className={field} disabled={pending} value={moveGroup} onChange={e=>setMoveGroup(e.target.value)}><option value="">選択してください</option>{plan.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label><label>移動先<select className={field} disabled={pending} value={moveBarn} onChange={e=>setMoveBarn(e.target.value)}>{barnIds.map(id=><option key={id} value={id}>{id}厩舎</option>)}</select></label><button className={secondary} disabled={pending||!moveGroup} onClick={()=>{try{change(moveStallGroup(plan,moveGroup,moveBarn))}catch(e){setError(e instanceof Error?e.message:'移動できません')}}}>この団体の馬とTRを移動</button></div>
       </details>
       <div className="space-y-3 rounded-xl border-2 p-4"><h4 className="text-xl font-bold">馬房ごとに修正する</h4>
         <label>厩舎<select className={field} disabled={pending} value={barn} onChange={e=>{setBarn(e.target.value);setSlotId('')}}>{barnIds.map(id=><option key={id}>{id}</option>)}</select></label>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{stalls.filter(s=>s.barn===barn).map(s=>{const c=plan.cells[s.id],g=plan.groups.find(g=>g.id===c?.groupId),h=g?.horses.find(h=>h.id===c?.horseId);return <button key={s.id} type="button" disabled={pending} className={`min-h-20 rounded-lg border-2 p-2 text-left ${s.id===slotId?'border-primary bg-blue-100':s.wire?'border-amber-500 bg-amber-50':'bg-background'}`} onClick={()=>selectSlot(s.id)}><strong>{s.number??s.id.split(':')[1]}{s.wire?'（ワイヤー）':''}</strong><span className="block">{h?.name??(c?.kind==='tr'?'TR':c?.kind==='blocked'?'使用不可':'空き')}</span><small>{g?.name}</small></button>})}</div>
-        {slotId&&<fieldset className="space-y-3 rounded-lg border-2 border-primary p-4"><legend className="px-2 text-lg font-bold">{slotId}の編集</legend>
-          <div className="grid gap-3 md:grid-cols-3"><label>使い方<select className={field} value={kind} disabled={pending} onChange={e=>setKind(e.target.value as typeof kind)}><option value="empty">空ける</option><option value="horse">馬</option><option value="tr">TR</option><option value="blocked">使用不可</option></select></label>{(kind==='horse'||kind==='tr')&&<label>団体<select className={field} value={groupId} disabled={pending} onChange={e=>{setGroupId(e.target.value);setHorseId('')}}><option value="">選択</option>{plan.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>}{kind==='horse'&&<label>馬<select className={field} value={horseId} disabled={pending} onChange={e=>setHorseId(e.target.value)}><option value="">選択</option>{editingGroup?.horses.map(h=><option key={h.id} value={h.id}>{h.name} {Object.entries(plan.cells).find(([,c])=>c.kind==='horse'&&c.horseId===h.id)?.[0]??'未配置'}</option>)}</select></label>}</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{stalls.filter(s=>s.barn===barn).map(s=>{const c=plan.cells[s.id],g=plan.groups.find(g=>g.id===c?.groupId),h=g?.horses.find(h=>h.id===c?.horseId);return <button key={s.id} type="button" disabled={pending} className={`min-h-20 rounded-lg border-2 p-2 text-left ${s.id===slotId?'border-primary bg-blue-100':s.wire?'border-amber-500 bg-amber-50':'bg-background'}`} onClick={()=>selectSlot(s.id)}><strong>{s.number}番</strong><span className="block">{h?.name??(c?.kind==='tr'?'TR':c?.kind==='blocked'?'使用不可':'空き')}</span><small>{g?.name}</small></button>})}</div>
+        {slotId&&<fieldset className="space-y-3 rounded-lg border-2 border-primary p-4"><legend className="px-2 text-lg font-bold">{stallLocation(slotId)}の編集</legend>
+          <div className="grid gap-3 md:grid-cols-3"><label>使い方<select className={field} value={kind} disabled={pending} onChange={e=>setKind(e.target.value as typeof kind)}><option value="empty">空ける</option><option value="horse">馬</option><option value="tr">TR</option><option value="blocked">使用不可</option></select></label>{(kind==='horse'||kind==='tr')&&<label>団体<select className={field} value={groupId} disabled={pending} onChange={e=>{setGroupId(e.target.value);setHorseId('')}}><option value="">選択</option>{plan.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>}{kind==='horse'&&<label>馬<select className={field} value={horseId} disabled={pending} onChange={e=>setHorseId(e.target.value)}><option value="">選択</option>{editingGroup?.horses.map(h=><option key={h.id} value={h.id}>{h.name} {stallLocation(Object.entries(plan.cells).find(([,c])=>c.kind==='horse'&&c.horseId===h.id)?.[0])}</option>)}</select></label>}</div>
           <label className="block">備考<input className={field} value={note} maxLength={500} disabled={pending} onChange={e=>setNote(e.target.value)}/></label>
           {currentSlot?.wire&&kind==='horse'&&<label className="flex min-h-14 items-center gap-3 rounded-lg bg-amber-100 p-3 font-bold"><input type="checkbox" checked={wire} disabled={pending} onChange={e=>setWire(e.target.checked)}/>この区画にはワイヤーがあります。現場を確認し、例外として馬を配置します</label>}
           <p className="text-sm">配置済みの馬を選ぶと元の区画から移動します。移動先にいた馬は未配置になり、上の要確認に表示されます。</p><button type="button" className={primary} disabled={pending} onClick={applySlot}>この区画に反映</button>
