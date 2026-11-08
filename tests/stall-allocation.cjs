@@ -1,13 +1,19 @@
 require('./register-ts.cjs')
 const assert=require('node:assert/strict')
-const {stalls,standardTR,defaultStallOptions:currentOptions,createStallPlan,groupAllocation,stallPlanIssues,readStallPlan,moveStallGroup,editStall,reconcileStallGroups,stallSourceKey}=require('../lib/master/stall-allocation.ts')
+const {stalls,stallLocation,previewStallMove,standardTR,defaultStallOptions:currentOptions,createStallPlan,groupAllocation,stallPlanIssues,readStallPlan,moveStallGroup,editStall,reconcileStallGroups,stallSourceKey}=require('../lib/master/stall-allocation.ts')
 const {stallPlanSvg,stallPlanPrintHtml}=require('../lib/master/stall-allocation-print.ts')
 // Preserve regression coverage of existing version-1 saved plans without extended layout.
 const defaultStallOptions=groups=>{const {layout,...old}=currentOptions(groups);return {...old,smallMax:3,useSCorridor:true}}
 const group=(id,n,name=id)=>({id,name,horses:Array.from({length:n},(_,i)=>({id:`${id}-h${i}`,name:`馬${i+1}`}))})
 assert.equal(stalls.length,224);assert.equal(stalls.filter(s=>s.wire).length,20)
 assert.equal(stalls.filter(s=>s.barn==='S').length,24)
-for(let b=1;b<=10;b++){const s=stalls.filter(s=>s.barn===String(b));assert.equal(s.length,20);assert.deepEqual(s.filter(s=>!s.wire).map(s=>s.number),Array.from({length:18},(_,i)=>i+1));assert.ok(s.filter(s=>s.wire).every(s=>s.row===4))}
+for (const barn of Array.from({length:10}, (_,i)=>String(i+1))) {
+  const slots=stalls.filter(s=>s.barn===barn)
+  assert.deepEqual(slots.map(s=>s.number), Array.from({length:20},(_,i)=>i+1))
+  assert.deepEqual(slots.filter(s=>s.wire).map(s=>s.number),[5,15])
+  assert.deepEqual(slots.map(s=>s.id.split(':')[1]),['1','2','3','4','TR1','5','6','7','8','9','10','11','12','13','TR2','14','15','16','17','18'])
+}
+assert.deepEqual(stalls.filter(s=>s.barn==='S').map(s=>s.number),Array.from({length:24},(_,i)=>i+1))
 for(const [total,counts] of [[100,[1,1,1,2,2,2,2,3,3,3,4,4,4,5,5,5]],[101,[1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4]],[150,[1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4]],[151,[1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4]],[200,[1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4]]])counts.forEach((expected,i)=>assert.equal(standardTR(total,i+1),expected,`${total}/${i+1}`))
 assert.equal(standardTR(100,17),null);assert.equal(standardTR(150,17),null);assert.equal(standardTR(201,3),null);assert.equal(standardTR(151,32),4)
 const groups=[group('fuji',9,'ライディングクラブフジファーム'),group('small',2),group('a',8),group('b',5)]
@@ -50,5 +56,20 @@ assert.ok(stallPlanIssues(newer).some(s=>s.includes('new')));assert.ok(!Object.v
 assert.equal(stallSourceKey(groups),stallSourceKey([...groups].reverse()));assert.notEqual(stallSourceKey(groups),stallSourceKey(newer.groups))
 const xss=createStallPlan([group('x',1,'<script>alert(1)</script>')],defaultStallOptions([group('x',1)]))
 const svg=stallPlanSvg(xss,'<event>');assert.ok(svg.includes('&lt;script&gt;'));assert.ok(!svg.includes('<script>'));assert.equal((svg.match(/data-slot=/g)||[]).length,224)
-const html=stallPlanPrintHtml(p,'Winter');assert.ok(html.includes('A4 landscape'));assert.ok(html.includes('団体別の割り当て'));assert.ok(html.includes('屋内TRの場所'));assert.ok(html.includes('1厩舎：TR1'));assert.ok(html.includes('TR2'))
+const html=stallPlanPrintHtml(p,'Winter');assert.ok(html.includes('A4 landscape'));assert.ok(html.includes('団体別の割り当て'));assert.ok(html.includes('屋内TRの場所'));assert.ok(html.includes('1厩舎：5・10・15'));assert.ok(!html.includes('W＝ワイヤー区画'));assert.ok(!svg.includes('>W</text>'))
 console.log('PASS: template topology, all TR bands/boundaries, Fuji/S priority, shared tents, first-fit, capacity overflow, manual moves, braced exceptions, identity/dedup, stale reconciliation, escaped print')
+
+// Move a saved horse by its physical slot. Keep the source draft intact while a swap awaits confirmation.
+const beforeMove=JSON.stringify(p), horse=p.cells['1:1'], tack=p.cells['1:TR1']
+assert.equal(horse.kind,'horse');assert.equal(tack.kind,'tr')
+const empty=previewStallMove(p,'1:1','4:5')
+assert.equal(stallLocation('4:5'),'4厩舎 6番')
+assert.equal(empty.swap,false);assert.equal(empty.next.cells['1:1'],undefined);assert.deepEqual(empty.next.cells['4:5'],horse)
+const swap=previewStallMove(p,'1:1','1:TR1')
+assert.deepEqual(swap.wireSlots.map(s=>s.number),[5]);assert.equal(swap.swap,true)
+assert.deepEqual(swap.next.cells['1:TR1'],horse);assert.deepEqual(swap.next.cells['1:1'],tack)
+const undo=previewStallMove(swap.next,'1:TR1','1:1')
+assert.deepEqual(undo.next,p);assert.equal(JSON.stringify(p),beforeMove)
+const blocked=editStall(p,'4:5',{kind:'blocked',groupId:'',horseId:'',note:'修理'},false)
+assert.throws(()=>previewStallMove(blocked,'1:1','4:5'),/使用不可/)
+assert.throws(()=>previewStallMove({...p,options:{...p.options,layout:{...currentOptions(groups).layout,enabledBarns:['S','1','2']}}},'1:1','4:5'),/予備棟/)

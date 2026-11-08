@@ -23,9 +23,9 @@ const settle=async()=>{for(let i=0;i<25;i++)await Promise.resolve()}
  assert.ok(by(n=>n.props?.role==='status'&&String(n.props.children).includes('保存中')))
  release();await settle();assert.ok(by(n=>n.props?.role==='status'&&String(n.props.children).includes('保存が完了')))
  assert.equal(button('保存済みの厩舎割を印刷').props.disabled,false)
- // Select the occupied S stall through the actual whole-map callback.
- by(n=>n.props?.dangerouslySetInnerHTML).props.onClick({target:{closest:()=>({getAttribute:()=> '1:1'})}})
- const slotField=by(n=>n.type==='fieldset'&&nodes(n).some(v=>v.type==='legend'&&React.Children.toArray(v.props.children).join('').includes('1:1')))
+ // Select the occupied stall through the map's editor callback.
+ by(n=>n.props?.onSelect && n.props?.onMove).props.onSelect('1:1')
+ const slotField=by(n=>n.type==='fieldset'&&nodes(n).some(v=>v.type==='legend'&&React.Children.toArray(v.props.children).join('').includes('1厩舎 1番')))
  nodes(slotField).find(n=>n.type==='select').props.onChange({target:{value:'empty'}})
  button('この区画に反映').props.onClick()
  assert.ok(by(n=>n.props?.role==='alert'&&JSON.stringify(n.props.children).includes('未配置')))

@@ -302,3 +302,9 @@
   .reading-list-paper h3 { break-after: avoid; }
   .reading-list-paper table { width: 100%; }
 }
+
+.stall-map [data-slot] { cursor: pointer; user-select: none; }
+.stall-map [data-movable] { cursor: grab; touch-action: none; }
+.stall-map [data-dragging] { cursor: grabbing; }
+.stall-map [data-dragging] > rect { stroke: #2563eb; stroke-width: 4; }
+.stall-map [data-drop-target] > rect { fill: #bfdbfe; stroke: #174aaa; stroke-width: 5; }
