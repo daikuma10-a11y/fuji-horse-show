@@ -308,10 +308,3 @@
 .stall-map [data-dragging] { cursor: grabbing; }
 .stall-map [data-dragging] > rect { stroke: #2563eb; stroke-width: 4; }
 .stall-map [data-drop-target] > rect { fill: #bfdbfe; stroke: #174aaa; stroke-width: 5; }
-
-.stall-legend { padding: .75rem 1rem; border-top: 1px solid #94a3b8; }
-.stall-legend h5 { font-weight: 700; margin-bottom: .5rem; }
-.stall-legend ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .5rem 1rem; }
-.stall-legend li { display: flex; align-items: flex-start; gap: .5rem; line-height: 1.25; color: #111827; }
-.stall-legend li b { min-width: 1.7em; padding: .1em; border: 1px solid #475569; text-align: center; }
-.stall-legend li strong, .stall-legend li small { display: block; overflow-wrap: anywhere; }

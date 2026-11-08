@@ -1,8 +1,8 @@
 require('./register-ts.cjs')
 const assert=require('node:assert/strict')
 const R=require('../lib/master/stall-request.ts'),A=require('../lib/master/stall-allocation.ts')
-const {stallPlanSvg,stallPlanLegendHtml}=require('../lib/master/stall-allocation-print.ts')
-const {layoutClubSigns,signBox}=require('../lib/master/stall-club-signs.ts')
+const {stallPlanSvg,stallPlanPrintHtml}=require('../lib/master/stall-allocation-print.ts')
+const {layoutClubSigns,signBox,rowTop,rowHeight,bayWidth}=require('../lib/master/stall-club-signs.ts')
 const {reviewStallImport,stallRequestId}=require('../lib/winter-stall-requests.ts')
 const g=(id,n,name=id)=>({id,name,horses:Array.from({length:n},(_,i)=>({id:id+'h'+i,name:'検証馬'+i}))})
 const groups=[g('fuji',8,'輸送元クラブ'),g('near',6,'輸送共用クラブ'),g('flex',3,'日程調整クラブ'),g('four',5,'希望棟クラブ'),g('next',3,'隣接希望クラブ')]
@@ -13,9 +13,9 @@ assert.deepEqual(A.stallPlanIssues(p),[]);assert.equal(p.corridors.length,0)
 assert.deepEqual(A.groupAllocation(p,groups[2]).barns,['S']);assert.deepEqual(A.groupAllocation(p,groups[3]).barns,['4']);assert.deepEqual(A.groupAllocation(p,groups[4]).barns,['4'])
 for(const group of groups)for(const b of A.groupAllocation(p,group).barns)assert.equal(A.zoneComponents(p,group.id,b).length,1)
 assert.ok(!A.stalls.some(s=>s.wire&&p.cells[s.id]?.kind==='horse'))
-const svg=stallPlanSvg(p,'合成試験'),legend=stallPlanLegendHtml(p)
+const svg=stallPlanSvg(p,'合成試験'),printed=stallPlanPrintHtml(p,'合成試験')
 for(const group of groups){
-  assert.ok(legend.includes('<strong>'+group.name+'</strong>'))
+  assert.ok(printed.includes(group.name), 'retain full names in the detailed assignments')
   const zones=A.barnIds.flatMap(b=>A.zoneComponents(p,group.id,b))
   assert.equal(svg.split('data-zone-label="'+group.id+'"').length-1,zones.length)
 }
@@ -28,14 +28,26 @@ delete split.options.layout
 split.groups=[g('left',1,'乗馬クラブ東'),g('right',1,'東馬事センター')]
 split.cells=Object.fromEntries([['S:1','left'],['S:3','left'],['S:13','right']].map(([id,groupId])=>[id,{kind:'tr',groupId,horseId:'',note:''}]))
 const layout=layoutClubSigns(split)
-const splitZones=layout.barns.get('S')
+const splitZones=layout.get('S')
 assert.equal(splitZones.length,3)
 for(const {slots,sign,groupId} of splitZones){
-  const s=slots[0],top=layout.tops[s.row],height=layout.heights[s.row],box=signBox(sign,0,top,height)
+  const s=slots[0],top=rowTop(s.row),box=signBox(sign,0)
   assert.equal(sign.lines.map(l=>l.text).join(''),split.groups.find(g=>g.id===groupId).name,'retain distinct names')
-  assert.ok(box.y>=top+36 && box.y+sign.height<=top+height-15,'keep the TR, number and club mark clear')
+  assert.ok(box.y>=top+23 && box.y+sign.height<=top+rowHeight-1,'keep the TR, number and club mark clear')
   assert.ok(box.x>=72*s.side && box.x+sign.width<=72*s.side+64,'stay inside the single bay')
 }
+// The same fixed rectangles are used for an empty plan, this allocation and a sparse legacy plan.
+for(const plan of [p,split,{...p,cells:{}}]){
+  const rendered=stallPlanSvg(plan,'寸法確認')
+  const boxes=[...rendered.matchAll(/<g data-slot="([^"]+)"[^>]*><title>[^<]*<\/title><rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g)]
+  assert.equal(boxes.length,A.stalls.length)
+  for(const [,id,,y,width,height] of boxes){
+    const slot=A.stalls.find(s=>s.id===id)
+    assert.deepEqual([Number(y),Number(width),Number(height)],[rowTop(slot.row),bayWidth,rowHeight],id)
+  }
+}
+assert.ok(!printed.includes('団体記号一覧'))
+assert.ok(printed.includes('団体別の割り当て'))
 const corridorOptions=structuredClone(o);corridorOptions.layout.requests.flex.corridor=true
 const corridorPlan=A.createStallPlan(groups,corridorOptions);assert.equal(A.groupAllocation(corridorPlan,groups[2]).corridor,true);assert.equal(A.groupAllocation(corridorPlan,groups[0]).corridor,false)
 const sameOptions=structuredClone(o);sameOptions.layout.requests.next.relation='same';assert.deepEqual(A.stallPlanIssues(A.createStallPlan(groups,sameOptions)),[])

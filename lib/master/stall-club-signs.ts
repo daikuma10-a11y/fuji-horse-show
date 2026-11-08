@@ -1,9 +1,15 @@
 import {barnIds, zoneComponents, type Stall, type StallPlan} from './stall-allocation'
 
-export const bayWidth = 64, aisleWidth = 8, usualRowHeight = 47, gridTop = 105
-const font = 14, lineHeight = 16, badgeSpace = 15
+export const bayWidth = 64, rowHeight = 64, aisleWidth = 8
+export const rowTop = (row: number) => 105 + row * rowHeight
+// A signed bay has its number, TR and corner mark above this band.
+const signTop = 23, bottomMargin = 1
+
 type SignLine = {text:string; width:number}
-type ClubSign = {row:number; side:number; span:number; width:number; height:number; inset:number; lines:SignLine[]}
+type ClubSign = {
+  row:number; side:number; span:number; width:number; height:number
+  fontSize:number; lineHeight:number; lines:SignLine[]
+}
 type Zone = {groupId:string; name:string; slots:Stall[]; sign:ClubSign}
 
 // Use a short, recognizable part of the registered name, as on the paper plan.
@@ -14,32 +20,37 @@ function mapNames(plan: StallPlan) {
   return plan.groups.map(({name}, i) => shortNames.indexOf(shortNames[i]) === shortNames.lastIndexOf(shortNames[i]) ? shortNames[i] : name)
 }
 
-function textWidth(text: string) {
-  return Array.from(text).reduce((w, c) => w + font * (c === ' ' ? 0.32 : /^[!-~]$/.test(c) ? 0.65 : 1), 0)
+function textWidth(text: string, fontSize: number) {
+  return Array.from(text).reduce((w, c) => w + fontSize * (c === ' ' ? 0.32 : /^[!-~]$/.test(c) ? 0.65 : 1), 0)
 }
 
-function wrapName(name: string, width: number) {
+function wrapName(name: string, width: number, fontSize: number) {
   const normalized = name.replace(/\s+/g, ' ').trim()
-  const naturalWidth = textWidth(normalized)
+  const naturalWidth = textWidth(normalized, fontSize)
   // Keep a name on one line when a little tightening avoids an isolated last character.
-  if (naturalWidth <= width * 1.10) {
-    return {shortened:false, lines:[{text:normalized, width:Math.min(naturalWidth, width)}]}
-  }
-  const rows: string[] = []
+  if (naturalWidth <= width * 1.1) return [{text:normalized, width:Math.min(naturalWidth,width)}]
+  const lines: string[] = []
   let row = ''
   for (const c of Array.from(normalized)) {
-    if (row && textWidth(row + c) > width) { rows.push(row.trimEnd()); row = '' }
+    if (row && textWidth(row + c, fontSize) > width) {
+      lines.push(row.trimEnd())
+      row = ''
+    }
     if (row || c !== ' ') row += c
   }
-  if (row) rows.push(row)
-  const shortened = rows.length > 3
-  if (shortened) {
-    rows.length = 3
-    const last = Array.from(rows[2])
-    while (last.length && textWidth(last.join('') + '…') > width) last.pop()
-    rows[2] = last.join('') + '…'
-  }
-  return {shortened, lines:rows.map(text => ({text,width:textWidth(text)}))}
+  if (row) lines.push(row)
+  return lines.map(text => ({text,width:textWidth(text,fontSize)}))
+}
+
+function fitText(name: string, width: number) {
+  const regular = wrapName(name,width,14)
+  if (regular.length <= 2) return {lines:regular, fontSize:14, lineHeight:16, shortened:false}
+  const compact = wrapName(name,width,11)
+  if (compact.length <= 3) return {lines:compact, fontSize:11, lineHeight:12, shortened:false}
+  const last = Array.from(compact[2].text)
+  while (last.length && textWidth(last.join('')+'…',11) > width) last.pop()
+  const text = last.join('')+'…'
+  return {lines:[...compact.slice(0,2),{text,width:textWidth(text,11)}], fontSize:11, lineHeight:12, shortened:true}
 }
 
 function placeSign(plan: StallPlan, slots: Stall[], name: string): ClubSign {
@@ -50,16 +61,15 @@ function placeSign(plan: StallPlan, slots: Stall[], name: string): ClubSign {
     const choices = across.map(slot => [slot])
     if (across.length === 2) choices.push(across)
     for (const bays of choices) {
-      const span = bays.length, available = span * bayWidth + (span - 1) * aisleWidth - 8
-      const {shortened, lines} = wrapName(name, available - 10)
-      const height = lines.length * lineHeight + 4
+      const span = bays.length
+      const available = span * bayWidth + (span - 1) * aisleWidth - 18
+      const {lines,fontSize,lineHeight,shortened} = fitText(name,available)
       const hasTR = bays.some(s => plan.cells[s.id].kind === 'tr')
-      const inset = hasTR ? 36 : 16 // Below the TR text, or below the stall number.
-      const growth = Math.max(0, inset + height + badgeSpace - usualRowHeight)
-      // Prefer a complete name, then a compact row with the sign over horse bays.
-      const cost = (shortened ? 1000 : 0) + growth + (hasTR ? 15 : 0) + lines.length * 3 + Math.abs(row - middle)
+      const cost = (shortened ? 1000 : 0) + (14 - fontSize) * 10 + (hasTR ? 15 : 0) + lines.length * 3 + Math.abs(row - middle)
       if (!best || cost < best.cost) {
-        best = {cost,sign:{row,side:bays[0].side,span,lines,height,inset,width:Math.max(...lines.map(l => l.width)) + 10}}
+        const width = Math.max(...lines.map(l => l.width)) + 10
+        const height = lines.length * lineHeight + 4
+        best = {cost, sign:{row,side:bays[0].side,span,width,height,fontSize,lineHeight,lines}}
       }
     }
   }
@@ -68,27 +78,21 @@ function placeSign(plan: StallPlan, slots: Stall[], name: string): ClubSign {
 
 export function layoutClubSigns(plan: StallPlan) {
   const names = mapNames(plan), barns = new Map<string, Zone[]>()
-  const heights = Array<number>(12).fill(usualRowHeight)
   for (const barn of barnIds) {
     const zones: Zone[] = []
     plan.groups.forEach((group,i) => {
       for (const slots of zoneComponents(plan,group.id,barn)) {
-        const sign = placeSign(plan,slots,names[i])
-        heights[sign.row] = Math.max(heights[sign.row], sign.inset + sign.height + badgeSpace)
-        zones.push({groupId:group.id,name:group.name,slots,sign})
+        zones.push({groupId:group.id,name:group.name,slots,sign:placeSign(plan,slots,names[i])})
       }
     })
     barns.set(barn,zones)
   }
-  // Keep facing bays and the same row in adjacent barns aligned when a narrow zone needs more space.
-  const tops = [gridTop]
-  heights.forEach(h => tops.push(tops[tops.length - 1] + h))
-  return {barns,heights,tops,extraHeight:tops[12] - gridTop - 12 * usualRowHeight}
+  return barns
 }
 
-export function signBox(sign: ClubSign, barnX: number, rowTop: number, rowHeight: number) {
+export function signBox(sign: ClubSign, barnX: number) {
   const spanWidth = sign.span * bayWidth + (sign.span - 1) * aisleWidth
   const x = barnX + sign.side * (bayWidth + aisleWidth) + (spanWidth - sign.width) / 2
-  const y = rowTop + sign.inset + (rowHeight - sign.inset - badgeSpace - sign.height) / 2
+  const y = rowTop(sign.row) + signTop + (rowHeight - signTop - bottomMargin - sign.height) / 2
   return {x,y}
 }
