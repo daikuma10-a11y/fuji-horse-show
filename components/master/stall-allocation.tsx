@@ -3,6 +3,7 @@ import type {StallRequest} from '@/lib/master/stall-request'
 import { useEffect, useRef, useState } from 'react'
 import type { StableGroup } from '@/lib/master/stable-information'
 import { barnIds, stalls, stallLocation, previewStallMove, tentIds, createStallPlan, defaultStallOptions, editStall, groupAllocation, horseTotal, moveStallGroup, readStallPlan, reconcileStallGroups, stallPlanIssues, stallSourceKey, standardTR, type SavedStallPlan, type StallOptions, type StallPlan, type StallUse } from '@/lib/master/stall-allocation'
+import { openStallPlanFile, stallPlanFile } from '@/lib/master/stall-plan-file'
 import { StallMap } from './stall-map'
 import { stallPlanPrintHtml } from '@/lib/master/stall-allocation-print'
 import { usePrintDocument } from './use-print-document'
@@ -17,8 +18,8 @@ function withRequests(options:StallOptions,groups:StableGroup[],source?:RequestS
  const rows=Object.entries(source??{}).filter(([id])=>groups.some(g=>g.id===id))
  return {...options,layout:{...layout,requests:Object.fromEntries(rows.map(([id,r])=>[id,r.value])),requestVersions:Object.fromEntries(rows.map(([id,r])=>[id,r.revision]))}}
 }
-export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSave,requestSource}: {
-  requestSource?:RequestSource;groups:StableGroup[];eventName:string;active?:boolean;onLoad:()=>Promise<LoadResult>;
+export function MasterStallAllocation({groups,eventName,eventId,active=true,onLoad,onSave,requestSource}: {
+  requestSource?:RequestSource;groups:StableGroup[];eventName:string;eventId:string;active?:boolean;onLoad:()=>Promise<LoadResult>;
   onSave:(plan:StallPlan,expected:string|null)=>Promise<SavedStallPlan>
 }){
   const [plan,setPlan]=useState<StallPlan|null>(null),[saved,setSaved]=useState<SavedStallPlan|null>(null)
@@ -28,6 +29,8 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
   const [barn,setBarn]=useState('1'),[slotId,setSlotId]=useState(''),[kind,setKind]=useState<'empty'|StallUse['kind']>('empty'),[groupId,setGroupId]=useState(''),[horseId,setHorseId]=useState(''),[note,setNote]=useState(''),[wire,setWire]=useState(false)
   const [moveGroup,setMoveGroup]=useState(''),[moveBarn,setMoveBarn]=useState('1')
   const lock=useRef(false),loadedRef=useRef(false),alive=useRef(true),loadRef=useRef(onLoad);loadRef.current=onLoad
+  const [fileBase,setFileBase]=useState<string|null|undefined>(undefined)
+  const expected=fileBase!==undefined?fileBase:(saved?.requestId??null)
   const printer=usePrintDocument(), pending=!!busy||printer.busy
   const dirty=!!plan&&JSON.stringify(plan)!==JSON.stringify(saved?.plan)
   const freshSource=source
@@ -49,7 +52,7 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
   }
   async function reload(){await run('保存済みの厩舎割を読み込み中…',async()=>{
     const r=await loadRef.current();if(!alive.current)return
-    setSource(r.groups);setSaved(r.saved);setPlan(r.saved?.plan??null);setOptions(r.saved?.plan.options??defaultStallOptions(r.groups));setLoaded(true);setDiscard(false);setReplace(false);setSlotId('');setNotice(r.saved?'保存済みの厩舎割を読み込みました。':'まだ厩舎割は作成されていません。')
+    setSource(r.groups);setSaved(r.saved);setFileBase(undefined);setPlan(r.saved?.plan??null);setOptions(r.saved?.plan.options??defaultStallOptions(r.groups));setLoaded(true);setDiscard(false);setReplace(false);setSlotId('');setNotice(r.saved?'保存済みの厩舎割を読み込みました。':'まだ厩舎割は作成されていません。')
   })}
   function change(p:StallPlan){setPlan(p);setOptions(p.options);setNotice('変更しました。まだ保存していません。');setError('')}
   function changeOptions(o:StallOptions){setOptions(o);if(plan)change({...plan,options:o})}
@@ -59,13 +62,56 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
       const r=await loadRef.current();if(!alive.current)return
       if((r.saved?.requestId??null)!==(saved?.requestId??null))throw new Error('別の端末で厩舎割が更新されています。保存済みの内容を読み直してください。')
       const p=createStallPlan(r.groups,withRequests(options,r.groups,r.requestSource))
-      setSource(r.groups);setPlan(p);setOptions(p.options);setReplace(false);setSlotId('');setNotice('配置案を作成しました。内容を確認し「厩舎割を保存」を押してください。まだ保存していません。')
+      setSource(r.groups);setFileBase(undefined);setPlan(p);setOptions(p.options);setReplace(false);setSlotId('');setNotice('配置案を作成しました。内容を確認し「厩舎割を保存」を押してください。まだ保存していません。')
     })
   }
-  async function save(){if(!plan)return;await run('厩舎割を保存中…',async()=>{
-    const valid=readStallPlan(plan),r=await onSave(valid,saved?.requestId??null)
-    if(!alive.current)return;setSaved(r);setPlan(r.plan);setNotice(`保存が完了しました（${new Date(r.savedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}）。`)
-  })}
+  async function save() {
+    if (!plan) return
+    const draft = plan
+    await run('厩舎割を保存中…', async () => {
+      for (let attempt=0; attempt<2; attempt++) {
+        const current = await loadRef.current()
+        if (!alive.current) return
+        const value = reconcileStallGroups(draft, current.groups)
+        if (current.requestSource !== undefined) value.options = withRequests(value.options, current.groups, current.requestSource)
+        let result = current.saved
+        if (!result || JSON.stringify(result.plan) !== JSON.stringify(value)) {
+          if ((result?.requestId ?? null) !== expected) throw new Error('別の端末で厩舎割が更新されています。現在の配置は端末ファイルにも保存できます。')
+          try {
+            result = await onSave(readStallPlan(value), expected)
+          } catch (e) {
+            // The request/roster can change between the read and the version-checked write.
+            if (!attempt && e instanceof Error && /要望が更新|保存済みの厩舎割要望|団体情報が変わ|参加馬情報が変わ|参加馬の頭数が変わ/.test(e.message)) continue
+            throw e
+          }
+        }
+        if (!alive.current) return
+        setSource(current.groups);setSaved(result);setPlan(result.plan);setOptions(result.plan.options);setFileBase(undefined)
+        setNotice(`保存が完了しました（${new Date(result.savedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}）。`)
+        return
+      }
+    })
+  }
+  function downloadPlan() {
+    if (!plan) return
+    try {
+      const blob = new Blob([stallPlanFile(eventId,expected,plan)],{type:'application/json'})
+      const url = URL.createObjectURL(blob), link = document.createElement('a')
+      link.href=url;link.download=eventName+'-厩舎割.json';link.click()
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000)
+      setNotice('現在の配置を端末ファイルに書き出しました。')
+    } catch (e) {setError(e instanceof Error ? e.message : 'ファイルに保存できませんでした。')}
+  }
+  async function restoreFile(file: File) {
+    if (dirty && !window.confirm('編集中の配置をファイルの内容に置き換えますか？')) return
+    await run('厩舎割ファイルを開いています…',async()=>{
+      const data=openStallPlanFile(await file.text(),eventId)
+      if (!alive.current) return
+      loadedRef.current=true
+      setPlan(data.plan);setOptions(data.plan.options);setFileBase(data.expected);setSlotId('');setLoaded(true)
+      setNotice('ファイルの配置を開きました。本部へ保存するには「厩舎割を保存」を押してください。')
+    })
+  }
   function selectSlot(id:string, selectedPlan=plan){if(!selectedPlan)return;const s=stalls.find(s=>s.id===id);if(!s)return;const c=selectedPlan.cells[id];setSlotId(id);setBarn(s.barn);setKind(c?.kind??'empty');setGroupId(c?.groupId??'');setHorseId(c?.horseId??'');setNote(c?.note??'');setWire(selectedPlan.wireHorseSlots.includes(id));setError('')}
   function moveSlot(fromId: string, toId: string) {
     if (!plan || pending || lock.current) return
@@ -102,13 +148,13 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
       <p className="my-3">TRは道具・餌の保管場所です。ワイヤー区画は自動では馬を配置しません。151頭以上は各厩舎にTR2枠分のテントを確保します。テントは厩舎内で共有し、通常厩舎では各団体に屋内TRを最低1つ確保します。</p>
       <div className="grid gap-4 md:grid-cols-3">
         <label>S厩舎の優先団体<select className={field} disabled={pending} value={options.priorityId} onChange={e=>changeOptions({...options,priorityId:e.target.value})}><option value="">指定なし</option>{allGroups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
-        <label>Sに優先する少頭数団体（頭以下）<input className={field} type="number" min="0" max="24" disabled={pending} value={options.smallMax} onChange={e=>changeOptions({...options,smallMax:Number(e.target.value)})}/></label>
+        <label>Sに優先する少頭数団体（頭以下）<input className={field} type="number" min="0" max="24" disabled={pending} value={options.smallMax} onChange={e=>changeOptions({...options,smallMax:Math.min(24,Math.max(0,Math.round(Number(e.target.value)||0)))})}/></label>
       </div>
-      <div className="my-3 space-y-3"><strong>使用する厩舎（外した棟は予備）</strong><div className="flex flex-wrap gap-3">{barnIds.map(b=><label key={b} className="flex min-h-12 items-center gap-2"><input type="checkbox" disabled={pending} checked={(options.layout?.enabledBarns??barnIds).includes(b)} onChange={e=>{const l=options.layout??defaultStallOptions(allGroups).layout!;changeOptions({...options,layout:{...l,enabledBarns:e.target.checked?barnIds.filter(x=>x===b||l.enabledBarns.includes(x)):l.enabledBarns.filter(x=>x!==b)}})}}/>{b}厩舎</label>)}</div><label className="block">通常厩舎の目安頭数（空きが足りない場合は超過して要確認表示）<input type="number" className={field} min={1} max={18} disabled={pending} value={options.layout?.normalHorseLimit??13} onChange={e=>changeOptions({...options,layout:{...(options.layout??defaultStallOptions(allGroups).layout!),normalHorseLimit:Number(e.target.value)}})}/></label><label className="flex min-h-12 items-center gap-3"><input type="checkbox" disabled={pending} checked={options.layout?.extraTR??false} onChange={e=>changeOptions({...options,layout:{...(options.layout??defaultStallOptions(allGroups).layout!),extraTR:e.target.checked}})}/>使用する棟の余裕を、各団体に隣接する追加TRとして配分する</label><p>TR表は最低必要数です。Sの通路利用は団体別の要望で個別に指定します。頭数の目安・予備棟・追加TRは大会ごとに調整してください。</p></div>
+      <div className="my-3 space-y-3"><strong>使用する厩舎（外した棟は予備）</strong><div className="flex flex-wrap gap-3">{barnIds.map(b=><label key={b} className="flex min-h-12 items-center gap-2"><input type="checkbox" disabled={pending||options.layout?.enabledBarns.length===1&&options.layout.enabledBarns[0]===b} checked={(options.layout?.enabledBarns??barnIds).includes(b)} onChange={e=>{const l=options.layout??defaultStallOptions(allGroups).layout!;changeOptions({...options,layout:{...l,enabledBarns:e.target.checked?barnIds.filter(x=>x===b||l.enabledBarns.includes(x)):l.enabledBarns.filter(x=>x!==b)}})}}/>{b}厩舎</label>)}</div><label className="block">通常厩舎の自動配置の目安頭数<input type="number" className={field} min={1} max={18} disabled={pending} value={options.layout?.normalHorseLimit??13} onChange={e=>changeOptions({...options,layout:{...(options.layout??defaultStallOptions(allGroups).layout!),normalHorseLimit:Math.min(18,Math.max(1,Math.round(Number(e.target.value)||13)))}})}/></label><label className="flex min-h-12 items-center gap-3"><input type="checkbox" disabled={pending} checked={options.layout?.extraTR??false} onChange={e=>changeOptions({...options,layout:{...(options.layout??defaultStallOptions(allGroups).layout!),extraTR:e.target.checked}})}/>使用する棟の余裕を、各団体に隣接する追加TRとして配分する</label><p>TR表は自動配置の目安です。Sの通路利用は団体別の要望で個別に指定します。頭数の目安・予備棟・追加TRは大会ごとに調整してください。</p></div>
       <p className="mt-3 text-sm">優先団体・少頭数・使用棟・目安頭数の設定は、配置案の再作成時に反映します。Sの通路利用は要望で個別に指定し、作成済みの割り当ても団体別一覧で変更できます。</p>
       <table className="my-3 w-full border-collapse text-sm"><thead><tr><th>大会総頭数</th><th>団体の頭数 → TR数</th></tr></thead><tbody><tr><td>1〜100</td><td>1〜3 → 1 ／ 4〜7 → 2 ／ 8〜10 → 3 ／ 11〜13 → 4 ／ 14〜16 → 5</td></tr><tr><td>101〜150</td><td>1〜4 → 1 ／ 5〜8 → 2 ／ 9〜12 → 3 ／ 13〜16 → 4</td></tr><tr><td>151〜200</td><td>1〜5 → 1 ／ 6〜10 → 2 ／ 11〜15 → 3 ／ 16以上 → 4</td></tr></tbody></table>
-      <h4 className="font-bold">TR数を個別に指定する</h4><p>200頭超、150頭以下で17頭以上の団体は個別指定が必要です。変更する場合は理由も入力してください。</p>
-      <div className="grid gap-3 md:grid-cols-2">{allGroups.map(g=>{const override=options.trOverrides[g.id],standard=standardTR(horseTotal(allGroups),g.horses.length);return <div key={g.id} className={`rounded-lg border p-3 ${standard===null?'bg-amber-50':''}`}><label className="block">{g.name}（{g.horses.length}頭・基準{standard??'未設定'}）<input aria-label={`${g.name}の個別TR数`} className={field} type="number" min="1" max="50" placeholder="基準を使用" disabled={pending} value={override?.count??''} onChange={e=>{const v={...options.trOverrides};if(!e.target.value)delete v[g.id];else v[g.id]={count:Number(e.target.value),reason:v[g.id]?.reason??''};changeOptions({...options,trOverrides:v})}}/></label>{override&&<label>個別指定の理由<input className={field} disabled={pending} value={override.reason} onChange={e=>changeOptions({...options,trOverrides:{...options.trOverrides,[g.id]:{...override,reason:e.target.value}}})}/></label>}</div>})}</div>
+      <h4 className="font-bold">TR数を個別に指定する</h4><p>表に目安がない団体には、個別指定がなければTRを1室分見込んで自動配置します。</p>
+      <div className="grid gap-3 md:grid-cols-2">{allGroups.map(g=>{const override=options.trOverrides[g.id],standard=standardTR(horseTotal(allGroups),g.horses.length);return <div key={g.id} className={`rounded-lg border p-3 ${standard===null?'bg-amber-50':''}`}><label className="block">{g.name}（{g.horses.length}頭・基準{standard??'未設定'}）<input aria-label={`${g.name}の個別TR数`} className={field} type="number" min="1" max="50" placeholder="基準を使用" disabled={pending} value={override?.count??''} onChange={e=>{const v={...options.trOverrides};if(!e.target.value)delete v[g.id];else {const count=Number(e.target.value);if(!Number.isInteger(count)||count<1||count>50)return;v[g.id]={count,reason:v[g.id]?.reason||'管理者による個別指定'}};changeOptions({...options,trOverrides:v})}}/></label>{override&&<label>補足（任意）<input className={field} maxLength={500} disabled={pending} value={override.reason==='管理者による個別指定'?'':override.reason} onChange={e=>changeOptions({...options,trOverrides:{...options.trOverrides,[g.id]:{...override,reason:e.target.value.trim()?e.target.value:'管理者による個別指定'}}})}/></label>}</div>})}</div>
     </details>
     <label className="flex min-h-14 items-center gap-3 rounded-xl border-2 p-3 font-bold"><input type="checkbox" className="h-6 w-6" checked={complete} disabled={pending} onChange={e=>setComplete(e.target.checked)}/>申込締切を過ぎ、全団体の読み込みが完了しました</label>
     {plan&&<label className="flex min-h-12 items-center gap-3"><input type="checkbox" checked={replace} disabled={pending} onChange={e=>setReplace(e.target.checked)}/>配置案を作り直す（現在の手動配置は置き換わります）</label>}
@@ -118,16 +164,14 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
     {notice&&<p role="status" className="rounded-lg bg-emerald-50 p-4 font-bold text-emerald-900">{notice}</p>}
     {error&&<p role="alert" className="rounded-lg bg-red-50 p-4 font-bold text-red-900">{error}</p>}
     {plan&&<>
-      {requestsStale&&<div role="alert" className="rounded-lg bg-amber-100 p-4"><p>保存後に団体の厩舎割要望が変わりました。配置を保持して条件を読み込み、未反映の希望を確認してください。</p><button className={secondary} disabled={pending} onClick={()=>void run('最新の要望を読み込み中…',async()=>{const r=await loadRef.current();if((r.saved?.requestId??null)!==(saved?.requestId??null))throw new Error('別の端末で厩舎割が更新されています。読み直してください。');change({...plan,options:withRequests(plan.options,plan.groups,r.requestSource)})})}>最新の要望を配置条件に反映（配置を維持）</button></div>}
-
-      {stale&&<div role="alert" className="rounded-lg bg-amber-100 p-4"><p className="font-bold">登録団体・馬が作成時から変わっています。保存・印刷の前に更新してください。</p><button className={secondary} disabled={pending} onClick={()=>void run('最新の参加馬を確認中…',async()=>{const r=await loadRef.current();setSource(r.groups);change(reconcileStallGroups(plan,r.groups))})}>最新の団体・頭数を反映（配置を維持）</button></div>}
-      <p className="font-bold">{dirty?'編集中・未保存':'保存済み'} ／ 未配置 {horseTotal(plan.groups)-Object.values(plan.cells).filter(c=>c.kind==='horse').length}頭 ／ 要確認 {issues.length}件</p>
-      {!!issues.length&&<div role="alert" className="rounded-xl border-2 border-amber-500 bg-amber-50 p-4"><strong>次の箇所を修正してください。未完成のまま下書き保存できます。</strong><ul className="list-disc pl-5">{issues.map((v,i)=><li key={i}>{v}</li>)}</ul></div>}
+      {(requestsStale||stale)&&<p>名簿または要望に更新があります。保存時に最新の内容を読み込みます。</p>}
+      <p className="font-bold">{dirty?'編集中・未保存':'保存済み'} ／ 未配置 {horseTotal(plan.groups)-Object.values(plan.cells).filter(c=>c.kind==='horse').length}頭</p>
+      {!!issues.length&&<details className="rounded-lg border p-3"><summary className="cursor-pointer">自動配置の参考情報（{issues.length}件）</summary><ul className="list-disc pl-5">{issues.map((v,i)=><li key={i}>{v}</li>)}</ul></details>}
       {!!plan.wireHorseSlots.length&&<p className="rounded-lg bg-amber-50 p-3">ワイヤー区画に手動配置した馬があります：{plan.wireHorseSlots.map(stallLocation).join('、')}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-xl font-bold">全体図</h4><a href="#stall-save-print" className="font-bold underline underline-offset-4">保存・印刷へ</a></div><p>馬やTRを移動先の馬房へドラッグしてください。馬房をクリックすると、下の編集欄が開きます。</p>
       <StallMap plan={plan} eventName={eventName} disabled={pending} onSelect={selectSlot} onMove={moveSlot}/>
       <details className="rounded-xl border-2 p-4" open><summary className="cursor-pointer text-xl font-bold">団体別の割り当て・まとめて移動</summary>
-        <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>団体</th><th>配置／頭数</th><th>厩舎</th><th>屋内TR</th><th>テント</th><th>S通路利用</th><th>要望の反映</th></tr></thead><tbody>{plan.groups.map(g=>{const a=groupAllocation(plan,g);return <tr key={g.id} className="border-t"><td className="py-3">{g.name}</td><td>{a.horses}／{g.horses.length}</td><td>{a.barns.join('・')||'未配置'}</td><td>{a.indoor}（必要{a.needed??'未設定'}）</td><td>{a.tent}</td><td><label><input aria-label={`${g.name}のS通路利用`} type="checkbox" disabled={pending} checked={plan.corridors.includes(g.id)} onChange={e=>change({...plan,corridors:e.target.checked?[...plan.corridors,g.id]:plan.corridors.filter(id=>id!==g.id)})}/>利用</label>{plan.corridors.includes(g.id)&&!a.corridor&&<small className="block text-amber-800">全頭をSに配置すると有効</small>}</td><td>{!plan.options.layout?.requests[g.id]?'指定なし':requestsStale?'更新あり':issues.some(i=>i.startsWith(g.name+'：'))?'未反映・要確認':'条件を満たしています'}</td></tr>})}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>団体</th><th>配置／頭数</th><th>厩舎</th><th>屋内TR</th><th>テント</th><th>S通路利用</th><th>要望の反映</th></tr></thead><tbody>{plan.groups.map(g=>{const a=groupAllocation(plan,g);return <tr key={g.id} className="border-t"><td className="py-3">{g.name}</td><td>{a.horses}／{g.horses.length}</td><td>{a.barns.join('・')||'未配置'}</td><td>{a.indoor}（目安{a.needed??'未設定'}）</td><td>{a.tent}</td><td><label><input aria-label={`${g.name}のS通路利用`} type="checkbox" disabled={pending} checked={plan.corridors.includes(g.id)} onChange={e=>change({...plan,corridors:e.target.checked?[...plan.corridors,g.id]:plan.corridors.filter(id=>id!==g.id)})}/>利用</label>{plan.corridors.includes(g.id)&&!a.corridor&&<small className="block text-amber-800">全頭をSに配置すると有効</small>}</td><td>{!plan.options.layout?.requests[g.id]?'指定なし':requestsStale?'更新あり':issues.some(i=>i.startsWith(g.name+'：'))?'目安との差あり':'反映済み'}</td></tr>})}</tbody></table></div>
         <div className="mt-4 grid gap-3 md:grid-cols-3"><label>移動する団体<select className={field} disabled={pending} value={moveGroup} onChange={e=>setMoveGroup(e.target.value)}><option value="">選択してください</option>{plan.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label><label>移動先<select className={field} disabled={pending} value={moveBarn} onChange={e=>setMoveBarn(e.target.value)}>{barnIds.map(id=><option key={id} value={id}>{id}厩舎</option>)}</select></label><button className={secondary} disabled={pending||!moveGroup} onClick={()=>{try{change(moveStallGroup(plan,moveGroup,moveBarn))}catch(e){setError(e instanceof Error?e.message:'移動できません')}}}>この団体の馬とTRを移動</button></div>
       </details>
       <div className="space-y-3 rounded-xl border-2 p-4"><h4 className="text-xl font-bold">馬房ごとに修正する</h4>
@@ -141,10 +185,17 @@ export function MasterStallAllocation({groups,eventName,active=true,onLoad,onSav
         </fieldset>}
         {horseTotal(plan.groups)>150&&barn!=='S'&&<fieldset className="rounded-lg border bg-blue-50 p-3"><legend>この厩舎の仮設テント（TR2枠分）</legend>{tentIds.filter(id=>id.startsWith(`${barn}:`)).map((id,i)=><label key={id} className="block">荷物枠{i+1}<select className={field} disabled={pending} value={plan.tents[id]??''} onChange={e=>{const tents={...plan.tents};if(e.target.value)tents[id]=e.target.value;else delete tents[id];change({...plan,tents})}}><option value="">未使用</option>{plan.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>)}</fieldset>}
       </div>
-      <div id="stall-save-print" className="flex scroll-mt-4 flex-wrap gap-3"><button className={primary} disabled={pending||stale||requestsStale||!dirty} onClick={()=>void save()}>{issues.length?'厩舎割を下書き保存':'厩舎割を保存'}</button><button className={secondary} disabled={pending||dirty||stale||requestsStale||!!issues.length||!saved} onClick={()=>void printer.print(async()=>{const r=await loadRef.current();if(!r.saved)throw new Error('保存済みの厩舎割がありません。');if(r.saved.requestId!==saved?.requestId)throw new Error('別の端末で厩舎割が更新されています。保存済みの内容を読み直してから印刷してください。');if(stallSourceKey(r.groups)!==stallSourceKey(r.saved.plan.groups))throw new Error('登録内容が変わっています。厩舎割を更新してください。');if(r.requestSource&&JSON.stringify(Object.entries(r.saved.plan.options.layout?.requestVersions??{}).sort())!==JSON.stringify(Object.entries(r.requestSource).filter(([id])=>r.groups.some(g=>g.id===id)).map(([id,v])=>[id,v.revision]).sort()))throw new Error('厩舎割要望が変わっています。最新の要望を配置条件に反映してください。');return stallPlanPrintHtml(r.saved.plan,eventName)},'横')}>保存済みの厩舎割を印刷</button></div>
-      {issues.length>0?<p className="font-bold text-amber-800">要確認が{issues.length}件あります。全体図の上にある指摘を解消して保存すると印刷できます。</p>:dirty&&<p className="font-bold text-amber-800">未保存の変更があります。保存してから印刷してください。</p>}
+      <div id="stall-save-print" className="flex scroll-mt-4 flex-wrap gap-3">
+        <button className={primary} disabled={pending} onClick={()=>void save()}>厩舎割を保存</button>
+        <button className={secondary} disabled={printer.busy} onClick={()=>void printer.print(async()=>stallPlanPrintHtml(plan,eventName),'横')}>現在の厩舎割を印刷</button>
+      </div>
       {saved&&<p>最終保存：{new Date(saved.savedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>}
       {printer.notice&&<p role="status">{printer.notice}</p>}{printer.error&&<p role="alert">{printer.error}</p>}
     </>}
+    <details className="rounded-lg border p-3"><summary className="cursor-pointer font-bold">端末に保存・ファイルから再開</summary>
+      <div className="my-2 flex flex-wrap gap-3">{plan&&<button type="button" className={secondary} onClick={downloadPlan}>現在の配置をファイルに保存</button>}
+        <label className={secondary}>厩舎割ファイルを開く<input type="file" accept=".json" className="block" disabled={pending} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void restoreFile(file)}}/></label>
+      </div>
+    </details>
   </section>
 }

@@ -5,8 +5,8 @@ const hooks={useState(initial){const i=index++;values[i]??={value:typeof initial
 const old=Module._load;Module._load=function(name,...args){return name==='react'?{...React,...hooks}:old.call(this,name,...args)}
 const {MasterStallAllocation}=require('../components/master/stall-allocation.tsx')
 const groups=[{id:'a',name:'架空団体',horses:[{id:'h1',name:'架空馬'}]}]
-let saved=null,saveCalls=0,release,fail=false
-const props={groups,eventName:'Winter',onLoad:async()=>({groups,saved}),onSave:async(plan,expected)=>{saveCalls++;assert.equal(expected,saved?.requestId??null);await new Promise(r=>release=r);if(fail)throw Error('別端末で更新');return saved={plan,requestId:'a'.repeat(64),savedAt:'2026-10-30T00:00:00Z'}}}
+let saved=null,saveCalls=0,release,fail=false,source=groups,requestSource={}
+const props={groups,eventName:'Winter',eventId:'winter-test',onLoad:async()=>({groups:source,saved,requestSource}),onSave:async(plan,expected)=>{saveCalls++;assert.equal(expected,saved?.requestId??null);await new Promise(r=>release=r);if(fail)throw Error('別端末で更新');return saved={plan,requestId:'a'.repeat(64),savedAt:'2026-10-30T00:00:00Z'}}}
 const render=()=>{index=0;return MasterStallAllocation(props)}
 const nodes=n=>!n||typeof n!=='object'?[]:[n,...React.Children.toArray(n.props?.children).flatMap(nodes)]
 const by=fn=>nodes(render()).find(fn),button=label=>by(n=>n.type==='button'&&n.props.children===label)
@@ -18,21 +18,32 @@ const settle=async()=>{for(let i=0;i<25;i++)await Promise.resolve()}
  nodes(completed).find(n=>n.type==='input').props.onChange({target:{checked:true}})
  button('厩舎割を作成').props.onClick();await settle()
  assert.ok(by(n=>n.props?.role==='status'&&String(n.props.children).includes('まだ保存')))
- assert.equal(button('保存済みの厩舎割を印刷').props.disabled,true)
+ assert.equal(button('現在の厩舎割を印刷').props.disabled,false)
  button('厩舎割を保存').props.onClick();button('厩舎割を保存').props.onClick();await settle();assert.equal(saveCalls,1)
  assert.ok(by(n=>n.props?.role==='status'&&String(n.props.children).includes('保存中')))
  release();await settle();assert.ok(by(n=>n.props?.role==='status'&&String(n.props.children).includes('保存が完了')))
- assert.equal(button('保存済みの厩舎割を印刷').props.disabled,false)
+ assert.equal(button('現在の厩舎割を印刷').props.disabled,false)
  // Select the occupied stall through the map's editor callback.
  by(n=>n.props?.onSelect && n.props?.onMove).props.onSelect('1:1')
  const slotField=by(n=>n.type==='fieldset'&&nodes(n).some(v=>v.type==='legend'&&React.Children.toArray(v.props.children).join('').includes('1厩舎 1番')))
  nodes(slotField).find(n=>n.type==='select').props.onChange({target:{value:'empty'}})
  button('この区画に反映').props.onClick()
- assert.ok(by(n=>n.props?.role==='alert'&&JSON.stringify(n.props.children).includes('未配置')))
- assert.equal(button('保存済みの厩舎割を印刷').props.disabled,true)
- fail=true;button('厩舎割を下書き保存').props.onClick();await settle();release();await settle()
+ assert.ok(by(n=>n.type==='li'&&String(n.props.children).includes('未配置')))
+ assert.equal(button('現在の厩舎割を印刷').props.disabled,false)
+ fail=true;button('厩舎割を保存').props.onClick();await settle();release();await settle()
  assert.ok(by(n=>n.props?.role==='alert'&&String(n.props.children).includes('別端末')))
- assert.ok(button('厩舎割を下書き保存'),'failed save keeps editable incomplete plan')
+ assert.ok(button('厩舎割を保存'),'failed save keeps editable incomplete plan')
+ // A changed request and a newly registered horse are picked up without changing the draft cells.
+ fail=false
+ source=[{...groups[0],horses:[...groups[0].horses,{id:'h2',name:'追加馬'}]}]
+ requestSource={a:{revision:'b'.repeat(64),value:{...require('../lib/master/stall-request.ts').emptyStallRequest(),manual:'21'}}}
+ const edited=structuredClone(by(n=>n.props?.onSelect&&n.props?.onMove).props.plan.cells)
+ button('厩舎割を保存').props.onClick();await settle();release();await settle()
+ assert.equal(saved.plan.groups[0].horses.length,2);assert.deepEqual(saved.plan.cells,edited)
+ assert.equal(saved.plan.options.layout.requestVersions.a,'b'.repeat(64))
+ assert.equal(saved.plan.options.layout.requests.a.confirmed,false)
+ const priorCalls=saveCalls
+ button('厩舎割を保存').props.onClick();await settle();assert.equal(saveCalls,priorCalls)
  Module._load=old
- console.log('PASS: readiness gate, explicit generation, progress/success/failure, double-tap save lock, saved-only printing, map editing, unplaced warning, failure preserves draft')
+ console.log('PASS: readiness gate, explicit generation, progress/success/failure, double-tap save lock, current draft printing, automatic request and roster refresh, unplaced horse, failure preserves draft')
 })().catch(e=>{console.error(e);process.exit(1)})
