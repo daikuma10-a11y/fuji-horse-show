@@ -2,7 +2,7 @@
 
 import {useEffect, useMemo, useRef, type PointerEvent} from 'react'
 import {stallLocation, type StallPlan} from '@/lib/master/stall-allocation'
-import {stallPlanSvg} from '@/lib/master/stall-allocation-print'
+import {stallPlanLegendHtml, stallPlanSvg} from '@/lib/master/stall-allocation-print'
 
 type Props = {
   plan: StallPlan
@@ -20,7 +20,7 @@ function slotAt(element: EventTarget | null) {
 }
 
 export function StallMap({plan, eventName, disabled, onSelect, onMove}: Props) {
-  const markup = useMemo(() => ({__html: stallPlanSvg(plan, eventName)}), [plan, eventName])
+  const markup = useMemo(() => ({__html: stallPlanSvg(plan, eventName) + stallPlanLegendHtml(plan)}), [plan, eventName])
   const gesture = useRef<Gesture | null>(null)
   const skipClick = useRef(false)
   const ghost = useRef<HTMLSpanElement>(null)
