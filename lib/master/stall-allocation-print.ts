@@ -1,4 +1,5 @@
-import { barnIds, stalls, stallLocation, horseTotal, groupAllocation, zoneComponents, type StallPlan } from './stall-allocation'
+import { barnIds, stalls, stallLocation, horseTotal, groupAllocation, type StallPlan } from './stall-allocation'
+import {aisleWidth, bayWidth, layoutClubSigns, signBox} from './stall-club-signs'
 const esc=(v:string)=>v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))
 const palette=['#dcecff','#ffe3d3','#e0f1d9','#efe0ff','#fff2bf','#d7f2ed','#f9dfe9','#e4e6f8','#f0e5d4','#d8ecdc','#f6dfc9','#e2f0fa']
 const lines=(text:string,max:number)=>Array.from(text).reduce<string[]>((a,c)=>{if(!a.length||Array.from(a[a.length-1]).length>=max)a.push(c);else a[a.length-1]+=c;return a},[])
@@ -27,15 +28,17 @@ export function stallPlanLegendHtml(plan: StallPlan): string {
 
 /** Original master topology: S at left; 1..10; two stall columns; facilities below. */
 export function stallPlanSvg(p:StallPlan,eventName:string):string{
+  const layout = layoutClubSigns(p)
+  const svgHeight = 980 + layout.extraHeight
   const colors=new Map(p.groups.map((g,i)=>[g.id,palette[i%palette.length]])), names=new Map(p.groups.map(g=>[g.id,g.name])), marks=new Map(p.groups.map((g,i)=>[g.id,clubMark(i)])), horseNames=new Map(p.groups.flatMap(g=>g.horses.map(h=>[h.id,h.name] as const)))
   const text=(x:number,y:number,t:string,size=14)=>`<text x="${x}" y="${y}" text-anchor="middle" font-size="${size}">${esc(t)}</text>`
   const label=(x:number,y:number,t:string,width:number,size=14)=>lines(t,Math.max(3,Math.floor(width/size))).map((s,i)=>text(x,y+i*(size+2),s,size)).join('')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1680 980" role="img" aria-label="厩舎割 全体図" style="width:100%;height:auto;font-family:Arial,'Yu Gothic',Meiryo,sans-serif;background:white;color:#111"><rect width="1680" height="980" fill="white"/>${text(840,28,'競 技 場 側',22)}${barnIds.map((barn,i)=>{
-    const x=15+i*151, y=105,w=64,h=47
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1680 ${svgHeight}" role="img" aria-label="厩舎割 全体図" style="width:100%;height:auto;font-family:Arial,'Yu Gothic',Meiryo,sans-serif;background:white;color:#111"><rect width="1680" height="${svgHeight}" fill="white"/>${text(840,28,'競 技 場 側',22)}${barnIds.map((barn,i)=>{
+    const x=15+i*151, w=bayWidth
     const local=stalls.filter(s=>s.barn===barn), used=local.filter(s=>p.cells[s.id]?.kind==='horse').length
     const cells=local.map(s=>{
       const c=p.cells[s.id],owner=c?.groupId??'',color=owner?colors.get(owner):c?.kind==='blocked'?'#ddd':'white'
-      const cx=x+s.side*(w+8),cy=y+s.row*h
+      const cx=x+s.side*(w+aisleWidth),cy=layout.tops[s.row],h=layout.heights[s.row]
       const description=`${barn}厩舎 ${s.number} ${c?.kind==='horse'?horseNames.get(c.horseId)??'':c?.kind==='tr'?'TR':c?.kind==='blocked'?'使用不可':'空き'} ${names.get(owner)??''}`
       const mark = marks.get(owner)
       const badge = mark ? `<text x="${cx+w-4}" y="${cy+h-2}" text-anchor="end" font-size="11" font-weight="bold">${mark}</text>` : ''
@@ -44,10 +47,10 @@ export function stallPlanSvg(p:StallPlan,eventName:string):string{
     }).join('')
     let blocks=''
     // Keep the zone boundary, including the aisle between facing bays.
-    if(p.options.layout)for(const group of p.groups)for(const zone of zoneComponents(p,group.id,barn)){
-      const owned=new Set(zone.map(s=>`${s.side}:${s.row}`))
+    for(const zone of layout.barns.get(barn)!){
+      const owned=new Set(zone.slots.map(s=>`${s.side}:${s.row}`))
       let edges=''
-      for(const s of zone){const left=x+s.side*(w+8),right=left+w,top=y+s.row*h,bottom=top+h,opposite=owned.has(`${1-s.side}:${s.row}`)
+      for(const s of zone.slots){const left=x+s.side*(w+aisleWidth),right=left+w,top=layout.tops[s.row],bottom=layout.tops[s.row+1],opposite=owned.has(`${1-s.side}:${s.row}`)
         if(!owned.has(`${s.side}:${s.row-1}`))edges+=`M${left},${top}H${right}`
         if(!owned.has(`${s.side}:${s.row+1}`))edges+=`M${left},${bottom}H${right}`
         if(s.side===0||!opposite)edges+=`M${left},${top}V${bottom}`
@@ -55,10 +58,13 @@ export function stallPlanSvg(p:StallPlan,eventName:string):string{
         if(s.side===0&&opposite){if(!(owned.has(`0:${s.row-1}`)&&owned.has(`1:${s.row-1}`)))edges+=`M${right},${top}h8`;if(!(owned.has(`0:${s.row+1}`)&&owned.has(`1:${s.row+1}`)))edges+=`M${right},${bottom}h8`}
       }
       blocks+=`<path d="${edges}" fill="none" stroke="#222" stroke-width="3" pointer-events="none"/>`
+      const sign=zone.sign, box=signBox(sign,x,layout.tops[sign.row],layout.heights[sign.row])
+      const ink=sign.lines.map((l,n)=>`<text x="${box.x+sign.width/2}" y="${box.y+15+n*16}" text-anchor="middle" font-size="14" textLength="${l.width}" lengthAdjust="spacingAndGlyphs">${esc(l.text)}</text>`).join('')
+      blocks+=`<g data-zone-label="${esc(zone.groupId)}" pointer-events="none"><title>${esc(zone.name)}</title><rect x="${box.x}" y="${box.y}" width="${sign.width}" height="${sign.height}" fill="white" stroke="#333" stroke-width="1.3"/>${ink}</g>`
     }
-    const tent=horseTotal(p.groups)>150&&barn!=='S'?`<rect x="${x}" y="${y+10*h+20}" width="${w*2+8}" height="64" fill="#eef4fb" stroke="#555"/>${text(x+w+4,y+10*h+39,'仮設テント（TR2枠）',13)}${label(x+w+4,y+10*h+56,[p.tents[`${barn}:tent1`],p.tents[`${barn}:tent2`]].filter(Boolean).map(id=>names.get(id)??'').join('／')||'空き',w*2,10)}`:''
+    const tent=horseTotal(p.groups)>150&&barn!=='S'?`<rect x="${x}" y="${layout.tops[10]+20}" width="${w*2+8}" height="64" fill="#eef4fb" stroke="#555"/>${text(x+w+4,layout.tops[10]+39,'仮設テント（TR2枠）',13)}${label(x+w+4,layout.tops[10]+56,[p.tents[`${barn}:tent1`],p.tents[`${barn}:tent2`]].filter(Boolean).map(id=>names.get(id)??'').join('／')||'空き',w*2,10)}`:''
     return text(x+w+4,66,`${barn}厩舎`,25)+text(x+w+4,91,`${used}頭`,16)+cells+blocks+tent
-  }).join('')}<circle cx="260" cy="790" r="54" fill="none" stroke="#333"/>${text(260,797,'丸馬場',17)}<rect x="445" y="735" width="150" height="50" fill="none" stroke="#333"/>${text(520,765,'装蹄所',17)}<rect x="805" y="760" width="170" height="60" fill="none" stroke="#333"/>${text(890,795,'休憩室',17)}<rect x="1000" y="760" width="125" height="60" fill="none" stroke="#333"/>${text(1062,795,'HM室',17)}<rect x="1430" y="735" width="200" height="70" fill="none" stroke="#333"/>${text(1530,778,'オガコ倉庫',17)}${text(840,883,eventName+' 厩舎割表',26)}${text(840,915,`合計 ${horseTotal(p.groups)}頭 ／ 配置 ${Object.values(p.cells).filter(c=>c.kind==='horse').length}頭　TR＝タックルーム`,19)}${p.corridors.length?text(840,945,'S通路利用：'+p.corridors.map(id=>names.get(id)).join('、'),15):''}</svg>`
+  }).join('')}<g transform="translate(0 ${layout.extraHeight})"><circle cx="260" cy="790" r="54" fill="none" stroke="#333"/>${text(260,797,'丸馬場',17)}<rect x="445" y="735" width="150" height="50" fill="none" stroke="#333"/>${text(520,765,'装蹄所',17)}<rect x="805" y="760" width="170" height="60" fill="none" stroke="#333"/>${text(890,795,'休憩室',17)}<rect x="1000" y="760" width="125" height="60" fill="none" stroke="#333"/>${text(1062,795,'HM室',17)}<rect x="1430" y="735" width="200" height="70" fill="none" stroke="#333"/>${text(1530,778,'オガコ倉庫',17)}${text(840,883,eventName+' 厩舎割表',26)}${text(840,915,`合計 ${horseTotal(p.groups)}頭 ／ 配置 ${Object.values(p.cells).filter(c=>c.kind==='horse').length}頭　TR＝タックルーム`,19)}${p.corridors.length?text(840,945,'S通路利用：'+p.corridors.map(id=>names.get(id)).join('、'),15):''}</g></svg>`
 }
 export function stallPlanPrintHtml(p:StallPlan,eventName:string){
   const summary=p.groups.map((g,index)=>{
