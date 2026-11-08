@@ -32,10 +32,16 @@ const call=(name,p)=>db.query(`select public.${name}($1::jsonb) result`,[JSON.st
  options.layout.requests[org]=second.value;options.layout.requestVersions[org]=second.requestId
  const plan=A.createStallPlan(groups,options,'2026-10-31T00:00:00Z'),input={eventId:event,requestId:'e'.repeat(64),expected:null,value:plan}
  await call('save_winter_stall_allocation',input)
+ const pendingRequest={...second,requestId:'9'.repeat(64),expected:second.requestId,value:{...second.value,confirmed:false,reason:''}}
+ await call('save_winter_stall_request',pendingRequest)
+ const partial=structuredClone(plan);partial.cells={};partial.options.layout.requests[org]=pendingRequest.value;partial.options.layout.requestVersions[org]=pendingRequest.requestId
+ const partialId='8'.repeat(64)
+ await call('save_winter_stall_allocation',{...input,requestId:partialId,expected:input.requestId,value:partial})
+ assert.deepEqual((await db.query('select value from public.fhs_stable_allocation_versions where request_id=$1',[partialId])).rows[0].value.cells,{})
  const stale=structuredClone(plan);stale.options.layout.requestVersions[org]=request.requestId
- await assert.rejects(()=>call('save_winter_stall_allocation',{...input,requestId:'f'.repeat(64),expected:input.requestId,value:stale}),/要望が更新/)
+ await assert.rejects(()=>call('save_winter_stall_allocation',{...input,requestId:'f'.repeat(64),expected:partialId,value:stale}),/要望が更新/)
  const ignored=structuredClone(plan);delete ignored.options.layout
- await assert.rejects(()=>call('save_winter_stall_allocation',{...input,requestId:'f'.repeat(64),expected:input.requestId,value:ignored}),/要望が更新/)
+ await assert.rejects(()=>call('save_winter_stall_allocation',{...input,requestId:'f'.repeat(64),expected:partialId,value:ignored}),/要望が更新/)
  await db.exec('set role authenticated');await claims('member')
  assert.equal((await db.query('select count(*)::int n from public.fhs_current_stall_requests')).rows[0].n,0)
  await claims('admin');assert.equal((await db.query('select count(*)::int n from public.fhs_current_stall_requests')).rows[0].n,1)

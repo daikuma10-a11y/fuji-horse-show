@@ -33,7 +33,7 @@ for(const g of total151)if(!groupAllocation(p151,g).corridor)assert.ok(groupAllo
 // An overcrowded allocation must report every unplaced horse instead of dropping applicants.
 const large=Array.from({length:30},(_,i)=>group(`large${i}`,16)),overrides=Object.fromEntries(large.map(g=>[g.id,{count:4,reason:'検証用の個別設定'}]))
 const full=createStallPlan(large,{priorityId:'',smallMax:0,useSCorridor:false,trOverrides:overrides})
-assert.equal(full.groups.length,30);assert.ok(stallPlanIssues(full).some(s=>s.includes('未配置')));assert.throws(()=>stallPlanPrintHtml(full,'test'),/未配置/)
+assert.equal(full.groups.length,30);assert.ok(stallPlanIssues(full).some(s=>s.includes('未配置')));assert.match(stallPlanPrintHtml(full,'test'),/0／16頭/)
 // Horse stalls may need to span barns to preserve all required TR rooms.
 const sixteen=[group('sixteen',16)],split=createStallPlan(sixteen,defaultStallOptions(sixteen))
 assert.deepEqual(stallPlanIssues(split),[]);assert.deepEqual(groupAllocation(split,sixteen[0]).barns,['1','2']);assert.equal(groupAllocation(split,sixteen[0]).indoor,5)
@@ -72,4 +72,23 @@ const undo=previewStallMove(swap.next,'1:TR1','1:1')
 assert.deepEqual(undo.next,p);assert.equal(JSON.stringify(p),beforeMove)
 const blocked=editStall(p,'4:5',{kind:'blocked',groupId:'',horseId:'',note:'修理'},false)
 assert.throws(()=>previewStallMove(blocked,'1:1','4:5'),/使用不可/)
-assert.throws(()=>previewStallMove({...p,options:{...p.options,layout:{...currentOptions(groups).layout,enabledBarns:['S','1','2']}}},'1:1','4:5'),/予備棟/)
+const reserveMove=previewStallMove({...p,options:{...p.options,layout:{...currentOptions(groups).layout,enabledBarns:['S','1','2']}}},'1:1','4:5')
+assert.deepEqual(reserveMove.next.cells['4:5'],horse)
+const big=[group('large',21)]
+const bigPlan=createStallPlan(big,currentOptions(big))
+assert.equal(groupAllocation(bigPlan,big[0]).horses,21)
+const partial=structuredClone(p);partial.cells={}
+assert.ok(stallPlanIssues(partial).length>0)
+assert.ok(stallPlanPrintHtml(partial,'Winter').includes('0／8頭'))
+const {stallPlanFile,openStallPlanFile}=require('../lib/master/stall-plan-file.ts')
+const file=stallPlanFile('winter','a'.repeat(64),partial)
+assert.deepEqual(openStallPlanFile(file,'winter'),{plan:partial,expected:'a'.repeat(64)})
+assert.throws(()=>openStallPlanFile(file,'other'))
+
+// Moving a registered horse to a different club does not change the stall the organizer chose.
+const reassignedHorse=p.cells['1:1'], reassignedGroups=structuredClone(groups)
+const former=reassignedGroups.find(g=>g.id===reassignedHorse.groupId)
+const [transferred]=former.horses.splice(former.horses.findIndex(h=>h.id===reassignedHorse.horseId),1)
+reassignedGroups[0].horses.push(transferred)
+const synced=reconcileStallGroups(p,reassignedGroups)
+assert.deepEqual(synced.cells['1:1'],{...reassignedHorse,groupId:reassignedGroups[0].id})

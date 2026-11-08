@@ -38,6 +38,10 @@ export function standardTR(total: number, count: number): number | null {
 export function requiredTR(plan: Pick<StallPlan, 'groups' | 'options'>, g: StableGroup) {
   return plan.options.trOverrides[g.id]?.count ?? standardTR(horseTotal(plan.groups), g.horses.length)
 }
+// When no headcount band applies, the automatic suggestion starts with one indoor tack room.
+function automaticTR(plan: StallPlan, group: StableGroup): number {
+  return requiredTR(plan,group) ?? 1
+}
 export function defaultStallOptions(groups: StableGroup[]): StallOptions {
   const candidates = groups.filter(g => ['ライディングクラブフジファーム', 'フジファーム'].includes(g.name.normalize('NFKC').replace(/\s/g, '')))
   return { priorityId: candidates.length === 1 ? candidates[0].id : '', smallMax: 0, useSCorridor: false, trOverrides: {}, layout:{enabledBarns:[...barnIds],normalHorseLimit:13,extraTR:false,requests:{},requestVersions:{}} }
@@ -58,8 +62,7 @@ export function groupAllocation(p: StallPlan, g: StableGroup) {
  * Each normal-barn club keeps >=1 indoor TR; tents are a shared 2-unit budget. */
 function placeGroup(p: StallPlan, g: StableGroup, barn: string): boolean {
   if(p.options.layout)return placeZone(p,g,barn)
-  const need = requiredTR(p,g)
-  if (need === null) return false
+  const need = automaticTR(p,g)
   const corridor = barn === 'S' && p.options.useSCorridor
   const free = stalls.filter(s => s.barn === barn && !p.cells[s.id])
   const horses = free.filter(s => !s.wire)
@@ -78,7 +81,6 @@ function placeGroup(p: StallPlan, g: StableGroup, barn: string): boolean {
 export function createStallPlan(groups: StableGroup[], options: StallOptions, createdAt = new Date().toISOString()): StallPlan {
   const p: StallPlan = { version:1,template:STALL_TEMPLATE,groups:clone(groups),options:clone(options),cells:{},tents:{},corridors:[],wireHorseSlots:[],registrationComplete:true,createdAt }
   if(!groups.length) throw new Error('参加登録済みの馬がいません。')
-  for(const g of groups) if(requiredTR(p,g)===null) throw new Error(`${g.name}：この頭数のTR数は未設定です。個別指定してください。`)
   if(options.layout)return createZonePlan(p)
   const allocated = new Set<string>()
   const priority=groups.find(g=>g.id===options.priorityId)
@@ -91,7 +93,7 @@ export function createStallPlan(groups: StableGroup[], options: StallOptions, cr
   for(const g of rest){
     if(barnIds.slice(1).some(b=>placeGroup(p,g,b)))continue
     // Large clubs may span barns. Keep all horses visible, even if capacity runs out.
-    const need=requiredTR(p,g)!
+    const need=automaticTR(p,g)
     const trial=clone(p); let remaining=[...g.horses], indoor=0, tent=0
     for(const b of barnIds.slice(1)){
       const free=stalls.filter(s=>s.barn===b&&!trial.cells[s.id]&&!s.wire)
@@ -147,9 +149,6 @@ export function previewStallMove(plan: StallPlan, fromId: string, toId: string) 
   if (!from || !to || from === to || !moving || moving.kind === 'blocked')
     throw new Error('馬またはTRがある馬房から、別の馬房へドラッグしてください。')
   if (occupant?.kind === 'blocked') throw new Error('移動先は使用不可の馬房です。')
-  const enabled = plan.options.layout?.enabledBarns
-  if (enabled && (!enabled.includes(to.barn) || (occupant && !enabled.includes(from.barn))))
-    throw new Error('予備棟には配置できません。使用する厩舎を確認してください。')
 
   const next = clone(plan)
   if (occupant) next.cells[fromId] = clone(occupant)
@@ -162,7 +161,13 @@ export function previewStallMove(plan: StallPlan, fromId: string, toId: string) 
 export function reconcileStallGroups(p: StallPlan, groups: StableGroup[]): StallPlan {
   const n=clone(p);n.groups=clone(groups)
   const ids=new Set(groups.map(g=>g.id)), horses=new Map(groups.flatMap(g=>g.horses.map(h=>[h.id,g.id] as const)))
-  for(const [id,c] of Object.entries(n.cells))if(c.kind!=='blocked'&&(!ids.has(c.groupId)||c.kind==='horse'&&horses.get(c.horseId)!==c.groupId))delete n.cells[id]
+  for(const [id,c] of Object.entries(n.cells)){
+    if(c.kind==='horse'){
+      const currentGroup=horses.get(c.horseId)
+      if(currentGroup)c.groupId=currentGroup
+      else delete n.cells[id]
+    } else if(c.kind==='tr'&&!ids.has(c.groupId))delete n.cells[id]
+  }
   for(const [id,gid] of Object.entries(n.tents))if(!ids.has(gid))delete n.tents[id]
   n.corridors=n.corridors.filter(id=>ids.has(id));n.wireHorseSlots=n.wireHorseSlots.filter(id=>n.cells[id]?.kind==='horse')
   if(!ids.has(n.options.priorityId))n.options.priorityId=''
@@ -174,7 +179,7 @@ export function reconcileStallGroups(p: StallPlan, groups: StableGroup[]): Stall
 export function stallPlanIssues(p: StallPlan): string[] {
   const issues:string[]=[]
   const priority=p.groups.find(g=>g.id===p.options.priorityId)
-  if(priority&&!groupHorseSlots(p,priority.id).some(s=>s.barn==='S'))issues.push(`${priority.name}：S厩舎の優先団体がSに未配置です。馬房ごとの編集でSへの配置を調整してください。`)
+  if(priority&&!groupHorseSlots(p,priority.id).some(s=>s.barn==='S'))issues.push(`${priority.name}：S厩舎の優先団体がSに未配置です。`)
   for(const g of p.groups){
     const a=groupAllocation(p,g)
     if(a.horses!==g.horses.length)issues.push(`${g.name}：馬が${g.horses.length-a.horses}頭未配置です。`)
@@ -240,8 +245,8 @@ function zoneDistance(p:StallPlan,a:string,b:string):number{
   return best
 }
 function placeZone(p:StallPlan,g:StableGroup,barn:string):boolean{
-  const l=p.options.layout!,need=requiredTR(p,g)
-  if(need===null||!l.enabledBarns.includes(barn))return false
+  const l=p.options.layout!,need=automaticTR(p,g)
+  if(!l.enabledBarns.includes(barn))return false
   const corridor=barn==='S'&&!!l.requests[g.id]?.corridor
   const tentFree=horseTotal(p.groups)>150&&barn!=='S'?tentIds.filter(t=>t.startsWith(barn+':')&&!p.tents[t]):[]
   const tentCount=corridor?0:Math.min(Math.max(0,need-1),tentFree.length),indoor=corridor?0:need-tentCount
@@ -303,7 +308,7 @@ function createZonePlan(p:StallPlan,balanceBarns?:string[]):StallPlan{
       const trial=clone(p),originalOverride=trial.options.trOverrides[g.id],remaining=[...g.horses]
       let rooms=0
       for(const b of barns.filter(b=>b!=='S')){
-        const budget=Math.max(1,requiredTR(p,g)!-rooms)
+        const budget=Math.max(1,automaticTR(p,g)-rooms)
         trial.options.trOverrides[g.id]={count:budget,reason:'分割時のTR確保（内部計算）'}
         for(let n=Math.min(remaining.length,l.normalHorseLimit);n>=1;n--){
           const before=Object.values(trial.cells).filter(c=>c.kind==='tr'&&c.groupId===g.id).length+Object.values(trial.tents).filter(id=>id===g.id).length
@@ -342,7 +347,7 @@ function createZonePlan(p:StallPlan,balanceBarns?:string[]):StallPlan{
 }
 export function zoneIssues(p:StallPlan):string[]{
   const l=p.options.layout!,issues:string[]=[]
-  for(const b of l.enabledBarns.filter(b=>b!=='S')){const count=stalls.filter(s=>s.barn===b&&p.cells[s.id]?.kind==='horse').length;if(count>l.normalHorseLimit)issues.push(`${b}厩舎：目安${l.normalHorseLimit}頭に対して${count}頭を配置しています。目安または配置を調整してください。`)}
+  for(const b of l.enabledBarns.filter(b=>b!=='S')){const count=stalls.filter(s=>s.barn===b&&p.cells[s.id]?.kind==='horse').length;if(count>l.normalHorseLimit)issues.push(`${b}厩舎：目安${l.normalHorseLimit}頭に対して${count}頭を配置しています。`)}
   for(const g of p.groups){
     const a=groupAllocation(p,g),r=l.requests[g.id],c=r?stallRequestConditions(r,p.groups,g.id):null
     for(const b of a.barns){if(!l.enabledBarns.includes(b))issues.push(`${g.name}：予備・使用しない${b}厩舎に配置されています。`);if(zoneComponents(p,g.id,b).length>1)issues.push(`${g.name}：${b}厩舎の馬とTRが離れています。`)}

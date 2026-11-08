@@ -34,21 +34,19 @@ export function suggestStallRequest(v:StallRequest,groups:Pick<StableGroup,'id'|
   const barns=[...new Set([...text.matchAll(/(?:第)?(10|[1-9]|S)(?:番)?厩舎/gi)].map(m=>m[1].toUpperCase()))]
   let barn='',neighborId='',relation:StallRequest['relation']=''
   if(barns.length===1&&!/(?:厩舎.{0,8}(?:以外|避け|嫌|不可|ない))/.test(text))barn=barns[0]
-  else if(barns.length)issues.push('厩舎の指定が複数、または否定を含みます。希望厩舎を選んでください。')
+  else if(barns.length)issues.push('厩舎の指定が複数、または否定を含みます。自動配置では棟を指定しません。')
   const neighbor=/(?:横|隣|近く|近接|同じ厩舎|離し|離れ|避け)/.test(text)
   if(neighbor){
     const matches=groups.filter(g=>g.id!==selfId&&norm(g.name)&&text.includes(norm(g.name)))
     if(matches.length===1){neighborId=matches[0].id;relation=/(?:離し|離れ|避け)/.test(text)?'avoid':/同じ厩舎/.test(text)?'same':/(?:横|隣)/.test(text)?'adjacent':'near'}
-    else issues.push('近接・離す相手を一意に照合できません。略称を推測せず団体を選んでください。')
+    else issues.push('近接・離す相手を一意に照合できません。自動配置では相手を指定しません。')
   }
-  if(raw&&!barn&&!neighborId&&!issues.length)issues.push('文章だけでは配置条件を確定できません。条件または運営上の判断を入力してください。')
+  if(raw&&!barn&&!neighborId&&!issues.length)issues.push('この原文から自動配置に使える条件を読み取れませんでした。')
   return {barn,neighborId,relation,issues}
 }
 export function stallRequestConditions(v:StallRequest,groups:Pick<StableGroup,'id'|'name'>[],selfId:string){
   const guessed=suggestStallRequest(v,groups,selfId)
   const result={barn:v.confirmed?v.barn:v.barn||guessed.barn,neighborId:v.confirmed?v.neighborId:v.neighborId||guessed.neighborId,relation:v.confirmed?v.relation:v.relation||guessed.relation,issues:v.confirmed?[]:[...guessed.issues]}
-  if(stallRequestText(v)&&v.confirmed&&!v.barn&&!v.neighborId&&!v.reason.trim())result.issues.push('配置条件を指定しない場合は、運営上の判断を理由に記載してください。')
-  if(stallRequestText(v)&&!v.confirmed)result.issues.push('要望の原文と配置条件が未確認です。')
   if(!!result.neighborId!==!!result.relation||result.neighborId&&(result.neighborId===selfId||!groups.some(g=>g.id===result.neighborId)))result.issues.push('相手団体と位置関係を確認してください。')
   return result
 }
