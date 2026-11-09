@@ -2,14 +2,15 @@
 
 import type { ReactNode } from 'react'
 
-export type PreRegistrationSection = 'roster' | 'entries' | 'application' | 'overview'
+export type PreRegistrationSection = 'roster' | 'entries' | 'application' | 'overview' | 'substitution'
 
-export function MasterPreRegistration({ selected, onSelect, roster, entries, application, overview, children }: {
+export function MasterPreRegistration({ selected, onSelect, roster, entries, application, overview, substitution, children }: {
   selected: PreRegistrationSection
   onSelect: (section: PreRegistrationSection) => void
   roster: ReactNode
   entries: ReactNode
   application?: ReactNode
+  substitution?: ReactNode
   overview?: ReactNode
   children?: ReactNode
 }) {
@@ -22,6 +23,7 @@ export function MasterPreRegistration({ selected, onSelect, roster, entries, app
           ['roster', '人馬の登録', '① 団体を選び、参加する選手・馬を登録'],
           ['entries', '出番表の登録', '② 選手・馬・競技を組み合わせて登録'],
           ...(application ? [['application', '申込書の読み込み', 'Excelから人馬・エントリー・金額を確認'] as const] : []),
+          ...(substitution ? [['substitution', '馬の差し替え', '参加馬・出場競技を変更し、請求差額を確認'] as const] : []),
           ...(overview ? [['overview', '団体別の登録内容', '登録済みの選手・馬・エントリーを一覧で確認'] as const] : []),
         ] as const).map(([id, label, description]) => <button key={id} type="button" aria-pressed={selected === id} aria-controls={`pre-registration-${id}`} onClick={() => onSelect(id)} className={`min-h-24 rounded-xl border-2 border-blue-800 p-4 text-left focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-blue-800 ${selected === id ? 'bg-blue-800 text-white' : 'bg-white text-blue-900 hover:bg-blue-100'}`}>
           <span className="block text-2xl font-bold">{label}</span>
@@ -34,6 +36,7 @@ export function MasterPreRegistration({ selected, onSelect, roster, entries, app
     <section id="pre-registration-entries" aria-label="出番表の登録" hidden={selected !== 'entries'} className="space-y-5">{entries}</section>
     {application&&<section id="pre-registration-application" aria-label="申込書の読み込み" hidden={selected !== 'application'} className="space-y-5">{application}</section>}
     {overview&&<section id="pre-registration-overview" aria-label="団体別の登録内容" hidden={selected !== 'overview'} className="space-y-5">{overview}</section>}
+    {substitution&&<section id="pre-registration-substitution" aria-label="馬の差し替え" hidden={selected !== 'substitution'}>{substitution}</section>}
     {children}
   </div>
 }

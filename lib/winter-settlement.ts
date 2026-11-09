@@ -40,8 +40,9 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  assertWinterEvent(data.eventId)
  const org=data.organizations.find(x=>x.id===orgId);if(!org)throw new Error('Winterの団体を選択してください');assertWinterEvent(org.event_id)
  for(const row of [...ledger.initial,...ledger.requests,...ledger.advances,...(ledger.instructions??[]),...(ledger.payments??[]),...(ledger.adjustments??[]),...(ledger.onsite??[])])assertWinterEvent(row.event_id)
+ const horseHistory=[...data.horses,...(data.historicalHorses??[])]
  for(const row of ledger.initial){
-  if(!row.inputs||!data.organizations.some(x=>x.id===row.inputs.organizationId)||(row.inputs.billingOrganizationId!==undefined&&!data.organizations.some(x=>x.id===row.inputs.billingOrganizationId))||!data.competitions.some(x=>x.id===row.inputs.competitionId)||!data.riders.some(x=>x.id===row.inputs.riderId)||!data.horses.some(x=>x.id===row.inputs.horseId))throw new Error('事前エントリーの団体・競技・人馬を確認できません')
+  if(!row.inputs||!data.organizations.some(x=>x.id===row.inputs.organizationId)||(row.inputs.billingOrganizationId!==undefined&&!data.organizations.some(x=>x.id===row.inputs.billingOrganizationId))||!data.competitions.some(x=>x.id===row.inputs.competitionId)||!data.riders.some(x=>x.id===row.inputs.riderId)||!horseHistory.some(x=>x.id===row.inputs.horseId))throw new Error('事前エントリーの団体・競技・人馬を確認できません')
   amount(row.entry_fee)
  }
  const horseRegistration=winterHorseRegistration(data.horses,orgId)
@@ -55,22 +56,22 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  const normalTotal=initial.reduce((sum,x)=>sum+amount(x.entry_fee),0)
  const lines=reflected.map(x=>{
   const comp=data.competitions.find(c=>c.id===x.target_competition_id)
-  const rider=data.riders.find(r=>r.id===x.rider_id),horse=data.horses.find(h=>h.id===x.horse_id)
+  const rider=data.riders.find(r=>r.id===x.rider_id),horse=horseHistory.find(h=>h.id===x.horse_id)
   if(!comp||!rider||!horse)throw new Error('明細の競技・人馬を確認できません')
   const fee=amount(x.fee_amount);if(x.request_type==='withdraw'&&fee!==0)throw new Error('棄権料金が0円ではありません')
   const before=x.payload?.before
   const oldComp=before&&data.competitions.find(c=>c.id===before.competitionId)
-  const oldRider=before&&data.riders.find(r=>r.id===before.riderId),oldHorse=before&&data.horses.find(h=>h.id===before.horseId)
+  const oldRider=before&&data.riders.find(r=>r.id===before.riderId),oldHorse=before&&horseHistory.find(h=>h.id===before.horseId)
   if(before&&(!oldComp||!oldRider||!oldHorse))throw new Error('変更前の人馬・競技を確認できません')
   const changed=(a:string|undefined,b:string)=>a&&a!==b?`${a} → ${b}`:b
   return {id:x.id,competition:comp,competitionLabel:changed(oldComp&&winterCompetitionLabel(oldComp),winterCompetitionLabel(comp)),rider:changed(oldRider?.name,rider.name),horse:changed(oldHorse?.name,horse.name),action:x.request_type==='add'?'追加':x.request_type==='change'?'変更':'棄権',amount:fee}
  }).sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const onsite=(ledger.onsite??[]).filter(x=>x.organization_key===orgId),onsiteReversed=new Set<string>()
  for(const row of onsite){
-  const comp=data.competitions.find(x=>x.id===row.inputs.competitionId),rider=data.riders.find(x=>x.id===row.inputs.riderId),horse=data.horses.find(x=>x.id===row.inputs.horseId)
+  const comp=data.competitions.find(x=>x.id===row.inputs.competitionId),rider=data.riders.find(x=>x.id===row.inputs.riderId),horse=horseHistory.find(x=>x.id===row.inputs.horseId)
   if(!comp||!rider||!horse)throw new Error('現場登録の人馬・競技を確認できません')
   if(row.reverses_id){const original=onsite.find(x=>x.id===row.reverses_id);if(!original||original.reverses_id||original.fee_amount!==row.fee_amount||onsiteReversed.has(original.id))throw new Error('現場登録の取消履歴を確認できません');onsiteReversed.add(original.id)}
-  const before=row.inputs.before,bc=before&&data.competitions.find(x=>x.id===before.competitionId),br=before&&data.riders.find(x=>x.id===before.riderId),bh=before&&data.horses.find(x=>x.id===before.horseId)
+  const before=row.inputs.before,bc=before&&data.competitions.find(x=>x.id===before.competitionId),br=before&&data.riders.find(x=>x.id===before.riderId),bh=before&&horseHistory.find(x=>x.id===before.horseId)
   if(before&&(!bc||!br||!bh))throw new Error('現場変更前の人馬・競技を確認できません')
   const freeChange = row.fee_amount===0 && winterFreeFriendshipChange(bc?.competition_no,comp.competition_no)
   const action=row.action_type??'add';amount(row.entry_fee);if((action==='add'&&(row.entry_fee===0||row.fee_amount!==row.entry_fee+3000))||(action==='change'&&(row.entry_fee===0||!Number.isSafeInteger(row.fee_amount)||(row.fee_amount<2000&&!freeChange)))||(action==='withdraw'&&(row.entry_fee!==0||row.fee_amount!==0))||!row.note.trim())throw new Error('現場登録の料金履歴を確認できません')
