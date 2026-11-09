@@ -6,7 +6,7 @@ import { compareWinterCompetitions, compareWinterOrganizations } from "./winter-
 const URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
 type ReceptionRosterState = { is_participant?: boolean; roster_source?: string | null }
-export function isWinterReceptionParticipant(row: ReceptionRosterState) { return row.roster_source !== "shared_roster" || row.is_participant === true }
+export function isWinterReceptionParticipant(row: ReceptionRosterState) { return row.roster_source !== "winter-substituted" && (row.roster_source !== "shared_roster" || row.is_participant === true) }
 type EventRow = { event_id: string }
 export type WinterOrganizationRow = EventRow & { id: string; name: string }
 export type WinterRiderRow = EventRow & ReceptionRosterState & { id: string; name: string; organization_id: string; jef_member_no: string | null }
@@ -58,12 +58,14 @@ export async function loadWinterData(signal?: AbortSignal) {
   const orgIds = new Set(organizations.map(row => row.id))
   const riderIds = new Set(riders.map(row => row.id))
   const horseIds = new Set(horses.map(row => row.id))
+  const historicalHorses = allHorses.filter(row => !isWinterReceptionParticipant(row))
+  const retiredIds = new Set(historicalHorses.map(row => row.id))
   const competitionIds = new Set(competitions.map(row => row.id))
   if (riders.some(row => !orgIds.has(row.organization_id)) || horses.some(row => !orgIds.has(row.organization_id))) {
     throw new Error("Winter人馬の所属を確認できません")
   }
   if (competitions.some(row => !WINTER_DATES.some(date => date === row.competition_date))) throw new Error("Winter競技の日付を確認してください")
-  if (entries.some(row => (row.organization_id!==undefined&&!orgIds.has(row.organization_id)) || !competitionIds.has(row.competition_id) || !riderIds.has(row.rider_id) || !horseIds.has(row.horse_id))) {
+  if (entries.some(row => (row.organization_id!==undefined&&!orgIds.has(row.organization_id)) || !competitionIds.has(row.competition_id) || !riderIds.has(row.rider_id) || (!horseIds.has(row.horse_id) && !(retiredIds.has(row.horse_id) && /^(wd|withdrawn)$/i.test(row.status))))) {
     throw new Error("Winter出番表に所属大会を確認できない人馬があります")
   }
   const timetable=competitions.flatMap(row=>{
@@ -74,5 +76,5 @@ export async function loadWinterData(signal?: AbortSignal) {
     if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||!['provisional','final'].includes(t.phase)||!isMasterTimetableTime(t.inspection_time,'inspection')||!isMasterTimetableTime(t.start_time,'start'))throw new Error('Winterの時間設定を確認できません')
     return [t]
   })
-  return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable }
+  return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable, ...(historicalHorses.length ? {historicalHorses} : {}) }
 }

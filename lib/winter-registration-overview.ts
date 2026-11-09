@@ -9,7 +9,7 @@ export function winterRegistrationOverview(data:Data):RegistrationOverviewGroup[
  assertWinterEvent(data.eventId)
  for(const row of [...data.organizations,...data.riders,...data.horses,...data.competitions,...data.entries])assertWinterEvent(row.event_id)
  const organizations=new Map(data.organizations.map(row=>[row.id,row]))
- const riders=new Map(data.riders.map(row=>[row.id,row])),horses=new Map(data.horses.map(row=>[row.id,row]))
+ const riders=new Map(data.riders.map(row=>[row.id,row])),horses=new Map([...data.horses,...(data.historicalHorses??[])].map(row=>[row.id,row]))
  const competitions=new Map(data.competitions.map(row=>[row.id,row]))
  const entries=data.entries.map(entry=>{
   const rider=riders.get(entry.rider_id),horse=horses.get(entry.horse_id),competition=competitions.get(entry.competition_id)
