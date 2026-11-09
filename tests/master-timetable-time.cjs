@@ -1,6 +1,6 @@
 require('./register-ts.cjs')
 const assert=require('node:assert/strict'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server')
-const {isMasterTimetableTime,masterTimetableChoices}=require('../lib/master/timetable.ts')
+const {isMasterTimetableTime,masterTimetableChoices,inspectionForStart}=require('../lib/master/timetable.ts')
 const {MasterTimetableTimeField}=require('../components/master/timetable-time-field.tsx')
 const {MasterCompetitionTime}=require('../components/master/timetable.tsx')
 const {WinterTimetable}=require('../components/winter-timetable.tsx')
@@ -16,6 +16,10 @@ for(const kind of ['inspection','start']){
 assert(!isMasterTimetableTime('前競技に引き続き','inspection'))
 assert(!isMasterTimetableTime('オープン','start'))
 assert(!isMasterTimetableTime('組み換え時間','start'))
+assert(!isMasterTimetableTime('前競技と同時','start'))
+assert.equal(inspectionForStart('07:15','07:30','08:10'),'07:55')
+assert.equal(inspectionForStart('前競技と同時','07:30','08:10'),'前競技と同時')
+assert.equal(inspectionForStart('07:20','07:30','08:10'),'07:20')
 let selected
 const field=MasterTimetableTimeField({kind:'inspection',label:'下見時間',value:'組み換え時間',disabled:false,onChange:v=>selected=v})
 const fieldHtml=renderToStaticMarkup(field)
@@ -30,7 +34,7 @@ const data={eventId:ev,organizations:[row({id:'o',name:'団体'})],riders:[row({
 const state={version:1,eventId:ev,competitionId:'c',page:0,draft:false,rows:[]}
 global.fetch=async url=>{const name=new URL(url).pathname.split('/').at(-1);const rows=name==='reception_entries'?data.entries:name==='competitions'?data.competitions.map(c=>({...c,notes:JSON.stringify({originalNotes:'残す競技メモ',winterTimetable:table()})})):data[name];return{ok:true,json:async()=>rows}}
 ;(async()=>{
- for(const v of ['オープン','組み換え時間','08:15']){
+ for(const v of ['オープン','組み換え時間','前競技と同時','08:15']){
   inspection=v
   const loaded=await loadWinterData();assert.equal(loaded.timetable[0].inspection_time,v);assert.equal(loaded.timetable[0].start_time,start)
   const time=renderToStaticMarkup(React.createElement(MasterCompetitionTime,{inspection:v,start,phase:'final'}));assert(time.includes(v)&&time.includes(start))

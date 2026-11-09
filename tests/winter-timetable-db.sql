@@ -24,6 +24,9 @@ saved:=public.save_winter_timetable(c,'組み換え時間','08:45','provisional'
 if saved->>'inspection_time'<>'組み換え時間' or saved->>'start_time'<>'08:45' then raise exception 'mixed instruction/time failed';end if;
 denied:=false;begin perform public.save_winter_timetable(c,'前競技に引き続き','08:45','final',saved);exception when others then denied:=true;end;if not denied then raise exception 'start instruction in inspection accepted';end if;
 denied:=false;begin perform public.save_winter_timetable(c,'08:15','オープン','final',saved);exception when others then denied:=true;end;if not denied then raise exception 'inspection instruction in start accepted';end if;
+saved:=public.save_winter_timetable(c,'前競技と同時','08:45','provisional',saved);
+if saved->>'inspection_time'<>'前競技と同時' then raise exception 'simultaneous inspection lost';end if;
+denied:=false;begin perform public.save_winter_timetable(c,'08:15','前競技と同時','final',saved);exception when others then denied:=true;end;if not denied then raise exception 'inspection instruction accepted as start';end if;
 saved:=public.save_winter_timetable(c,null,null,'provisional',saved);if saved->>'start_time' is not null or saved->>'inspection_time' is not null then raise exception 'clear failed';end if;
 end $$;
 rollback;
