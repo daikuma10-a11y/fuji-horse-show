@@ -54,6 +54,8 @@ export function WinterAdminDashboard(){
   if(window.location.hash==='#winter-admin-tools'){setTab('roster');setVisited(['requests','roster'])}
   if(window.location.hash==='#winter-initial-registration'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('entries')}
   if(window.location.hash==='#winter-application-import'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('application')}
+  if(window.location.hash==='#winter-startlist'){setTab('startlist');setVisited(['requests','startlist'])}
+  if(window.location.hash==='#winter-timetable'){setTab('timetable');setVisited(['requests','timetable'])}
   if(window.location.hash==='#winter-horse-substitution'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('substitution')}
   if(window.location.hash==='#winter-registration-overview'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-meeting'){setTab('meeting');setVisited(['requests','meeting'])}
