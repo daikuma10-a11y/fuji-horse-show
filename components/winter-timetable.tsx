@@ -1,5 +1,8 @@
 "use client"
 import {MasterTimetable} from './master/timetable'
+import {WinterArenaOpening} from './winter-arena-opening'
+import {loadArenaOpening,openingDate} from '@/lib/winter-arena-opening'
+import {verifyAdminSession} from '@/lib/supabase-rest'
 import {WinterTimetableEditor} from './winter-timetable-editor'
 import {WINTER_DATES,WINTER_EVENT_NAME,winterTimetableSection} from '@/lib/winter-event'
 import {winterCompetitionLabel} from '@/lib/winter-display-order'
@@ -9,9 +12,14 @@ import {loadWinterData} from '@/lib/winter-data'
 import type {AdminSession} from '@/lib/supabase-rest'
 export function WinterTimetable({data,session,onSession,onChanged}:{data:Awaited<ReturnType<typeof loadWinterData>>;session:AdminSession;onSession:(session:AdminSession)=>void;onChanged:()=>void}){
  const dates=WINTER_DATES.map(value=>({value,label:new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',weekday:'short'}).format(new Date(value+'T00:00:00+09:00'))}))
- async function loadPrint(dates:readonly string[]){
+ async function loadPrint(dates:readonly string[],sectionId?:string){
   const latest=await loadWinterData(AbortSignal.timeout(20000))
-  return timetablePrintHtml(winterTimetablePrintData(latest),new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}),dates)
+  const output=winterTimetablePrintData(latest)
+  if(dates.includes(openingDate)&&(!sectionId||sectionId==='dressage')){
+   const verified=await verifyAdminSession(session);onSession(verified)
+   output.openings=[{date:openingDate,section:'dressage',label:'馬場開放',start:await loadArenaOpening(verified.accessToken)}]
+  }
+  return timetablePrintHtml(output,new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}),dates)
  }
  const items = data.competitions.map(competition => {
    const time = data.timetable.find(row => row.competition_id === competition.id)
@@ -29,6 +37,7 @@ export function WinterTimetable({data,session,onSession,onChanged}:{data:Awaited
    }
  })
  return <MasterTimetable title={WINTER_EVENT_NAME} dates={dates} items={items} loadPrint={loadPrint}
+   renderDayExtra={date=>date===openingDate?<WinterArenaOpening session={session} onSession={onSession} onChanged={onChanged} revision={data}/>:null}
    renderEditor={(id, showInspection) =>
      <WinterTimetableEditor competitionId={id} showInspection={showInspection}
        initial={data.timetable.find(time => time.competition_id === id) ?? null}

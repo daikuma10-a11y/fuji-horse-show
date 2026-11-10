@@ -2,7 +2,7 @@ import { assertWinterEvent } from './winter-event'
 import type { loadWinterData } from './winter-data'
 import { loadSharedRoster, loadWinterRosterBindings, type SharedRoster, type WinterRosterBinding } from './shared-roster'
 import { kanaHorseReading } from './master/application-autofill'
-import type { ReadingList, ReadingListRow } from './master/reading-list'
+import { compareReadingRows,type ReadingList,type ReadingListRow } from './master/reading-list'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 
@@ -46,7 +46,7 @@ export function winterReadingList(data: Data, roster: SharedRoster, bindings: Wi
         number: ('jef_member_no' in person ? person.jef_member_no : person.jef_registration_no) ?? '',
       })
     }
-    result[kind === 'rider' ? 'riders' : 'horses'] = [...rows.values()].map(row => ({ ...row, organizations: row.organizations.sort((a,b) => a.localeCompare(b,'ja')) })).sort((a,b) => (a.reading || a.name).localeCompare(b.reading || b.name,'ja') || a.id.localeCompare(b.id))
+    result[kind === 'rider' ? 'riders' : 'horses'] = [...rows.values()].map(row => ({ ...row, organizations: row.organizations.sort((a,b) => a.localeCompare(b,'ja')) })).sort(compareReadingRows)
   }
   return result
 }

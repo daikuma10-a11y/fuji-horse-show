@@ -4,6 +4,7 @@ export type TimetablePrintItem = MasterTimetableItem & { number: string; name: s
 export type TimetablePrintData = {
   title: string; dates: readonly { value: string; label: string }[]
   sections: readonly (TimetableSection & { venue: string })[]
+  openings?: readonly {date:string;section:string;label:string;start:string}[]
   items: TimetablePrintItem[]
 }
 const esc = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]!)
@@ -16,28 +17,30 @@ export function timetablePrintHtml(data: TimetablePrintData, generatedAt: string
   const columns = data.sections.map(section => {
     const { showInspection } = section
     const headers = ['番号', '競技種目', '出場数', ...(showInspection ? ['下見開始'] : []), '競技開始']
-    const widths = showInspection ? [7, 39, 9, 19, 26] : [7, 55, 9, 29]
+    const widths = showInspection ? [6, 48, 9, 17, 20] : [7, 59, 9, 25]
     const dayGroups = dates.map(date => {
       const rows = data.items.filter(item => item.date === date.value && item.section === section.id)
       const body = rows.map(item => `<tr data-competition-id="${esc(item.id)}">
         <td class="center">${esc(item.number)}</td>
-        <td>${esc(item.name)}${item.official ? '<span class="official"> ★公認</span>' : ''}</td>
+        <td data-competition-name><span class="competition-name">${esc(item.name)}${item.official ? '<span class="official"> ★公認</span>' : ''}</span></td>
         <td class="center">${item.count}</td>
         ${showInspection ? `<td>${esc(item.inspection || '未定')}</td>` : ''}
         <td>${esc(item.start || '未定')}${item.phase === 'final' ? '<small>（確定）</small>' : ''}</td>
       </tr>`).join('')
+      const activities=(data.openings??[]).filter(a=>a.date===date.value&&a.section===section.id)
+        .map(a=>`<tr><td colspan="${headers.length}" class="opening">${esc(a.label)}　${esc(a.start)}</td></tr>`).join('')
       return `<tbody data-timetable-date="${esc(date.value)}">
         <tr class="date"><th colspan="${headers.length}" scope="rowgroup">${esc(date.label)}</th></tr>
-        ${body || `<tr><td colspan="${headers.length}" class="empty">この日の競技はありません。</td></tr>`}
+        ${activities}${body || (activities?'':`<tr><td colspan="${headers.length}" class="empty">この日の競技はありません。</td></tr>`)}
       </tbody>`
     }).join('')
-    return `<section><h3>${esc(section.label)} <span class="venue">${esc(section.venue)}</span></h3>
+    return `<section data-section="${esc(section.id)}"><h3>${esc(section.label)} <span class="venue">${esc(section.venue)}</span></h3>
       <table><colgroup>${widths.map(width => `<col style="width:${width}%">`).join('')}</colgroup>
       <thead><tr>${headers.map(label => `<th>${label}</th>`).join('')}</tr></thead>${dayGroups}</table>
     </section>`
   }).join('')
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(data.title)} タイムテーブル</title><style>
-*{box-sizing:border-box}body{margin:0;background:#e5e7eb;color:#111;font-family:Arial,"Yu Gothic",Meiryo,sans-serif}.toolbar{display:flex;flex-wrap:wrap;gap:12px;padding:12px;align-items:center}.toolbar button{padding:12px 20px;font-size:16px}.timetable-sheet{background:#fff;width:281mm;height:190mm;margin:12px auto}.timetable-content{width:281mm;display:flow-root;margin:0 auto}header{text-align:center;border-bottom:2px solid #222;padding-bottom:1mm}h1{font-size:15pt;margin:0 0 1mm}h2{font-size:11pt;margin:0}p{font-size:8pt;margin:1mm 0}h3{font-size:11pt;margin:2mm 0 1mm;text-align:center}.venue{font-size:9pt;font-weight:normal}.columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5mm}.columns>section{min-width:0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt}th,td{border:1px solid #555;padding:.45mm 1mm;vertical-align:middle;overflow-wrap:anywhere;line-height:1.2}th{background:#edf1f5;font-size:8pt}.date th{text-align:left;font-size:9pt;background:#dbe6f2;padding:.7mm 1mm}small{font-size:7.5pt;white-space:nowrap}.official{font-size:7.5pt;white-space:nowrap}.center{text-align:center}.empty{padding:1.5mm;text-align:center}footer{margin-top:2mm;border-top:1px solid #777;padding-top:1mm}thead{display:table-header-group}tr{break-inside:avoid}
+*{box-sizing:border-box}body{margin:0;background:#e5e7eb;color:#111;font-family:Arial,"Yu Gothic",Meiryo,sans-serif}.toolbar{display:flex;flex-wrap:wrap;gap:12px;padding:12px;align-items:center}.toolbar button{padding:12px 20px;font-size:16px}.timetable-sheet{background:#fff;width:281mm;height:190mm;margin:12px auto}.timetable-content{width:281mm;display:flow-root;margin:0 auto}header{text-align:center;border-bottom:2px solid #222;padding-bottom:1mm}h1{font-size:15pt;margin:0 0 1mm}h2{font-size:11pt;margin:0}p{font-size:8pt;margin:1mm 0}h3{font-size:11pt;margin:2mm 0 1mm;text-align:center}.venue{font-size:9pt;font-weight:normal}.columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5mm}.columns>section{min-width:0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt}th,td{border:1px solid #555;padding:.45mm 1mm;vertical-align:middle;overflow-wrap:anywhere;line-height:1.2}th{background:#edf1f5;font-size:8pt}.date th{text-align:left;font-size:9pt;background:#dbe6f2;padding:.7mm 1mm}small{font-size:7.5pt;white-space:nowrap}.competition-name{display:inline-block;white-space:nowrap}.competition-name .official{font-size:.84em;white-space:nowrap}.center{text-align:center}.empty{padding:1.5mm;text-align:center}footer{margin-top:2mm;border-top:1px solid #777;padding-top:1mm}thead{display:table-header-group}tr{break-inside:avoid}
 @page{size:A4 landscape;margin:8mm}@media print{body{background:white}.toolbar{display:none}.timetable-sheet{margin:0;break-inside:avoid}}
 </style></head><body><nav class="toolbar"><button id="stable-print" type="button">印刷・PDF保存</button><button id="stable-close" type="button">閉じる</button><span>選択した${dates.length}日分をA4横1ページにまとめます。印刷先で「PDFに保存」も選べます。</span></nav><main class="timetable-sheet" data-timetable-sheet><div class="timetable-content" data-timetable-content><header><h1>${esc(data.title)}</h1><h2>タイムテーブル　${dates.map(d => esc(d.label)).join(' ／ ')}</h2><p>${esc(generatedAt)} 作成</p></header><div class="columns">${columns}</div><footer><p>★公認：日本馬術連盟の公認種目。</p><p>競技の進行により開始時間を変更する場合があります。最新のタイムテーブルをご確認ください。</p></footer></div></main></body></html>`
 }
@@ -50,6 +53,17 @@ export function fitTimetablePrint(doc: Document) {
   // Reset before every measurement; a previous print must not compound the scale.
   sheet.style.height = '190mm'
   content.style.zoom = '1'
+  // Fit the complete name and its official mark inside the existing column before
+  // the whole sheet is scaled. Recheck against the actual printer/browser font.
+  for(const name of Array.from(content.querySelectorAll<HTMLElement>('.competition-name'))){
+    const cell=name.parentElement!
+    name.style.fontSize=''
+    const win=doc.defaultView!
+    const style=win.getComputedStyle(cell)
+    const space=cell.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-1
+    const natural=name.getBoundingClientRect().width
+    if(space>0&&natural>space)name.style.fontSize=(parseFloat(win.getComputedStyle(name).fontSize)*space/natural)+'px'
+  }
   const width = Math.max(content.scrollWidth, content.offsetWidth)
   const height = Math.max(content.scrollHeight, content.offsetHeight)
   const availableWidth = sheet.clientWidth - 2
