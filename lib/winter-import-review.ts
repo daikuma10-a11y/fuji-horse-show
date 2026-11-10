@@ -132,12 +132,13 @@ export function reviewWinterImport(source: ImportSource) {
   const accountOrgs = new Set<string>()
   function money(value:string,row:number,label:string) { if(!/^\d+$/.test(value)||!Number.isSafeInteger(Number(value))) { issue('事前精算',row,`${label}は0以上の整数です（円記号・カンマなし）`); return 0 } return Number(value) }
   for(const {values:v,row} of table('accounts','事前精算')) {
+    const issuesBeforeRow=issues.length
     const [org,totalText,paidText,confirmedText]=v
     const total=money(totalText,row,'事前申込合計'),paid=money(paidText,row,'入金額'),confirmed=flag(confirmedText,'事前精算',row,'原本確認',false)
     if(!orgs.has(org))issue('事前精算',row,`団体番号 ${org} が名簿にありません`)
     if(accountOrgs.has(org))issue('事前精算',row,'同じ団体の事前精算が重複しています');accountOrgs.add(org)
     if(!confirmed)issue('事前精算',row,'事前申込合計・入金額の原本確認が必要です')
-    if(paid>total)issue('事前精算',row,'入金額が事前申込合計を超えています。過入金の確認が必要です')
+    if(issues.length===issuesBeforeRow && paid>total)issue('事前精算',row,`過入金 ${(paid-total).toLocaleString('ja-JP')}円。確認した入金額のままエントリーを登録できます。`,'warning')
     accounts.push({org,total,paid,confirmed,outstanding:total-paid})
   }
   for(const org of orgs.keys())if(!accountOrgs.has(org))issue('事前精算',0,`${orgs.get(org)?.name} の事前申込合計・入金額は未登録です。精算準備は完了していません`,'warning')

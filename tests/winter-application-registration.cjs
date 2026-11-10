@@ -34,6 +34,18 @@ async function main(){
  await runApplicationRegistration(createApplicationRegistration(remap),e.deps)
  assert.deepEqual(e.posts,{person:2,participants:1,entry:1})
 
+ // Overpayment is an advisory on the Excel review and remains intact when resuming a completed import.
+ const excess=setup()
+ excess.work=createApplicationRegistration({...excess.work.review,paid:'20000'})
+ const notices=require('../lib/winter-application-guide.ts').applicationTodos(excess.work.review,true)
+ assert.ok(notices.some(n=>n.target==='application-payment'&&!n.blocking&&n.message.includes('過入金 1,000円')))
+ assert.equal((await reviewApplicationRegistration(excess.work,excess.snapshot)).ready,true)
+ await runApplicationRegistration(excess.work,excess.deps)
+ const resumed=parseApplicationRegistration(excess.raw)
+ assert.equal(resumed.review.paid,'20000');assert.equal(resumed.review.edited.amounts.total,'19000')
+ await runApplicationRegistration(resumed,excess.deps)
+ assert.deepEqual(excess.posts,{person:2,participants:1,entry:1});assert.equal(excess.snapshot.initial[0].entry_fee,5000)
+
  // Lost response after a new person was created: no blind retry, explicit matching required.
  e=setup();let savedId
  await assert.rejects(runApplicationRegistration(e.work,{...e.deps,savePerson:async input=>{savedId=await e.deps.savePerson(input);throw Error('lost person response')}}),/lost person response/)
