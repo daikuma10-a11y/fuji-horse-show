@@ -37,10 +37,35 @@ test('Winter番号の先頭ゼロと手書き枠を成績表から出番表・�
  for(const col of ['D','F']){
   assert.match(cell(start,col+'16'),/<v>-<\/v>/)
   assert.match(cell(result,col+'15'),/>-<\/t>/)
-  assert.match(cell(start,col+'53'),/<v><\/v>/)
+  assert.match(cell(start,col+'48'),/<v><\/v>/)
  }
  assert.match(cell(result,'B16'),/<v>6<\/v>/)
- assert.match(cell(start,'B53'),/'15'!B52.*?<v>42<\/v>/)
- assert.match(cell(start,'C53'),/<v><\/v>/)
- assert.match(strFromU8(files['xl/workbook.xml']),/\$A\$6:\$G\$53/)
+ assert.match(cell(start,'B46'),/'15'!B45.*?<v>35<\/v>/)
+ assert.match(cell(start,'B47'),/<v><\/v>/)
+ assert.match(cell(start,'C48'),/<v><\/v>/)
+ assert.match(strFromU8(files['xl/workbook.xml']),/\$A\$6:\$G\$48/)
+})
+
+test('選択した日の競技だけを同じ帳票で印刷し、35番を超えた実出番も保持する',()=>{
+ const event_id=WINTER_EVENT_ID,date='2026-11-14'
+ const competitions=['1','15'].map(number=>({id:'c'+number,event_id,competition_date:date,competition_no:number,name:'競技'+number,official:false}))
+ const entries=Array.from({length:36},(_,i)=>({entry_id:'e'+i,event_id,competition_id:'c1',rider_id:'r',horse_id:'h',organization_name:'団体',start_order:i+1,status:'active'}))
+ const data={eventId:event_id,competitions,riders:[{id:'r',event_id,name:'選手'}],horses:[{id:'h',event_id,name:'馬'}],entries}
+ const day=unzipSync(exportWinterWorkbook(layouts,data,date))
+ for(const [i,c] of competitions.entries()){
+  const single=unzipSync(exportWinterWorkbook(layouts,data,date,c.id))
+  const book=strFromU8(single['xl/workbook.xml'])
+  assert.equal((book.match(/<sheet name=/g)||[]).length,2)
+  assert.deepEqual(single['xl/worksheets/sheet1.xml'],day['xl/worksheets/sheet'+(i+1)+'.xml'])
+  assert.deepEqual(single['xl/worksheets/sheet2.xml'],day['xl/worksheets/sheet'+(i+3)+'.xml'])
+  const sheet=strFromU8(single['xl/worksheets/sheet1.xml'])
+  assert.match(sheet,/<c r="B48"[^>]*><f>[^<]+<\/f><v>35<\/v>/)
+  if(i===0){
+   assert.match(book,/\$A\$49:\$G\$83/)
+   assert.match(sheet,/<c r="B49"[^>]*><f>[^<]+<\/f><v>36<\/v>/)
+   assert.match(sheet,/<c r="B50"[^>]*><f>[^<]+<\/f><v><\/v>/)
+  }else assert.doesNotMatch(book,/\$A\$49:/)
+ }
+ assert.throws(()=>exportWinterWorkbook(layouts,data,date,'missing'),/競技を確認/)
+ assert.throws(()=>exportWinterWorkbook(layouts,data,'2026-11-15','c1'),/競技を確認/)
 })

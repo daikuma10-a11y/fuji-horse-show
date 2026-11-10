@@ -1,5 +1,5 @@
 import type {loadWinterData} from './winter-data'
-import {WINTER_DATES, WINTER_EVENT_NAME, assertWinterEvent, winterTimetableSection} from './winter-event'
+import {WINTER_DATES, WINTER_EVENT_NAME, WINTER_STARTS_PER_PAGE, assertWinterEvent, winterTimetableSection} from './winter-event'
 import {buildLinkedEventWorkbook} from './master/linked-event-workbook'
 import {entryValues} from './official-excel'
 
@@ -16,12 +16,14 @@ function workbookJefNumber(number: string | null) {
   return digits.padStart(5, '0')
 }
 
-export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnType<typeof loadWinterData>>, date: string) {
+export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnType<typeof loadWinterData>>, date: string, competitionId?: string) {
   assertWinterEvent(data.eventId)
   for (const rows of [data.competitions,data.entries,data.riders,data.horses]) for (const row of rows) assertWinterEvent(row.event_id)
   if (!WINTER_DATES.some(d=>d===date)) throw new Error('Winterの開催日を選択してください')
   const riders=new Map(data.riders.map(r=>[r.id,r])), horses=new Map(data.horses.map(h=>[h.id,h]))
-  const competitions=data.competitions.filter(c=>c.competition_date===date).map(c=>{
+  const selected=data.competitions.filter(c=>c.competition_date===date && (competitionId===undefined || c.id===competitionId))
+  if (competitionId!==undefined && selected.length!==1) throw new Error('選択した日の競技を確認できません')
+  const competitions=selected.map(c=>{
     const section=winterTimetableSection(c.competition_no)
     if (!section) throw new Error('競技番号と会場を確認してください：'+c.competition_no)
     const entries=data.entries.filter(e=>e.competition_id===c.id).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id)).map(e=>{
@@ -32,5 +34,5 @@ export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnTy
     return {name:c.name, number:c.competition_no, venue:section.venue, official:c.official, dressage:section.id==='dressage', entries}
   })
   if (!competitions.length || new Set(competitions.map(c=>c.number)).size!==competitions.length) throw new Error('開催日の競技一覧を確認してください')
-  return buildLinkedEventWorkbook(layouts,WINTER_EVENT_NAME,date,competitions)
+  return buildLinkedEventWorkbook(layouts,WINTER_EVENT_NAME,date,competitions, {startsPerPage:WINTER_STARTS_PER_PAGE, numberedThrough:WINTER_STARTS_PER_PAGE})
 }

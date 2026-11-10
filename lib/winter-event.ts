@@ -4,6 +4,7 @@ import preparation from "../config/winter-2026-preparation.json"
 export const WINTER_EVENT_ID = preparation.eventId
 export const WINTER_EVENT_NAME = preparation.name
 export const WINTER_BANK_DETAILS = preparation.bankDetails
+export const WINTER_STARTS_PER_PAGE = 35
 export const WINTER_DATES = ["2026-11-13", "2026-11-14", "2026-11-15"] as const
 // The Winter program assigns one discipline to each arena.
 export const winterTimetableSections = [
