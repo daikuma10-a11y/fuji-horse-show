@@ -1,4 +1,6 @@
 import pdfMake from 'pdfmake/build/pdfmake'
+import type {StallPlan} from './stall-allocation'
+import {stallPlanSvg} from './stall-allocation-print'
 import type {Content,CustomTableLayout,Size,TableCell,TDocumentDefinitions} from 'pdfmake/interfaces'
 
 // Webpack emits the same-origin font files alongside the lazy JS chunk.
@@ -82,17 +84,11 @@ export async function timetablePdf(html:string,sectionId=''):Promise<Blob>{
   throw new Error('選択した日程を1ページに収められません。日程を選び直してください。')
 }
 
-export async function stallAllocationPdf(html:string):Promise<Blob>{
-  const doc=new DOMParser().parseFromString(html,'text/html')
-  const svg=doc.querySelector<SVGSVGElement>('.map svg'),details=doc.querySelector('.details'),table=details?.querySelector('table')
-  if(!svg||!details||!table)throw new Error('厩舎割の配置図と明細を確認できません。')
-  // Render precisely the same SVG that shows the current (possibly unsaved) plan.
+export async function stallAllocationPdf(plan:StallPlan,eventName:string):Promise<Blob>{
+  const doc=new DOMParser().parseFromString(stallPlanSvg(plan,eventName),'image/svg+xml')
+  const svg=doc.documentElement
+  if(svg.localName!=='svg')throw new Error('厩舎割の配置図を確認できません。')
   svg.removeAttribute('style')
-  const content:Content[]=[
-    {svg:new XMLSerializer().serializeToString(svg),font,fit:[801,555],alignment:'center'},
-    {text:details.querySelector('h1')!.textContent!,fontSize:15,bold:true,pageBreak:'before',margin:[0,0,0,7]},
-    convertTable(table,['23%','10%','27%','23%','10%','7%'],1),
-    ...Array.from(details.querySelectorAll('p'),p=>({text:p.textContent??'',marginTop:5}))
-  ]
-  return pdfMake.createPdf(page(doc.title,content)).getBlob()
+  const map:Content={svg:new XMLSerializer().serializeToString(svg),font,fit:[801,555],alignment:'center'}
+  return pdfMake.createPdf(page(eventName+' 厩舎割',[map])).getBlob()
 }
