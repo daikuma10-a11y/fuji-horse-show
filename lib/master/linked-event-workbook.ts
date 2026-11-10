@@ -14,7 +14,6 @@ const contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml
 const xml = (v: Value) => String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 const sheetRef = (name: string) => "'"+name.replace(/'/g,"''")+"'"
 const literal = (value: Value): Cell => ({value})
-const startsPerPage = 40
 function link(sheet: string, address: string, value: Value): Cell {
   const source = sheetRef(sheet)+'!'+address
   return {value, formula:'IF('+source+'="","",'+source+')'}
@@ -50,7 +49,7 @@ function scoreCells(row: number, last: number, dressage: boolean) {
   return cells
 }
 
-function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompetition, isStart: boolean, printedRows: number) {
+function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompetition, isStart: boolean, printedRows: number, numberedThrough: number) {
   const firstResult = comp.dressage ? 13 : 14
   const first = isStart ? 14 : firstResult
   const count = Math.max(comp.dressage ? 30 : 60, printedRows)
@@ -61,8 +60,9 @@ function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompe
   const rows = Array.from({length: count}, (_, i) => {
     const row = first+i, cells = isStart ? {} as Record<string,Cell> : scoreCells(row,first+count-1,comp.dressage)
     Array.from('ABCDEFG').forEach((col, index) => {
-      const reserveOrder = col === 'B' && i >= comp.entries.length && i < printedRows
-      const value = reserveOrder ? finalOrder + i - comp.entries.length + 1 : comp.entries[i]?.[index] ?? ''
+      const nextNumber = finalOrder + i - comp.entries.length + 1
+      const reserveOrder = col === 'B' && i >= comp.entries.length && i < printedRows && nextNumber <= numberedThrough
+      const value = reserveOrder ? nextNumber : comp.entries[i]?.[index] ?? ''
       const sourceRow = firstResult+i
       if (isStart && (col === 'D' || col === 'F')) {
         const ref = sheetRef(comp.number)+'!'
@@ -79,7 +79,8 @@ function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompe
   return putCells(printableLayout.replace(prototype,'<!--entries-->'),header).replace('<!--entries-->',()=>rows.join(''))
 }
 
-export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, date: string, competitions: FormCompetition[]) {
+export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, date: string, competitions: FormCompetition[],
+  {startsPerPage = 40, numberedThrough = Infinity}: {startsPerPage?: number; numberedThrough?: number} = {}) {
   const assets = unzipSync(layouts)
   const files: Record<string,Uint8Array> = {'xl/styles.xml':assets['styles.xml'],'xl/theme/theme1.xml':assets['theme.xml']}
   const sheets: string[] = [], rels: string[] = [], areas: string[] = [], types: string[] = []
@@ -102,7 +103,7 @@ export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, dat
       const id=sheets.length+1, file='worksheets/sheet'+id+'.xml'
       const pages = Math.max(1, Math.ceil(comp.entries.length / startsPerPage))
       const printedRows = pages * startsPerPage
-      files['xl/'+file]=strToU8(fillSheet(strFromU8(layout),headers,comp,isStart,printedRows))
+      files['xl/'+file]=strToU8(fillSheet(strFromU8(layout),headers,comp,isStart,printedRows,numberedThrough))
       sheets.push('<sheet name="'+xml(name)+'" sheetId="'+id+'" r:id="rId'+id+'"/>')
       rels.push('<Relationship Id="rId'+id+'" Type="'+relationships+'/worksheet" Target="'+file+'"/>')
       types.push('<Override PartName="/xl/'+file+'" ContentType="'+contentType+'worksheet+xml"/>')

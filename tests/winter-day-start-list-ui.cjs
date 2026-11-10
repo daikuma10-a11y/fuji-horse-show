@@ -45,6 +45,23 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   await page.waitForFunction(id=>document.activeElement?.id==='day-start-heading-'+id&&document.activeElement.getBoundingClientRect().top>=-1&&document.activeElement.getBoundingClientRect().top<innerHeight,target.id)
   assert.equal(await headings.count(),18,'jump must not hide the other competitions')
   assert.ok(await section(saturday.find(c=>c.competition_no==='12')).getByText('この競技の出番はまだありません。').isVisible())
+  assert.deepEqual(await section(target).locator('[data-reserve-number]').evaluateAll(rows=>rows.map(row=>Number(row.dataset.reserveNumber))),Array.from({length:32},(_,i)=>i+4))
+  assert.equal(await section(saturday.find(c=>c.competition_no==='12')).locator('[data-reserve-number]').count(),35)
+  async function printedSheets(label){
+    const opened=page.waitForEvent('popup')
+    await panel.getByRole('button',{name:label,exact:true}).click()
+    const popup=await opened
+    try{
+      await popup.locator('section svg').first().waitFor()
+      const sheets=await popup.locator('section svg').evaluateAll(rows=>rows.map(svg=>svg.outerHTML))
+      const pdf=await popup.pdf({preferCSSPageSize:true,printBackground:true})
+      assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length,sheets.length,'one printed page per Excel print area')
+      return sheets
+    }finally{await popup.close()}
+  }
+  const daySheets=await printedSheets('この日の出番表を印刷')
+  assert.equal(daySheets.length,saturday.length)
+  assert.deepEqual(await printedSheets('この競技だけを印刷'),[daySheets[saturday.indexOf(target)]])
   const visibleIds=c=>section(c).locator('[data-start-entry-id]').evaluateAll(a=>a.map(e=>e.dataset.startEntryId))
   const before=await visibleIds(target),unaffected=await visibleIds(other)
   await section(target).getByRole('button',{name:'1番を下へ',exact:true}).click()
@@ -58,6 +75,6 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   await panel.getByRole('combobox',{name:'競技',exact:false}).first().selectOption(target.id)
   await page.waitForFunction(id=>document.activeElement?.id==='day-start-heading-'+id,target.id)
   assert.equal(await headings.count(),18);assert.deepEqual(errors,[])
-  console.log('PASS day-wide order and empty events, normal/wide jump, draft across days, save scoped to one competition.')
+  console.log('PASS day-wide order, 35 numbered slots, identical single and day Excel print pages, normal/wide jump, drafts and scoped save.')
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})
