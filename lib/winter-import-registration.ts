@@ -75,10 +75,15 @@ export async function reviewImportRegistration(checkpoint:ImportCheckpoint,snaps
   const differences:string[]=[];let fee=0
   try{fee=reviewWinterInitialEntry(input).entryFee;if(fee!==e.price)differences.push(`料金差分 原本区分からの計算 ${e.price}円／現在の登録料金 ${fee}円`)}catch(error){differences.push(error instanceof Error?error.message:'料金を確認してください')}
   const pair=JSON.stringify([competition.id,rider.id,horse.id]);if(pairs.has(pair))differences.push('同一競技・人馬の重複。既存の事前登録は2回目のOP登録に対応していません');pairs.add(pair)
-  const ledger=initial.filter(x=>x.id===id||(x.inputs.competitionId===competition.id&&x.inputs.riderId===rider.id&&x.inputs.horseId===horse.id))
+  const ledger=initial.filter(x=>x.id===id||(!x.inputs.cancellation&&x.inputs.competitionId===competition.id&&x.inputs.riderId===rider.id&&x.inputs.horseId===horse.id))
   let registeredId:string|undefined
   if(ledger.length>1)differences.push('同じ登録番号または人馬・競技の履歴が複数あります。既存履歴を確認してください')
   for(const saved of ledger){
+   if(saved.inputs.cancellation){
+    differences.push('この原本の事前エントリーは取消済みです。再読み込みで出番や料金は復活しません。')
+    registeredId=saved.id
+    continue
+   }
    const expected={organizationId:organization.id,competitionId:competition.id,riderId:rider.id,horseId:horse.id,membership:input.selection.membership??null,isOp:!!input.selection.isOp,instructorConfirmed:!!input.selection.instructorConfirmed,entryFee:fee}
    const labels={organizationId:'馬の所属',competitionId:'競技',riderId:'選手',horseId:'馬',membership:'会員区分',isOp:'OP区分',instructorConfirmed:'指導者資格確認',entryFee:'競技料金'}
    for(const key of Object.keys(expected) as (keyof typeof expected)[])if(saved.inputs[key]!==expected[key])differences.push(`登録済み ${saved.id}: ${labels[key]} 原本「${expected[key]}」／保存「${saved.inputs[key]}」`)
