@@ -191,7 +191,7 @@ export function MasterStallAllocation({groups,eventName,eventId,active=true,onLo
         <button className={secondary} disabled={printer.busy} onClick={()=>void printer.print(async()=>stallPlanPrintHtml(plan,eventName),'横')}>現在の厩舎割を印刷</button>
         <PdfDownload label="現在の厩舎割をPDFでダウンロード" filename={eventName+'_厩舎割'} generate={async()=>{
           const {stallAllocationPdf}=await import('@/lib/master/handout-pdf')
-          return stallAllocationPdf(stallPlanPrintHtml(plan,eventName))
+          return stallAllocationPdf(plan,eventName)
         }}/>
       </div>
       {saved&&<p>最終保存：{new Date(saved.savedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>}
