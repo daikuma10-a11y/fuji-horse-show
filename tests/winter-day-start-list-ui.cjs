@@ -22,6 +22,10 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
     if(u.origin===url.origin&&!u.pathname.startsWith('/api/'))return route.continue()
     if(u.hostname!=='mhgyhyxagkkwdiepifdp.supabase.co')return route.abort()
     if(u.pathname==='/auth/v1/user')return reply({email:'dummy@example.test',app_metadata:{role:'admin'}})
+    if(u.pathname.endsWith('/publish_winter_monitor')){
+      tables.fhs_winter_monitor=[{state:route.request().postDataJSON().p_state}]
+      return reply({})
+    }
     if(u.pathname.endsWith('/save_winter_start_order')){
       const body=route.request().postDataJSON();writes.push(body)
       body.p_entry_ids.forEach((e,i)=>{entries.find(x=>x.entry_id===e).start_order=i+1})
@@ -41,12 +45,20 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   assert.deepEqual(await headings.evaluateAll(h=>h.map(e=>e.id)),saturday.map(c=>'day-start-heading-'+c.id))
   const target=saturday.find(c=>c.competition_no==='14'),other=saturday.find(c=>c.competition_no==='1')
   const section=c=>panel.locator('section[aria-labelledby="day-start-heading-'+c.id+'"]')
+  const published=page.waitForResponse(response=>response.url().endsWith('/publish_winter_monitor') && response.request().postDataJSON()?.p_state?.competitionId===target.id)
   await panel.getByRole('button',{name:new RegExp(target.name)}).first().click()
   await page.waitForFunction(id=>document.activeElement?.id==='day-start-heading-'+id&&document.activeElement.getBoundingClientRect().top>=-1&&document.activeElement.getBoundingClientRect().top<innerHeight,target.id)
   assert.equal(await headings.count(),18,'jump must not hide the other competitions')
   assert.ok(await section(saturday.find(c=>c.competition_no==='12')).getByText('この競技の出番はまだありません。').isVisible())
-  assert.deepEqual(await section(target).locator('[data-reserve-number]').evaluateAll(rows=>rows.map(row=>Number(row.dataset.reserveNumber))),Array.from({length:32},(_,i)=>i+4))
-  assert.equal(await section(saturday.find(c=>c.competition_no==='12')).locator('[data-reserve-number]').count(),35)
+  assert.equal(await section(target).locator('[data-start-entry-id]').count(),3)
+  assert.equal(await section(saturday.find(c=>c.competition_no==='12')).locator('[data-start-entry-id]').count(),0)
+  assert.equal(await panel.locator('[data-reserve-number]').count(),0)
+  await published
+  const monitor=await ctx.newPage()
+  await monitor.goto(new URL('/winter/monitor',url).href)
+  await monitor.getByRole('heading',{name:new RegExp(target.name)}).waitFor()
+  assert.deepEqual(await monitor.locator('tbody tr td:first-child').allTextContents(),['1','2','3'])
+  await monitor.close()
   async function printedSheets(label){
     const opened=page.waitForEvent('popup')
     await panel.getByRole('button',{name:label,exact:true}).click()
@@ -54,6 +66,11 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
     try{
       await popup.locator('section svg').first().waitFor()
       const sheets=await popup.locator('section svg').evaluateAll(rows=>rows.map(svg=>svg.outerHTML))
+      for(const numbers of await popup.locator('section svg').evaluateAll(rows=>rows.map(svg=>
+        Array.from(svg.querySelectorAll('text'),node=>node.textContent).filter(v=>/^\d+$/.test(v))
+      ))){
+        assert.ok(numbers.includes('35') && !numbers.includes('36'),'print still has numbered rows to 35')
+      }
       const pdf=await popup.pdf({preferCSSPageSize:true,printBackground:true})
       assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length,sheets.length,'one printed page per Excel print area')
       return sheets
@@ -75,6 +92,6 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   await panel.getByRole('combobox',{name:'競技',exact:false}).first().selectOption(target.id)
   await page.waitForFunction(id=>document.activeElement?.id==='day-start-heading-'+id,target.id)
   assert.equal(await headings.count(),18);assert.deepEqual(errors,[])
-  console.log('PASS day-wide order, 35 numbered slots, identical single and day Excel print pages, normal/wide jump, drafts and scoped save.')
+  console.log('PASS registered starts only on screen and monitor, numbered print slots to 35, identical single and day Excel print pages, normal/wide jump, drafts and scoped save.')
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})
