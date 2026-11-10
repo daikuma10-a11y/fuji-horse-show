@@ -9,6 +9,13 @@ assert(jumpTable.includes('<th>下見開始</th>') && jumpTable.includes('<td>�
 assert(!dressageTable.includes('下見') && !dressageTable.includes('組み換え時間'))
 assert(dressageTable.includes('<th>競技開始</th>') && dressageTable.includes('<td>15:00</td>'))
 assert(!dressageTable.includes('colspan="5"') && dressageTable.includes('colspan="4"'))
+const withOpening={...mapped,openings:[{date:'2026-11-13',section:'dressage',label:'馬場開放',start:'14:25'}]}
+const friday=timetablePrintHtml(withOpening,'now',['2026-11-13'])
+const [fridayJump,fridayDressage]=[...friday.matchAll(/<table>([\s\S]*?)<\/table>/g)].map(match=>match[1])
+assert(!fridayJump.includes('馬場開放'))
+assert(fridayDressage.includes('馬場開放　14:25')&&!fridayDressage.includes('競技はありません'))
+assert(!timetablePrintHtml(withOpening,'now',['2026-11-14']).includes('馬場開放'))
+assert.equal((html.match(/<td data-competition-name>/g)||[]).length,40)
 assert.equal(mapped.items.length,40);assert.equal(mapped.items.filter(i=>i.section==='dressage').length,9)
 assert(mapped.items.every(i=>i.count===2),'OP counted and withdrawn excluded')
 assert.equal((html.match(/data-timetable-sheet/g)||[]).length,1);assert.equal((html.match(/data-competition-id=/g)||[]).length,40)

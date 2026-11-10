@@ -6,6 +6,7 @@ import { barnIds, stalls, stallLocation, previewStallMove, tentIds, createStallP
 import { openStallPlanFile, stallPlanFile } from '@/lib/master/stall-plan-file'
 import { StallMap } from './stall-map'
 import { stallPlanPrintHtml } from '@/lib/master/stall-allocation-print'
+import { PdfDownload } from './pdf-download'
 import { usePrintDocument } from './use-print-document'
 
 const primary='min-h-14 rounded-xl border-2 border-primary bg-primary px-5 py-3 text-lg font-bold text-primary-foreground disabled:opacity-40'
@@ -188,6 +189,10 @@ export function MasterStallAllocation({groups,eventName,eventId,active=true,onLo
       <div id="stall-save-print" className="flex scroll-mt-4 flex-wrap gap-3">
         <button className={primary} disabled={pending} onClick={()=>void save()}>厩舎割を保存</button>
         <button className={secondary} disabled={printer.busy} onClick={()=>void printer.print(async()=>stallPlanPrintHtml(plan,eventName),'横')}>現在の厩舎割を印刷</button>
+        <PdfDownload label="現在の厩舎割をPDFでダウンロード" filename={eventName+'_厩舎割'} generate={async()=>{
+          const {stallAllocationPdf}=await import('@/lib/master/handout-pdf')
+          return stallAllocationPdf(stallPlanPrintHtml(plan,eventName))
+        }}/>
       </div>
       {saved&&<p>最終保存：{new Date(saved.savedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>}
       {printer.notice&&<p role="status">{printer.notice}</p>}{printer.error&&<p role="alert">{printer.error}</p>}
