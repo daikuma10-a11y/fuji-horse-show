@@ -31,7 +31,7 @@ export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnTy
       if (!rider || !horse || !e.organization_name || !Number.isSafeInteger(e.start_order)) throw new Error('保存済みの出番・人馬・所属を確認してください')
       return entryValues({...e,rider_name:rider.name,jef_member_no:workbookJefNumber(rider.jef_member_no),horse_name:horse.name,jef_registration_no:workbookJefNumber(horse.jef_registration_no)})
     })
-    return {name:c.name, number:c.competition_no, venue:section.venue, official:c.official, dressage:section.id==='dressage', entries}
+    return {name:c.name, number:c.competition_no, venue:section.startListVenue ?? section.venue, official:c.official, dressage:section.id==='dressage', entries}
   })
   if (!competitions.length || new Set(competitions.map(c=>c.number)).size!==competitions.length) throw new Error('開催日の競技一覧を確認してください')
   return buildLinkedEventWorkbook(layouts,WINTER_EVENT_NAME,date,competitions, {startsPerPage:WINTER_STARTS_PER_PAGE, numberedThrough:WINTER_STARTS_PER_PAGE})

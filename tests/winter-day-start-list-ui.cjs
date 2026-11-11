@@ -43,10 +43,11 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   await panel.getByRole('button',{name:/11\/14/}).click()
   const saturday=competitions.filter(c=>c.competition_date==='2026-11-14')
   assert.deepEqual(await headings.evaluateAll(h=>h.map(e=>e.id)),saturday.map(c=>'day-start-heading-'+c.id))
-  const target=saturday.find(c=>c.competition_no==='14'),other=saturday.find(c=>c.competition_no==='1')
+  const target=saturday.find(c=>c.competition_no==='15'),other=saturday.find(c=>c.competition_no==='1')
   const section=c=>panel.locator('section[aria-labelledby="day-start-heading-'+c.id+'"]')
+  assert.ok(await section(target).getByText('会場：インドア競技場',{exact:true}).isVisible())
   const published=page.waitForResponse(response=>response.url().endsWith('/publish_winter_monitor') && response.request().postDataJSON()?.p_state?.competitionId===target.id)
-  await panel.getByRole('button',{name:new RegExp(target.name)}).first().click()
+  await panel.getByRole('button',{name:/^15\s/}).click()
   await page.waitForFunction(id=>document.activeElement?.id==='day-start-heading-'+id&&document.activeElement.getBoundingClientRect().top>=-1&&document.activeElement.getBoundingClientRect().top<innerHeight,target.id)
   assert.equal(await headings.count(),18,'jump must not hide the other competitions')
   assert.ok(await section(saturday.find(c=>c.competition_no==='12')).getByText('この競技の出番はまだありません。').isVisible())
@@ -56,7 +57,8 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   await published
   const monitor=await ctx.newPage()
   await monitor.goto(new URL('/winter/monitor',url).href)
-  await monitor.getByRole('heading',{name:new RegExp(target.name)}).waitFor()
+  await monitor.getByRole('heading',{name:/^第15競技/}).waitFor()
+  assert.ok(await monitor.getByText(/会場：インドア競技場/).isVisible())
   assert.deepEqual(await monitor.locator('tbody tr td:first-child').allTextContents(),['1','2','3'])
   await monitor.close()
   async function printedSheets(label){
@@ -78,6 +80,7 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   }
   const daySheets=await printedSheets('この日の出番表を印刷')
   assert.equal(daySheets.length,saturday.length)
+  saturday.forEach((c,i)=>assert.ok(daySheets[i].includes(['15','16','17','18'].includes(c.competition_no)?'インドア競技場':'第1競技場')))
   assert.deepEqual(await printedSheets('この競技だけを印刷'),[daySheets[saturday.indexOf(target)]])
   const visibleIds=c=>section(c).locator('[data-start-entry-id]').evaluateAll(a=>a.map(e=>e.dataset.startEntryId))
   const before=await visibleIds(target),unaffected=await visibleIds(other)
