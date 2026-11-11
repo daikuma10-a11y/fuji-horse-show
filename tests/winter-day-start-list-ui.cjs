@@ -11,7 +11,9 @@ const competitions=config.competitions.map((c,i)=>({event_id:ev,id:id(100+i),com
 const riders=people(10),horses=people(20)
 const entries=competitions.flatMap((c,i)=>c.competition_no==='12'?[]:riders.map((r,j)=>({event_id:ev,entry_id:id(1000+i*10+j),competition_id:c.id,
  rider_id:r.id,horse_id:horses[j].id,organization_id:org.id,organization_name:org.name,status:'active',is_op:false,start_order:j+1})))
-const tables={riders,horses,competitions,organizations:[org],reception_entries:entries}
+const officialName='大会での正式所属'
+const tables={riders,horses,competitions,organizations:[org],reception_entries:entries,
+ fhs_winter_event_affiliations:[{event_id:ev,organization_id:org.id,official_name:officialName}]}
 ;(async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.FHS_CHROMIUM?{executablePath:process.env.FHS_CHROMIUM,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--single-process','--no-zygote']}:{})})
  try{
@@ -46,6 +48,7 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   const target=saturday.find(c=>c.competition_no==='15'),other=saturday.find(c=>c.competition_no==='1')
   const section=c=>panel.locator('section[aria-labelledby="day-start-heading-'+c.id+'"]')
   assert.ok(await section(target).getByText('会場：インドア競技場',{exact:true}).isVisible())
+  assert.ok((await section(target).textContent()).includes(officialName))
   const published=page.waitForResponse(response=>response.url().endsWith('/publish_winter_monitor') && response.request().postDataJSON()?.p_state?.competitionId===target.id)
   await panel.getByRole('button',{name:/^15\s/}).click()
   await page.waitForFunction(id=>document.activeElement?.id==='day-start-heading-'+id&&document.activeElement.getBoundingClientRect().top>=-1&&document.activeElement.getBoundingClientRect().top<innerHeight,target.id)
@@ -81,6 +84,7 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   const daySheets=await printedSheets('この日の出番表を印刷')
   assert.equal(daySheets.length,saturday.length)
   saturday.forEach((c,i)=>assert.ok(daySheets[i].includes(['15','16','17','18'].includes(c.competition_no)?'インドア競技場':'第1競技場')))
+  assert.ok(daySheets[saturday.indexOf(target)].includes(officialName))
   assert.deepEqual(await printedSheets('この競技だけを印刷'),[daySheets[saturday.indexOf(target)]])
   const visibleIds=c=>section(c).locator('[data-start-entry-id]').evaluateAll(a=>a.map(e=>e.dataset.startEntryId))
   const before=await visibleIds(target),unaffected=await visibleIds(other)

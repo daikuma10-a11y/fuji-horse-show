@@ -1,14 +1,15 @@
 import type {RegistrationOverviewGroup,RegistrationOverviewPerson} from './master/registration-overview'
 import type {loadWinterData} from './winter-data'
 import {assertWinterEvent} from './winter-event'
-import {compareWinterCompetitions,compareWinterOrganizations,winterCompetitionLabel} from './winter-display-order'
+import {winterAffiliatedOrganizations,compareWinterCompetitions,compareWinterOrganizations,winterCompetitionLabel} from './winter-display-order'
 
 type Data=Awaited<ReturnType<typeof loadWinterData>>
 /** Read the saved event snapshot, never the browser's imported draft or a name match. */
 export function winterRegistrationOverview(data:Data):RegistrationOverviewGroup[]{
  assertWinterEvent(data.eventId)
  for(const row of [...data.organizations,...data.riders,...data.horses,...data.competitions,...data.entries])assertWinterEvent(row.event_id)
- const organizations=new Map(data.organizations.map(row=>[row.id,row]))
+ const eventOrganizations=winterAffiliatedOrganizations(data)
+ const organizations=new Map(eventOrganizations.map(row=>[row.id,row]))
  const riders=new Map(data.riders.map(row=>[row.id,row])),horses=new Map([...data.horses,...(data.historicalHorses??[])].map(row=>[row.id,row]))
  const competitions=new Map(data.competitions.map(row=>[row.id,row]))
  const entries=data.entries.map(entry=>{
@@ -20,7 +21,7 @@ export function winterRegistrationOverview(data:Data):RegistrationOverviewGroup[
  const withdrawn=(status:string)=>['wd','withdrawn'].includes(status.toLowerCase())
  const byName=(a:RegistrationOverviewPerson,b:RegistrationOverviewPerson)=>a.name.localeCompare(b.name,'ja')||a.id.localeCompare(b.id)
  const dateLabel=(date:string)=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',weekday:'short'}).format(new Date(`${date}T00:00:00+09:00`))
- return [...data.organizations].sort(compareWinterOrganizations).map(org=>{
+ return [...eventOrganizations].sort(compareWinterOrganizations).map(org=>{
   const chosen=entries.filter(row=>row.organizationId===org.id)
   const riderIds=new Set(chosen.map(row=>row.rider.id)),horseIds=new Set(chosen.map(row=>row.horse.id))
   const people=(kind:'riders'|'horses'):RegistrationOverviewPerson[]=>data[kind].filter(row=>row.organization_id===org.id||(kind==='riders'?riderIds:horseIds).has(row.id)).map(row=>{

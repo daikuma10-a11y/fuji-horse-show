@@ -1,3 +1,4 @@
+import {winterAffiliatedOrganizations} from './winter-display-order'
 import { assertWinterEvent } from './winter-event'
 import type { loadWinterData } from './winter-data'
 import { loadSharedRoster, loadWinterRosterBindings, type SharedRoster, type WinterRosterBinding } from './shared-roster'
@@ -13,7 +14,7 @@ export function winterReadingList(data: Data, roster: SharedRoster, bindings: Wi
   for (const row of roster.participants) assertWinterEvent(row.event_id)
   const active = data.entries.filter(e => !['wd', 'withdrawn', 'cancelled', 'canceled'].includes(e.status.toLowerCase()))
   const entities = new Map(roster.entities.map(e => [e.id, e]))
-  const organizations = new Map(data.organizations.map(o => [o.id, o.name]))
+  const organizations = new Map(winterAffiliatedOrganizations(data).map(o => [o.id, o.name]))
   const result: ReadingList = { riders: [], horses: [] }
   for (const kind of ['rider', 'horse'] as const) {
     const people = new Map((kind === 'rider' ? data.riders : data.horses).map(p => [p.id, p]))
