@@ -59,6 +59,8 @@ test('選択した日の競技だけを同じ帳票で印刷し、35番を超え
   assert.deepEqual(single['xl/worksheets/sheet1.xml'],day['xl/worksheets/sheet'+(i+1)+'.xml'])
   assert.deepEqual(single['xl/worksheets/sheet2.xml'],day['xl/worksheets/sheet'+(i+3)+'.xml'])
   const sheet=strFromU8(single['xl/worksheets/sheet1.xml'])
+  const venueCell=sheet.match(/<c r="G10"[^>]*>.*?<\/c>/)?.[0]
+  assert.ok(venueCell?.includes('競技場：'+(c.competition_no==='15'?'インドア競技場':'第1競技場')))
   assert.match(sheet,/<c r="B48"[^>]*><f>[^<]+<\/f><v>35<\/v>/)
   if(i===0){
    assert.match(book,/\$A\$49:\$G\$83/)

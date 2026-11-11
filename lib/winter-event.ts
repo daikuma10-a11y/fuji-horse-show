@@ -8,8 +8,8 @@ export const WINTER_STARTS_PER_PAGE = 35
 export const WINTER_DATES = ["2026-11-13", "2026-11-14", "2026-11-15"] as const
 // The Winter program assigns one discipline to each arena.
 export const winterTimetableSections = [
-  {id: 'jump', label: '障害馬術 ～Jump～', venue: '第1競技場', showInspection: true},
-  {id: 'dressage', label: '馬場馬術 ～Dressage～', venue: '第2競技場', showInspection: false},
+  {id: 'jump', label: '障害馬術 ～Jump～', venue: '第1競技場', startListVenue: null, showInspection: true},
+  {id: 'dressage', label: '馬場馬術 ～Dressage～', venue: '第2競技場', startListVenue: 'インドア競技場', showInspection: false},
 ] as const
 
 const timetableSectionsByNumber = new Map(preparation.competitions.map(competition => [
