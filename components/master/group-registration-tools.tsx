@@ -6,7 +6,7 @@ export const groupActionClass='min-h-11 rounded-lg border border-blue-800 bg-whi
 export type GroupEdit =
   | {kind:'payment'|'stable'|'source'}
   | {kind:'identity';type:'rider'|'horse';id:string}
-  | {kind:'cancelHorse'|'substitute'|'cancelEntry';id:string}
+  | {kind:'cancelHorse'|'substitute'|'editEntry'|'cancelEntry';id:string}
 
 export function GroupRegistrationTools({edit,open,close,children,message}:{edit:GroupEdit|null;open:(task:GroupEdit)=>void;close:()=>void;children:ReactNode;message:string}){
   return <section className="space-y-3" aria-label="団体の登録内容を修正">
