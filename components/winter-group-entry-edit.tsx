@@ -8,11 +8,14 @@ import {winterCompetition,winterStorageKey} from '@/lib/winter-event'
 import type {loadWinterData} from '@/lib/winter-data'
 import {winterCompetitionLabel} from '@/lib/winter-display-order'
 import {reviewWinterChange,type WinterChangeInput} from '@/lib/winter-change'
+import {correctWinterGroupEntry,type GroupCorrectionQuote} from '@/lib/winter-group-entry-correction'
 import {emptyWinterQueue,submitWinterBatch,WinterBatchRejected} from '@/lib/winter-batch'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 
 type Data=Awaited<ReturnType<typeof loadWinterData>>
-type Review={kind:'request';group:string;entry:string;change:WinterChangeInput;before:string;after:string;lines:string[]}
+type Review={group:string;entry:string;before:string;after:string;lines:string[]} & (
+  {kind:'request';change:WinterChangeInput}|{kind:'correction';operation:string;quote:GroupCorrectionQuote}
+)
 const yen=(amount:number)=>amount.toLocaleString('ja-JP')+'円'
 export const entryEditKey=(email:string,group:string)=>winterStorageKey('group-entry-edit')+':'+email+':'+group
 
@@ -21,6 +24,7 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
   const from=data.competitions.find(c=>c.id===original?.competition_id)
   const key=entryEditKey(session.email,group)
   const [fields,setFields]=useState<EntryFields|null>(null),[basis,setBasis]=useState<SubstitutionEntry|null>(null)
+  const [mode,setMode]=useState<''|'request'|'correction'>('')
   const [review,setReview]=useState<Review|null>(null),[attempted,setAttempted]=useState(false)
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[reload,setReload]=useState(0)
   const lock=useRef(false),auth=useRef({session,onSession});auth.current={session,onSession}
@@ -51,8 +55,9 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
     const c=data.competitions.find(c=>c.id===comp)
     return [c&&winterCompetitionLabel(c),data.riders.find(r=>r.id===rider)?.name,data.horses.find(h=>h.id===horse)?.name,op?'OP':'通常'].join(' ／ ')
   }
-  function preview(){
-    setError('')
+  async function preview(){
+    if(lock.current||!mode)return
+    lock.current=true;setBusy(true);setError('')
     try{
       if(!fields||!basis||!original||!from||!competition||!data.entries.some(e=>e.entry_id===entryId))throw Error('対象の出番を再確認してください。')
       const rider=data.riders.find(r=>r.id===fields.rider),horse=data.horses.find(h=>h.id===fields.horse)
@@ -65,6 +70,17 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
       const category=(value:string|null)=>value==='member'?' ／ 会員':value==='nonmember'?' ／ 非会員':''
       const before=describe(from.id,original.rider_id,original.horse_id,!!original.is_op)+category(basis.membership)
       const after=describe(competition.id,rider.id,horse.id,fields.op)+category(fields.membership)
+      if(mode==='correction'){
+        const verified=await verifyAdminSession(session);onSession(verified)
+        const target={...fields,membership:fields.membership||null}
+        const quote=await correctWinterGroupEntry(group,entryId,target,null,null,verified.accessToken)
+        const old=quote.original
+        if(old.competitionId!==from.id||old.riderId!==original.rider_id||old.horseId!==original.horse_id||!!old.op!==!!original.is_op||old.fee!==basis.oldFee)throw Error('元の出番または料金が変わりました。最新の登録内容を開き直してください。')
+        const lines=['転記訂正　変更料 0円','競技料　'+yen(old.fee)+' → '+yen(quote.fee),
+          ...quote.accounts.map(a=>orgName(a.id)+'　請求額 '+yen(a.before)+' → '+yen(a.before+a.delta))]
+        setReview({kind:'correction',group,entry:entryId,operation:change.target.id,quote,before,after,lines})
+        return
+      }
       const result=reviewWinterChange(change)
       if(result.fromEntryFee!==basis.oldFee)throw Error('登録時の競技料と現在の料金設定が異なります。精算で確認してください。')
       const {fee}=result
@@ -72,7 +88,7 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
         '請求先　'+organization.name,
         result.treatedAsWithdrawAdd?'棄権＋追加扱い　追加料 '+yen(fee.addBase)+' ／ 競技料 '+yen(fee.addEntry):'変更料 '+yen(fee.changeBase)+' ／ 競技料の差額 '+yen(fee.competitionDiff),
         '追加請求額　'+yen(fee.total)]})
-    }catch(e){setError(e instanceof Error?e.message:'修正内容を確認してください。')}
+    }catch(e){setError(e instanceof Error?e.message:'修正内容を確認してください。')}finally{lock.current=false;setBusy(false)}
   }
   async function confirm(){
     if(!review||lock.current)return
@@ -83,9 +99,11 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
       const verified=await verifyAdminSession(session);onSession(verified)
       sessionStorage.setItem(key,serialized);setAttempted(true)
       try{
-        await submitWinterBatch({...emptyWinterQueue(),attempted:true,items:[{type:'change',input:review.change}]},verified.accessToken,'meeting')
+        if(review.kind==='correction'){
+          await correctWinterGroupEntry(group,entryId,review.quote.target,review.operation,review.quote,verified.accessToken)
+        }else await submitWinterBatch({...emptyWinterQueue(),attempted:true,items:[{type:'change',input:review.change}]},verified.accessToken,'meeting')
       }catch(e){
-        if(e instanceof WinterBatchRejected){sessionStorage.removeItem(key);setAttempted(false);setReview(null);setReload(v=>v+1)}
+        if(e instanceof WinterBatchRejected||(e instanceof Error&&'status' in e&&e.status===400)){sessionStorage.removeItem(key);setAttempted(false);setReview(null);setReload(v=>v+1)}
         throw e
       }
       sessionStorage.removeItem(key);onSaved()
@@ -96,11 +114,14 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
     {review?<><p>修正前　{review.before}</p><p>修正後　{review.after}</p>{review.lines.map(line=><p key={line}>{line}</p>)}
       <button type="button" className={groupActionClass} disabled={busy} onClick={()=>void confirm()}>{attempted?'同じ修正の確定結果を再確認':'この内容で確定'}</button>
       {!attempted&&<button type="button" className={groupActionClass} disabled={busy} onClick={()=>setReview(null)}>入力に戻る</button>}</>:
-    fields&&competition?<><p>締切後に団体から届いた変更依頼として、確定前に料金を確認できます。</p>
+    fields&&competition?<fieldset disabled={busy} className="space-y-3">
+      <legend>修正の種類</legend>
+      <label className="block"><input type="radio" name="group-entry-mode" checked={mode==='correction'} onChange={()=>setMode('correction')}/> 申込書の転記訂正（競技料の差額のみ）</label>
+      <label className="block"><input type="radio" name="group-entry-mode" checked={mode==='request'} onChange={()=>setMode('request')}/> 団体からの締切後の変更依頼（大会の変更規定を適用）</label>
       <GroupEntryFields value={fields} change={v=>{setFields(v);setError('')}} competitions={data.competitions.map(c=>({id:c.id,label:c.competition_date+'　'+winterCompetitionLabel(c)}))}
         riders={data.riders.map(p=>person(p,p.jef_member_no))} horses={data.horses.map(p=>person(p,p.jef_registration_no))}
         allowOp={!competition.official&&competition.op_fee!=null} membership={competition.member_fee!=null||competition.nonmember_fee!=null} instructor={winterCompetition(competition.competition_no).instructorRequired}/>
-      <button type="button" className={groupActionClass} disabled={busy} onClick={preview}>修正内容と料金を確認</button></>:!error&&<p>登録時の出番と料金を読み込んでいます…</p>}
+      <button type="button" className={groupActionClass} disabled={busy||!mode} onClick={()=>void preview()}>修正内容と料金を確認</button></fieldset>:!error&&<p>登録時の出番と料金を読み込んでいます…</p>}
     {error&&<p role="alert" className="rounded-lg bg-red-100 p-3">{error}</p>}
     {error&&!fields&&!review&&<button type="button" className={groupActionClass} onClick={()=>setReload(n=>n+1)}>読み直す</button>}
   </section>
