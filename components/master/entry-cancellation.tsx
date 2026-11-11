@@ -8,6 +8,7 @@ export type CancellationQuote = {
 }
 type Entry = {id:string; competition:string; rider:string; horse:string; position:number; op:boolean; label:string}
 type Props = {
+  initialEntry?:string
   competitions:{id:string;label:string}[]; entries:Entry[]; organizationName:(id:string)=>string
   calculate:(entry:string,operation:string|null,expected:CancellationQuote|null)=>Promise<CancellationQuote>
   onSaved:()=>void
@@ -17,8 +18,8 @@ const yen=(n:number)=>n.toLocaleString('ja-JP')+'円'
 const field='block w-full min-h-12 rounded-xl border-2 p-2'
 const button='min-h-12 rounded-xl border-2 px-4 font-bold disabled:opacity-50'
 
-export function MasterEntryCancellation({competitions,entries,organizationName,calculate,onSaved}:Props){
-  const [competition,selectCompetition]=useState(''),[entry,selectEntry]=useState('')
+export function MasterEntryCancellation({competitions,entries,organizationName,calculate,onSaved,initialEntry}:Props){
+  const [competition,selectCompetition]=useState(entries.find(e=>e.id===initialEntry)?.competition??''),[entry,selectEntry]=useState(initialEntry??'')
   const [review,setReview]=useState<{quote:CancellationQuote;label:string;operation:string}|null>(null)
   const [error,setError]=useState(''),[result,setResult]=useState(''),[busy,setBusy]=useState(false)
   const lock=useRef(false)
@@ -56,11 +57,11 @@ export function MasterEntryCancellation({competitions,entries,organizationName,c
       <button type="button" disabled={busy} className={button+' bg-destructive text-white'} onClick={()=>void submit(true)}>取消を確定</button>{' '}
       <button type="button" disabled={busy} className={button} onClick={()=>{reset();onSaved()}}>選び直す</button>
     </div>:<>
-      <label className="block">競技<select className={field} disabled={busy} value={competition} onChange={e=>{reset();selectCompetition(e.target.value);selectEntry('')}}>
+      {initialEntry?<p>{competitions.find(c=>c.id===competition)?.label}　{candidates.find(e=>e.id===entry)?.label}</p>:<><label className="block">競技<select className={field} disabled={busy} value={competition} onChange={e=>{reset();selectCompetition(e.target.value);selectEntry('')}}>
         <option value="">競技を選択</option>{competitions.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
       <label className="block">取り消す出番<select className={field} disabled={busy||!candidates.length} value={entry} onChange={e=>{reset();selectEntry(e.target.value)}}>
         <option value="">出番を選択</option>{candidates.map(e=><option key={e.id} value={e.id}>{e.label}</option>)}</select></label>
-      {competition&&!candidates.length&&<p>この競技に取消対象の事前エントリーはありません。</p>}
+      </>}{competition&&!candidates.length&&<p>この競技に取消対象の事前エントリーはありません。</p>}
       <button type="button" className={button} disabled={busy||!candidates.some(e=>e.id===entry)} onClick={()=>void submit(false)}>取消内容を確認</button>
     </>}
     {busy&&<p role="status">確認中…</p>}{result&&<p role="status" className="font-bold">{result}</p>}

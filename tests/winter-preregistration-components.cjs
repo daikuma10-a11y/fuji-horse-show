@@ -75,7 +75,7 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
  assert.ok(text(MasterPreRegistration(workspace.props)).includes('申込書の読み込み'))
  assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.data,data)
  assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.active,false)
- assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.token,'synthetic')
+ assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.session.accessToken,'synthetic')
  workspace.props.onSelect('overview');tree=render();workspace=find(tree,MasterPreRegistration)
  assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.active,true)
  assert.equal(nodes(MasterPreRegistration(workspace.props)).find(n=>n.props?.id==='pre-registration-overview').props.hidden,false)

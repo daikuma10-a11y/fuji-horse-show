@@ -5,7 +5,7 @@ import {UncertainSubstitution,type HorseOptions,type HorseEdit,type HorseQuote,t
 type Props={
   data:{organizations:{id:string;name:string}[];riders:{id:string;name:string}[];horses:{id:string;name:string;organization_id:string;jef_registration_no:string|null}[];
     competitions:{id:string;competition_no:string;competition_date:string;name:string;official:boolean;op_fee:number|null;member_fee:number|null;nonmember_fee:number|null}[]}
-  storageKey:string;needsInstructor:(id:string)=>boolean;feeNote:string;onSaved:()=>void
+  fixedHorse?:string;storageKey:string;needsInstructor:(id:string)=>boolean;feeNote:string;onSaved:()=>void
   loadOptions:(old:string)=>Promise<HorseOptions>
   calculate:(input:SwapInput,id?:string|null,expected?:HorseQuote|null)=>Promise<HorseQuote>
 }
@@ -15,8 +15,8 @@ const button='min-h-12 rounded-xl border-2 border-blue-800 px-4 font-semibold di
 const yen=(n:number)=>n.toLocaleString('ja-JP')+'円'
 const sum=(b:HorseQuote['billing'][number])=>b.difference+b.service+b.registration
 
-export function MasterHorseSubstitution({data,storageKey,needsInstructor,feeNote,onSaved,loadOptions,calculate}:Props){
-  const [org,setOrg]=useState(''),[old,setOld]=useState(''),[target,setTarget]=useState('')
+export function MasterHorseSubstitution({data,storageKey,fixedHorse,needsInstructor,feeNote,onSaved,loadOptions,calculate}:Props){
+  const [org,setOrg]=useState(data.horses.find(h=>h.id===fixedHorse)?.organization_id??''),[old,setOld]=useState(fixedHorse??''),[target,setTarget]=useState('')
   const [options,setOptions]=useState<HorseOptions|null>(null),[rows,setRows]=useState<HorseEdit[]>([])
   const [quote,setQuote]=useState<HorseQuote|null>(null),[attempt,setAttempt]=useState<Attempt|null>(null)
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('')
@@ -65,11 +65,11 @@ export function MasterHorseSubstitution({data,storageKey,needsInstructor,feeNote
   return <div className="space-y-4 rounded-xl border-2 bg-white p-4">
     <h3 className="text-2xl font-bold">馬の差し替え</h3>
     <fieldset disabled={busy||!!attempt} className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      {fixedHorse?<p className="font-bold">{orgName(org)}　{data.horses.find(h=>h.id===fixedHorse)?.name??quote?.old}</p>:<div className="grid gap-3 sm:grid-cols-2">
         <label>馬の所属団体<select className={field} value={org} onChange={e=>{reset();setOrg(e.target.value);setOld('')}}><option value="">団体を選択</option>{data.organizations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
         <label>今回来なくなる馬<select className={field} value={old} onChange={e=>load(e.target.value)}><option value="">元の馬を選択</option>{data.horses.filter(h=>h.organization_id===org).map(h=><option key={h.id} value={h.id}>{h.name}（{h.jef_registration_no||'番号なし'}）</option>)}</select></label>
-      </div>
-      {old&&!options&&!busy&&<button className={button} onClick={()=>load(old)}>名簿と出番を読み直す</button>}
+      </div>}
+      {old&&!options&&!busy&&<button className={button} onClick={()=>load(old)}>{fixedHorse?'差し替え先と出番を表示':'名簿と出番を読み直す'}</button>}
       {options&&<>
         <label className="block">代わりに来る馬<select className={field} value={target} onChange={e=>{setTarget(e.target.value);setQuote(null);setError('')}}><option value="">同じ団体の馬を選択</option>{options.choices.map(c=><option key={c.kind+c.id} value={c.kind+':'+c.id}>{c.name}（{c.number||'番号なし'}・{c.kind==='event'?'参加済み':'名簿から参加'}）</option>)}</select></label>
         <p>候補にない馬は「人馬の登録」で団体の名簿に登録してから、元の馬を選び直してください。</p>
