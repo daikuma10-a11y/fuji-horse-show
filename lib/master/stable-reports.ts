@@ -2,11 +2,12 @@ import {stableDateLabel,type StableSchedule} from './stable-schedule'
 import type { StableGroup } from './stable-information'
 
 export type BookletRow = { id: string; name: string; count: number; received: string; arrival: string; departure: string; returned: string; notes: string }
-export type UnsettledRow = { id: string; name: string; status: '入金済み' | '不足' | '過入金' | '未入金' | '要確認' | '請求なし'; amount: number | null; notes: string; review: boolean }
+export type UnsettledRow = { id: string; name: string; status: '未精算' | '過入金' | '入金不足'; amount: number | null; notes: string; review: boolean }
 export const bookletHeaders = ['No.', '団体名', '手帳受取日', '頭数', '入厩日時', '退厩日時', '手帳返却日', '備考']
 export const unsettledHeaders = ['✓', '乗馬クラブ名', '入金状況', '差額', '備考']
 export const bookletExplanation = '団体名・頭数は参加登録、入退厩日時は保存済みの申込内容から自動反映します。日時の空欄は未登録です。手帳受取日・返却日は印刷後に記入してください。'
-export const unsettledExplanation = '精算画面と同じ請求・入金記録から作成します。団体ごとに入金状況と、請求額に対する不足額・過入金額を表示します。後日振込の選択だけでは入金済みになりません。'
+export const unsettledExplanation = '未精算・過入金・入金不足の団体を表示します。未反映の申請や料金履歴の不足は備考で確認できます。'
+export const unsettledEmptyMessage = '未精算・過入金・入金不足の団体はありません。'
 export const yen = (value: number) => `${value.toLocaleString('ja-JP')}円`
 export function bookletRows(groups: StableGroup[], schedules: {id:string;value:StableSchedule}[] = []): BookletRow[] {
   return groups.map(group => {const value=schedules.find(s=>s.id===group.id)?.value;return { id: group.id, name: group.name, count: group.horses.length, received: '', arrival: value?stableDateLabel(value.arrivalDate,value.arrivalTime):'', departure: value?stableDateLabel(value.departureDate,value.departureTime):'', returned: '', notes: value?.notes??'' }})
@@ -28,6 +29,6 @@ export function bookletPrintHtml(rows: BookletRow[], eventName: string, generate
   return document('手帳チェック', eventName, generatedAt, body)
 }
 export function unsettledPrintHtml(rows: UnsettledRow[], eventName: string, generatedAt: string) {
-  const body = `${rows.length ? `<table>${head(unsettledHeaders, [5,27,14,17,37])}<tbody>${rows.map(row => `<tr><td class="number"><span class="report-box"></span></td><td>${escape(row.name)}</td><td>${row.status}</td><td class="money">${row.amount === null ? '—' : yen(row.amount)}${row.review && row.status !== '要確認' ? '<br><span class="small review">要確認</span>' : ''}</td><td>${escape(row.notes)}</td></tr>`).join('')}</tbody></table><p>${rows.length}団体（要確認 ${rows.filter(row => row.review).length}団体）</p>` : '<p>表示する精算記録はありません。</p>'}`
+  const body = `${rows.length ? `<table>${head(unsettledHeaders, [5,27,14,17,37])}<tbody>${rows.map(row => `<tr><td class="number"><span class="report-box"></span></td><td>${escape(row.name)}</td><td>${row.status}</td><td class="money">${row.amount === null ? '—' : yen(row.amount)}${row.review ? '<br><span class="small review">要確認</span>' : ''}</td><td>${escape(row.notes)}</td></tr>`).join('')}</tbody></table><p>${rows.length}団体（要確認 ${rows.filter(row => row.review).length}団体）</p>` : `<p>${unsettledEmptyMessage}</p>`}`
   return document('未精算リスト', eventName, generatedAt, body)
 }

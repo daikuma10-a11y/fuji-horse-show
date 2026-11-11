@@ -1,5 +1,5 @@
 "use client"
-import { bookletHeaders, unsettledHeaders, bookletExplanation, unsettledExplanation, yen, type BookletRow, type UnsettledRow } from '@/lib/master/stable-reports'
+import { bookletHeaders, unsettledHeaders, bookletExplanation, unsettledExplanation, unsettledEmptyMessage, yen, type BookletRow, type UnsettledRow } from '@/lib/master/stable-reports'
 import { usePrintDocument } from './use-print-document'
 const button = 'min-h-14 rounded-xl bg-primary px-5 py-3 text-lg font-bold text-primary-foreground disabled:opacity-50'
 const cell = 'border p-2 text-left align-top'
@@ -21,7 +21,7 @@ export function MasterStableReports({ booklets, unsettled, loading, error, unset
       <button className={button} type="button" disabled={printer.busy || loading || unsettledLoading || !!error || !!unsettledError} onClick={() => void printer.print(loadUnsettledPrint, '縦')}>未精算リストを印刷</button>
       {(loading || unsettledLoading) && <p role="status">最新の精算状況を確認しています…</p>}
       {unsettledError && <p role="alert" className="rounded-lg bg-red-50 p-3 font-bold text-red-800">{unsettledError}</p>}
-      {!loading && !unsettledLoading && !error && !unsettledError && (unsettled.length ? <div className="overflow-x-auto"><table className="w-full border-collapse"><thead><tr>{unsettledHeaders.map(label => <th className={cell} key={label}>{label}</th>)}</tr></thead><tbody>{unsettled.map(row => <tr key={row.id} className={row.review ? 'bg-amber-50' : ''}><td className={cell}>□</td><td className={cell}>{row.name}</td><td className={cell}><strong>{row.status}</strong></td><td className={`${cell} whitespace-nowrap`}>{row.amount === null ? '—' : yen(row.amount)}{row.review && row.amount !== null && <span className="block text-sm font-bold">要確認</span>}</td><td className={cell}>{row.notes}</td></tr>)}</tbody></table></div> : <p>表示する精算記録はありません。</p>)}
+      {!loading && !unsettledLoading && !error && !unsettledError && (unsettled.length ? <div className="overflow-x-auto"><table className="w-full border-collapse"><thead><tr>{unsettledHeaders.map(label => <th className={cell} key={label}>{label}</th>)}</tr></thead><tbody>{unsettled.map(row => <tr key={row.id} className={row.review ? 'bg-amber-50' : ''}><td className={cell}>□</td><td className={cell}>{row.name}</td><td className={cell}><strong>{row.status}</strong></td><td className={`${cell} whitespace-nowrap`}>{row.amount === null ? '—' : yen(row.amount)}{row.review && <span className="block text-sm font-bold">要確認</span>}</td><td className={cell}>{row.notes}</td></tr>)}</tbody></table></div> : <p>{unsettledEmptyMessage}</p>)}
     </section>
     {printer.notice && <p role="status">{printer.notice}</p>}{printer.error && <p role="alert" className="rounded-lg bg-red-50 p-3 font-bold text-red-800">{printer.error}</p>}
   </div>
