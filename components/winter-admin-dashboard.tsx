@@ -25,8 +25,6 @@ import {WinterOfflineReception} from '@/components/winter-offline-reception'
 import {WinterReceptionNotice} from '@/components/winter-reception-notice'
 import {WinterReceivedReception} from '@/components/winter-received-reception'
 import {WinterOfflinePreparation} from '@/components/winter-offline-preparation'
-import {WinterEntryCancellation} from '@/components/winter-entry-cancellation'
-import {WinterHorseSubstitution} from '@/components/winter-horse-substitution'
 import {WinterStableInformation} from '@/components/winter-stable-information'
 const sessionKey=winterStorageKey('admin-session')
 const field='mt-2 min-h-14 w-full rounded-xl border-2 border-border bg-background px-4 text-lg'
@@ -57,8 +55,8 @@ export function WinterAdminDashboard(){
   if(window.location.hash==='#winter-application-import'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('application')}
   if(window.location.hash==='#winter-startlist'){setTab('startlist');setVisited(['requests','startlist'])}
   if(window.location.hash==='#winter-timetable'){setTab('timetable');setVisited(['requests','timetable'])}
-  if(window.location.hash==='#winter-entry-cancellation'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('cancellation')}
-  if(window.location.hash==='#winter-horse-substitution'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('substitution')}
+  if(window.location.hash==='#winter-entry-cancellation'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
+  if(window.location.hash==='#winter-horse-substitution'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-registration-overview'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-meeting'){setTab('meeting');setVisited(['requests','meeting'])}
   if(window.location.hash==='#winter-offline-reception'){setTab('requests');setVisited(['requests'])}
@@ -102,9 +100,7 @@ export function WinterAdminDashboard(){
  roster={<><p className="text-lg">団体を選ぶ → 参加する選手と馬にチェック →「参加チェックを保存」の順です。見つからない人馬は名簿全体を検索し、新規の場合は「新しい選手・馬を登録」を使います。</p><SharedRosterManager session={session} onParticipantsSaved={refresh}/>{data&&<WinterMasterRegistration session={session} organizations={data.organizations} onRegistered={refresh}/>}<button type="button" className={button} onClick={()=>openRegistration('entries')}>次へ：出番表の登録</button></>}
  entries={<div id="winter-initial-registration" className="space-y-4"><p className="text-lg">馬の所属団体 → 馬 → 競技・騎乗する選手を選び、内容と料金を確認して登録します。</p>{data?<WinterInitialEntryRegistration data={data} session={session} onChanged={refresh} onChooseParticipants={()=>openRegistration('roster')}/>:<p role="status">Winterのデータを読み込んでいます…</p>}<button type="button" className={button} onClick={()=>select('startlist')}>登録した出番表を確認</button></div>}
  application={<WinterApplicationImport session={session} onSession={updateSession} onChanged={refresh} onStartlist={()=>{refresh();select('startlist')}} onSettlement={()=>{refresh();select('settlement')}} onChanges={()=>select('on-site')} onRoster={()=>openRegistration('roster')}/>}
- cancellation={data?<WinterEntryCancellation data={data} session={session} onSession={updateSession} onSaved={refresh}/>:<p>出番を読み込んでいます…</p>}
- substitution={data?<WinterHorseSubstitution data={data} session={session} onSession={updateSession} onSaved={refresh}/>:<p>馬の名簿を読み込んでいます…</p>}
- overview={<WinterRegistrationOverview data={data} token={session.accessToken} active={tab==='roster'&&registrationSection==='overview'} loading={loading} error={dataError}/>}
+ overview={<WinterRegistrationOverview data={data} session={session} onSession={updateSession} onChanged={refresh} revision={revision} active={tab==='roster'&&registrationSection==='overview'} loading={loading} error={dataError}/>}
  ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">CSV・TSVからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVは、これまでの取込準備画面を使えます。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
  t.id==='meeting'?<WinterMeetingPanel session={session} onSession={updateSession} onChanged={refresh} onStartlist={()=>select('startlist')}/>:

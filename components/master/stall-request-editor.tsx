@@ -4,7 +4,7 @@ import {emptyStallRequest,stableBarns,stallRequestConditions,suggestStallRequest
 type Row={id:string;name:string;value:StallRequest;revision:string|null}
 const field='mt-1 min-h-12 w-full rounded-lg border-2 bg-background p-2 text-base'
 const button='min-h-12 rounded-xl border-2 border-primary px-4 py-2 font-bold disabled:opacity-40'
-export function MasterStallRequestEditor({rows,loading,error,onReload,onSave}:{rows:Row[];loading:boolean;error:string;onReload:()=>Promise<void>;onSave:(id:string,value:StallRequest,expected:string|null)=>Promise<void>}){
+export function MasterStallRequestEditor({rows,loading,error,onReload,onSave,organizationId}:{organizationId?:string;rows:Row[];loading:boolean;error:string;onReload:()=>Promise<void>;onSave:(id:string,value:StallRequest,expected:string|null)=>Promise<void>}){
  const [edit,setEdit]=useState<{id:string;value:StallRequest;expected:string|null}|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[failure,setFailure]=useState(''),lock=useRef(false)
  const dirty=!!edit
  useEffect(()=>{if(!dirty)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue=''};window.addEventListener('beforeunload',leave);return()=>window.removeEventListener('beforeunload',leave)},[dirty])
@@ -14,8 +14,14 @@ export function MasterStallRequestEditor({rows,loading,error,onReload,onSave}:{r
  return <section className="space-y-4 rounded-xl border-2 p-4" aria-label="団体別の厩舎割要望"><h3 className="text-2xl font-bold">団体別の厩舎割要望</h3><p>Excelの要望欄を保存し、メール・電話の要望や運営上の理由を追記できます。要望を保存しても配置済みの馬は動きません。自動配置では読み取れる希望を優先します。</p>
   <button className={button} disabled={loading||busy||dirty} onClick={()=>void run(onReload)}>保存済みの要望を読み直す</button>
   {(error||failure)&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-red-900">{error||failure}</p>}{message&&<p role="status" className="rounded-lg bg-emerald-50 p-3">{message}</p>}{busy&&<p role="status">要望の保存・結果確認中…</p>}
-  <label className="block">要望を入力・修正する団体<select className={field} disabled={loading||busy||!!error||dirty} value={edit?.id??''} onChange={e=>{const r=rows.find(r=>r.id===e.target.value);if(r){setEdit({id:r.id,value:structuredClone(r.value),expected:r.revision});setFailure('');setMessage('')}}}><option value="">団体を選択してください</option>{rows.map(r=><option key={r.id} value={r.id}>{r.name}{r.value.imports.length||r.value.manual?'（要望あり）':''}</option>)}</select></label>
+  {!organizationId&&<><label className="block">要望を入力・修正する団体<select className={field} disabled={loading||busy||!!error||dirty} value={edit?.id??''} onChange={e=>{const r=rows.find(r=>r.id===e.target.value);if(r){setEdit({id:r.id,value:structuredClone(r.value),expected:r.revision});setFailure('');setMessage('')}}}><option value="">団体を選択してください</option>{rows.map(r=><option key={r.id} value={r.id}>{r.name}{r.value.imports.length||r.value.manual?'（要望あり）':''}</option>)}</select></label>
   <details><summary className="cursor-pointer font-bold">団体別の保存状況（{rows.filter(r=>r.value.imports.length||r.value.manual).length}団体に要望あり）</summary>{rows.map(r=><div key={r.id} className="rounded-lg border p-3"><strong>{r.name}</strong><p>{r.value.imports.length}件のExcel要望{r.value.manual?' ／ 手入力あり':''}</p><button className={button} disabled={loading||busy||!!error||dirty} onClick={()=>{setEdit({id:r.id,value:structuredClone(r.value??emptyStallRequest()),expected:r.revision});setFailure('');setMessage('')}}>{r.name}の要望を入力・修正</button></div>)}</details>
+  </>}
+  {organizationId&&!edit&&rows.filter(r=>r.id===organizationId).map(r=><div key={r.id} className="space-y-2">
+    {r.value.imports.map(i=><p key={i.digest} className="whitespace-pre-wrap">{i.text}</p>)}
+    {r.value.manual&&<p className="whitespace-pre-wrap">{r.value.manual}</p>}
+    <button className={button} disabled={loading||busy||!!error} onClick={()=>{setEdit({id:r.id,value:structuredClone(r.value),expected:r.revision});setFailure('')}}>この団体の厩舎割要望を編集</button>
+  </div>)}
   {edit&&row&&<fieldset className="space-y-4 rounded-xl border-2 border-primary p-4"><legend className="px-2 text-xl font-bold">{row.name}の要望</legend>
     {edit.value.imports.map(i=><div key={i.digest} className="rounded-lg bg-slate-50 p-3"><strong>Excel原文</strong><p className="whitespace-pre-wrap">{i.text}</p><small>{i.source}</small></div>)}
     <label className="block">メール・電話・手入力の要望<textarea className={field} maxLength={4000} disabled={busy} value={edit.value.manual} onChange={e=>change({manual:e.target.value})}/></label>

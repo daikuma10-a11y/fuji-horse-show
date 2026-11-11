@@ -20,7 +20,7 @@ export function rosterCorrectionExpectation(id:string,s:ApplicationSnapshot){
   }).sort((a,b)=>a.clubId.localeCompare(b.clubId)),
  }
 }
-export function rosterCorrectionInput(person:ApplicationPerson,id:string,applicationClub:string,s:ApplicationSnapshot,requestId:string,edit?:RosterAffiliationEdit):RosterCorrectionInput{
+export function rosterCorrectionInput(person:Pick<ApplicationPerson,'name'|'reading'|'jef'|'kind'>,id:string,applicationClub:string,s:ApplicationSnapshot,requestId:string,edit?:RosterAffiliationEdit):RosterCorrectionInput{
  const e=s.roster.entities.find(e=>e.id===id&&!e.archived_at&&e.kind===person.kind)
  if(!e)throw new Error('訂正する既存人馬を選択してください。「新規登録」は名簿の訂正には使いません')
  if(edit&&(edit.entityId!==id||!['application','existing','manual'].includes(edit.source)))throw new Error('所属を訂正する人馬を選び直してください')

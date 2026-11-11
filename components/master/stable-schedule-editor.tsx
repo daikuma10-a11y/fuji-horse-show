@@ -5,17 +5,20 @@ import { MasterStableScheduleFields } from './stable-schedule-fields'
 import { MasterFilePicker } from './file-picker'
 
 export type StableScheduleEditorRow = { id: string; name: string; value: StableSchedule; revision: string | null }
-export function MasterStableScheduleEditor({ rows, loading, error, onReadExcel, onSave, onReload, year }: {
-  rows: StableScheduleEditorRow[]; loading: boolean; error: string; year: string
+export function MasterStableScheduleEditor({ rows, loading, error, onReadExcel, onSave, onReload, year, organizationId }: {
+  organizationId?: string; rows: StableScheduleEditorRow[]; loading: boolean; error: string; year: string
   onReadExcel: (file: File) => Promise<{ club: string; value: StableSchedule }>
   onSave: (id: string, value: StableSchedule, expected: string | null) => Promise<void>
   onReload: () => Promise<void>
 }) {
-  const [selected, setSelected] = useState<StableScheduleEditorRow | null>(null), [value, setValue] = useState(emptyStableSchedule)
+  const [draftRow, setSelected] = useState<StableScheduleEditorRow | null>(null), [draftValue, setDraftValue] = useState(emptyStableSchedule)
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [problem, setProblem] = useState(''), [source, setSource] = useState('')
   const [activity, setActivity] = useState('')
+  const selected = draftRow ?? rows.find(row => row.id === organizationId) ?? null
+  const value = draftRow ? draftValue : selected?.value ?? emptyStableSchedule()
+  function setValue(next: StableSchedule) { setSelected(selected); setDraftValue(next) }
   const lock = useRef(false)
-  function select(id: string) { const row = rows.find(r => r.id === id) ?? null; setSelected(row); setValue(row?.value ?? emptyStableSchedule()); setProblem(''); setMessage(''); setSource('') }
+  function select(id: string) { const row = rows.find(r => r.id === id) ?? null; setSelected(row); setDraftValue(row?.value ?? emptyStableSchedule()); setProblem(''); setMessage(''); setSource('') }
   async function action(fn: () => Promise<void>, progress = '保存中です。保存結果を確認しています…') { if (lock.current) return; lock.current = true; setBusy(true); setActivity(progress); setProblem(''); setMessage(''); try { await fn() } catch (reason) { setProblem(reason instanceof Error ? reason.message : '処理を完了できませんでした。内容を確認してやり直してください。') } finally { lock.current = false; setBusy(false); setActivity('') } }
   return <section className="space-y-3 rounded-xl border-2 bg-card p-4" aria-label="入退厩予定の補足・訂正">
     <h3 className="text-xl font-bold">入退厩予定の補足・訂正</h3>
@@ -23,7 +26,7 @@ export function MasterStableScheduleEditor({ rows, loading, error, onReadExcel, 
     <p className="text-sm">出番・人馬・料金は追加しません。入厩チェックリストには日時を印刷しません。</p>
     {loading && <p role="status">保存済みの入退厩予定を読み込んでいます…</p>}{error && <p role="alert" className="rounded bg-red-50 p-3 text-red-800">{error}</p>}
     <fieldset disabled={busy || loading || !!error} className="space-y-3">
-      <label className="block font-bold">対象の団体<select className="mt-1 min-h-12 w-full rounded-lg border bg-background p-2" value={selected?.id ?? ''} onChange={e => select(e.target.value)}><option value="">団体を選んでください</option>{rows.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+      {!organizationId&&<label className="block font-bold">対象の団体<select className="mt-1 min-h-12 w-full rounded-lg border bg-background p-2" value={selected?.id ?? ''} onChange={e => select(e.target.value)}><option value="">団体を選んでください</option>{rows.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}
       {selected && <><MasterFilePicker key={selected.id} label={busy && activity.startsWith('読み込み中') ? 'Excelの日時を読み込み中…' : 'Excelを選んで日時を読み込む'} accept=".xlsx" disabled={busy || loading || !!error} hint="ボタンを押して、この団体の申込書（Excel）を選んでください。読み込み後、下の日時を確認して「日時のみ保存」を押します。" onFiles={files => { const file = files[0]; if (file) void action(async () => {
         setSource('')
         const result = await onReadExcel(file)

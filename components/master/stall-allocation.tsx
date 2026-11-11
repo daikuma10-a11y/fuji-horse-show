@@ -45,6 +45,12 @@ export function MasterStallAllocation({groups,eventName,eventId,active=true,onLo
     loadedRef.current=true
     void reload()
   },[active]) // Explicit reload protects edits from background parent refreshes.
+  useEffect(()=>{
+    if(!active||!loaded||!stale||pending||!plan)return
+    const updated=reconcileStallGroups(plan,freshSource)
+    setPlan(updated);setOptions(updated.options)
+    setNotice('最新の参加馬を配置図に反映しました。追加馬は未配置です。「厩舎割を保存」で現在の配置を保存できます。')
+  },[active,loaded,stale,pending,plan,freshSource])
   useEffect(()=>{if(!dirty)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue=''};window.addEventListener('beforeunload',leave);return()=>window.removeEventListener('beforeunload',leave)},[dirty])
   async function run(label:string,work:()=>Promise<void>){
     if(lock.current)return;lock.current=true;setBusy(label);setError('');setNotice('')
