@@ -21,6 +21,18 @@ export function winterTimetableSection(competitionNo: string) {
   return timetableSectionsByNumber.get(competitionNo)
 }
 
+// 公認種目の認定番号は、日別表示や出番順に関係なく大会プログラムの順で決まる。
+const recognitionNumbers = new Map(preparation.competitions
+  .filter(competition => competition.official)
+  .map((competition, index) => [competition.number, index + 1]))
+
+export function winterRecognitionNumber(competitionNo: string, official: boolean) {
+  if (!official) return null
+  const number = recognitionNumbers.get(competitionNo)
+  if (number === undefined) throw new Error('公認競技の認定番号を確認してください：' + competitionNo)
+  return number
+}
+
 const friendshipNumbers = new Set(preparation.competitions.filter(c=>c.name.startsWith('フレンドシップ')).map(c=>c.number))
 export function winterFreeFriendshipChange(from: string | number | undefined, to: string | number | undefined) {
   return friendshipNumbers.has(String(from)) && friendshipNumbers.has(String(to))

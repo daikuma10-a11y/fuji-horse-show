@@ -85,6 +85,16 @@ const tables={riders,horses,competitions,organizations:[org],reception_entries:e
   assert.equal(daySheets.length,saturday.length)
   saturday.forEach((c,i)=>assert.ok(daySheets[i].includes(['15','16','17','18'].includes(c.competition_no)?'インドア競技場':'第1競技場')))
   assert.ok(daySheets[saturday.indexOf(target)].includes(officialName))
+  for(const svg of daySheets){
+   assert.ok(svg.includes('>2026/11/14</text>'))
+   assert.doesNotMatch(svg,/選　　　手|馬　　　匹/)
+   const label=(name)=>svg.match(new RegExp('<text [^>]*>'+name+'</text>'))?.[0]
+   const heading=label('所属')
+   assert.match(heading,/text-anchor="middle"/)
+   assert.equal(heading.match(/ y="([^"]+)"/)[1],label('選手名').match(/ y="([^"]+)"/)[1])
+   const affiliation=label(officialName)
+   if(affiliation)assert.match(affiliation,/text-anchor="middle"/)
+  }
   assert.deepEqual(await printedSheets('この競技だけを印刷'),[daySheets[saturday.indexOf(target)]])
   const visibleIds=c=>section(c).locator('[data-start-entry-id]').evaluateAll(a=>a.map(e=>e.dataset.startEntryId))
   const before=await visibleIds(target),unaffected=await visibleIds(other)

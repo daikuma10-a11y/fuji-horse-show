@@ -3,7 +3,7 @@ import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate'
 type Value = string | number
 type Cell = {value: Value; formula?: string}
 export type FormCompetition = {
-  number: string; name: string; venue: string; dressage: boolean; official: boolean
+  number: string; name: string; venue: string; dressage: boolean; official: boolean; recognitionNumber: number | null
   entries: Value[][]
 }
 
@@ -49,9 +49,13 @@ function scoreCells(row: number, last: number, dressage: boolean) {
   return cells
 }
 
+function firstEntryRow(isStart: boolean, dressage: boolean) {
+  return isStart || dressage ? 13 : 14
+}
+
 function fillSheet(layout: string, header: Record<string, Cell>, comp: FormCompetition, isStart: boolean, printedRows: number, numberedThrough: number) {
-  const firstResult = comp.dressage ? 13 : 14
-  const first = isStart ? 14 : firstResult
+  const firstResult = firstEntryRow(false, comp.dressage)
+  const first = firstEntryRow(isStart, comp.dressage)
   const count = Math.max(comp.dressage ? 30 : 60, printedRows)
   const finalOrder = Number(comp.entries.at(-1)?.[1] ?? 0)
   const pattern = new RegExp('<row r="'+first+'"[^>]*>[\\s\\S]*?</row>(?=</sheetData>)')
@@ -89,9 +93,10 @@ export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, dat
     for (const comp of competitions) {
       const name=isStart ? comp.number+'_出番表' : comp.number
       const headers: Record<string,Cell>={}
-      const fields: Record<string,Value>={F2:serial,C3:title,C4:comp.number,F4:comp.name}
+      const recognitionCell = comp.dressage ? 'C5' : 'D5'
+      const fields: Record<string,Value>={F2:serial,C3:title,C4:comp.number,F4:comp.name,[recognitionCell]:comp.recognitionNumber ?? '-'}
       if (isStart) {
-        const refs: Record<string,string>={C6:'C2',G6:'F2',C7:'C3',B8:'C4',D8:'F4',D9:comp.dressage?'C5':'D5',F9:comp.dressage?'F5':'K4'}
+        const refs: Record<string,string>={C6:'C2',G6:'F2',C7:'C3',B8:'C4',D8:'F4',D9:recognitionCell,F9:comp.dressage?'F5':'K4'}
         if (!comp.dressage) { refs.D10='D6'; refs.F10='F5' }
         for (const [addr,target] of Object.entries(refs)) headers[addr]=link(comp.number,target,fields[target]??'')
         headers.G10=literal('競技場：'+comp.venue)
@@ -99,7 +104,7 @@ export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, dat
         for (const [addr,value] of Object.entries(fields)) headers[addr]=literal(value)
       }
       const kind=comp.dressage?'dressage':comp.official&&!isStart?'official':'jump'
-      const layout=assets[kind+(isStart?'-start.xml':'-result.xml')]
+      const layout=assets[kind+(isStart?'-start-single-header.xml':'-result.xml')]
       const id=sheets.length+1, file='worksheets/sheet'+id+'.xml'
       const pages = Math.max(1, Math.ceil(comp.entries.length / startsPerPage))
       const printedRows = pages * startsPerPage
@@ -107,7 +112,7 @@ export function buildLinkedEventWorkbook(layouts: Uint8Array, title: string, dat
       sheets.push('<sheet name="'+xml(name)+'" sheetId="'+id+'" r:id="rId'+id+'"/>')
       rels.push('<Relationship Id="rId'+id+'" Type="'+relationships+'/worksheet" Target="'+file+'"/>')
       types.push('<Override PartName="/xl/'+file+'" ContentType="'+contentType+'worksheet+xml"/>')
-      const first=isStart?6:2, headerEnd=!isStart&&comp.dressage?12:13
+      const first=isStart?6:2, headerEnd=firstEntryRow(isStart,comp.dressage)-1
       const column=isStart?'G':comp.dressage?'S':'T'
       const sheet=xml(sheetRef(name))+'!'
       // Each print area fits a single page; print titles repeat on later blocks.
