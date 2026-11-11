@@ -10,7 +10,7 @@ import { WinterQueueLink } from '@/components/winter-queue-link'
 import { WinterExerciseNotice } from '@/components/winter-exercise-notice'
 import {loadReceptionData,receptionNavigate,stageReceptionDraft} from '@/lib/winter-offline'
 import { loadWinterData } from '@/lib/winter-data'
-import { eventStartListModel } from '@/lib/master/event-start-list-model'
+import { winterStartListModel } from '@/lib/winter-start-list-model'
 import { WINTER_DATES } from '@/lib/winter-event'
 import {  type WinterQueueScope } from '@/lib/winter-batch'
 import { winterWithdrawDraft } from '@/lib/winter-withdraw-form'
@@ -31,9 +31,9 @@ function LoadedWinterWithdraw({data,scope}:{data:Data;scope:WinterQueueScope}) {
  const selectors=useMemo(()=>({
  DateSelect:({onSelect}:ComponentProps<MasterWithdrawAdapter['DateSelect']>)=><MasterDateSelect dates={dates} onSelect={onSelect}/>,
  CompetitionList:({date,onSelect}:ComponentProps<MasterWithdrawAdapter['CompetitionList']>)=><MasterCompetitionList list={data.competitions.filter(row=>row.competition_date===date).map(row=>({id:row.id,date:row.competition_date,number:row.competition_no,name:row.name,official:row.official,entryFee:row.fee,entryFeeLabel:row.member_fee!==null||row.nonmember_fee!==null?[row.member_fee!==null?`会員 ¥${row.member_fee.toLocaleString('ja-JP')}`:'',row.nonmember_fee!==null?`非会員 ¥${row.nonmember_fee.toLocaleString('ja-JP')}`:''].filter(Boolean).join(' ／ '):undefined}))} onSelect={onSelect}/>,
- StartList:(props:import('@/components/start-list').StartListProps)=><MasterStartRows {...props} model={eventStartListModel(data,data.eventId,props.competitionId,[])}/>
+ StartList:(props:import('@/components/start-list').StartListProps)=><MasterStartRows {...props} model={winterStartListModel(data,props.competitionId,[])}/>
  }),[data])
- const people=eventStartListModel(data,data.eventId,'',[])
+ const people=winterStartListModel(data,'',[])
  const visitor=scope==='meeting'&&<label className="mt-4 block text-xl font-bold">受付担当者名<input value={visitorName} maxLength={100} onChange={event=>setVisitorName(event.target.value)} className="mt-2 min-h-16 w-full rounded-xl border-2 border-border bg-card p-3 text-xl"/></label>
  return <MasterWithdrawForm adapter={{...people,...selectors,homeHref:'/winter',onExit:()=>receptionNavigate(scope==='meeting'?'/winter/admin#winter-meeting':'/winter',router.push),notice:<><WinterQueueLink scope={scope}/>{scope==='meeting'&&<p className="rounded-xl bg-orange-100 p-4 font-bold">打ち合わせ会の保留入力です。相談中はDB・出番表・精算には反映しません。<Link className="underline" href="/winter/admin#winter-meeting">打ち合わせ会へ戻る</Link></p>}</>,entryFields:entry=><><WinterExerciseNotice organizationId={entry?data.riders.find(row=>row.id===entry.playerId)?.organization_id??'':''}/>{visitor}</>,confirmFields:()=> <p className="mt-4 text-xl">{scope==='meeting'&&<>受付担当者：{visitorName||'未入力'} ／ </>}棄権料金：¥0</p>,stageWithdraw:payload=>stageReceptionDraft(winterWithdrawDraft(data,payload,visitorName,crypto.randomUUID(),{requireVisitor:scope==='meeting'}),scope,data),onStaged:()=>receptionNavigate(scope==='meeting'?'/winter/admin#winter-meeting':'/winter/confirm',router.push)}}/>
 }

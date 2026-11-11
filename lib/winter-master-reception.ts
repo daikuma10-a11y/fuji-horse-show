@@ -1,3 +1,4 @@
+import {winterAffiliatedOrganizations} from './winter-display-order'
 import {winterFreeFriendshipChange} from './winter-event'
 import type {loadWinterData} from './winter-data'
 import {WINTER_DATES,assertWinterEvent,winterCompetition,winterEntryPrice,type WinterFeeSelection} from './winter-event'
@@ -16,10 +17,10 @@ export const winterMasterDates=WINTER_DATES.map(value=>({value,label:new Date(va
 export function winterMasterRoster(data:Data):MasterRosterSource {
  assertWinterEvent(data.eventId)
  for(const rows of [data.organizations,data.riders,data.horses,data.competitions,data.entries])for(const row of rows)assertWinterEvent(row.event_id)
- return {organizations:data.organizations.map(row=>({id:row.id,name:row.name})),players:data.riders.map(row=>({id:row.id,name:row.name,orgId:row.organization_id,jefRegistered:!!row.jef_member_no?.trim(),officialId:row.jef_member_no??undefined})),horses:data.horses.map(row=>({id:row.id,name:row.name,orgId:row.organization_id,jefRegistered:!!row.jef_registration_no?.trim(),officialId:row.jef_registration_no??undefined}))}
+ return {organizations:winterAffiliatedOrganizations(data).map(row=>({id:row.id,name:row.name})),players:data.riders.map(row=>({id:row.id,name:row.name,orgId:row.organization_id,jefRegistered:!!row.jef_member_no?.trim(),officialId:row.jef_member_no??undefined})),horses:data.horses.map(row=>({id:row.id,name:row.name,orgId:row.organization_id,jefRegistered:!!row.jef_registration_no?.trim(),officialId:row.jef_registration_no??undefined}))}
 }
 export function winterMasterEntryModel(data:Data,competitionId:string){
- const model=eventStartListModel(data,data.eventId,competitionId,[])
+ const model=eventStartListModel({...data,organizations:winterAffiliatedOrganizations(data)},data.eventId,competitionId,[])
  // Winter entries are ID-linked; do not reconstruct affiliations by organization names.
  const riderOrg=new Map(data.riders.map(row=>[row.id,row.organization_id]))
  return {...model,entriesByCompetition:(id:string)=>model.entriesByCompetition(id).map(entry=>({...entry,organizationId:entry.organizationId??riderOrg.get(entry.playerId)}))}

@@ -43,14 +43,25 @@ async function rows<T extends EventRow>(table: string, select: string, order: st
 }
 
 export async function loadWinterData(signal?: AbortSignal) {
-  const [organizations, allRiders, allHorses, competitions, allEntries] = await Promise.all([
+  const [organizations, allRiders, allHorses, competitions, allEntries, affiliations] = await Promise.all([
     rows<WinterOrganizationRow>("organizations", "event_id,id,name", "id.asc", signal),
     rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee,notes", "id.asc", signal),
     rows<WinterEntryRow>("reception_entries", "event_id,entry_id,source,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_id,organization_name,is_op", "entry_id.asc", signal),
+    rows<EventRow & {organization_id:string; official_name:string}>("fhs_winter_event_affiliations", "event_id,organization_id,official_name", "organization_id.asc", signal),
   ])
-  const entries = allEntries.filter(row => row.source !== "winter-initial-cancelled")
+  const affiliationNames: Record<string, string> = {}
+  for (const affiliation of affiliations) {
+    if (!organizations.some(org => org.id === affiliation.organization_id) || !affiliation.official_name?.trim() || Object.hasOwn(affiliationNames, affiliation.organization_id)) {
+      throw new Error("Winterの大会所属と登録団体IDを確認してください")
+    }
+    affiliationNames[affiliation.organization_id] = affiliation.official_name
+  }
+  const entries = allEntries.filter(row => row.source !== "winter-initial-cancelled").map(row => {
+    const name = row.organization_id && affiliationNames[row.organization_id]
+    return name ? {...row, organization_name: name} : row
+  })
   organizations.sort(compareWinterOrganizations)
   for (const row of competitions) row.name=row.name.normalize("NFKC").replace(/\s+/g," ").trim()
   competitions.sort(compareWinterCompetitions)
@@ -77,5 +88,5 @@ export async function loadWinterData(signal?: AbortSignal) {
     if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||!['provisional','final'].includes(t.phase)||!isMasterTimetableTime(t.inspection_time,'inspection')||!isMasterTimetableTime(t.start_time,'start'))throw new Error('Winterの時間設定を確認できません')
     return [t]
   })
-  return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable, ...(historicalHorses.length ? {historicalHorses} : {}) }
+  return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable, ...(affiliations.length ? {affiliationNames} : {}), ...(historicalHorses.length ? {historicalHorses} : {}) }
 }

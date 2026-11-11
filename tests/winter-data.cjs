@@ -17,16 +17,25 @@ global.fetch = async url => {
   const table = u.pathname.split('/').at(-1)
   let data = []
   if (table === 'organizations') data = [{ id: 'org', name: 'ライディングクラブフジファーム', event_id },{id:'org2',name:'小山乗馬クラブ',event_id},{id:'org3',name:'アシェンダ乗馬学校',event_id}]
+  if (table === 'fhs_winter_event_affiliations' && mode === 'affiliation') data = [{organization_id:'org',official_name:'大会用クラブ名',event_id}]
   if (table === 'riders') data = [{ id: 'rider', organization_id: 'org', event_id }]
   if (table === 'horses') data = [{ id: 'horse', organization_id: 'org', event_id }]
   if (table === 'competitions') data = ['10','2','④','①','1','36'].map(no=>({id:no==='10'?'competition':no,competition_no:no,name:'Ｌ－Ｂ級　障害飛越競技',competition_date:'2026-11-14',event_id}))
-  if (table === 'reception_entries') data = [{ entry_id: 'entry', competition_id: 'competition', rider_id: mode === 'bad-link' ? 'autumn-rider' : 'rider', horse_id: 'horse', event_id }]
+  if (table === 'reception_entries') data = [{ entry_id: 'entry', organization_id:'org', organization_name:'申込時の団体', competition_id: 'competition', rider_id: mode === 'bad-link' ? 'autumn-rider' : 'rider', horse_id: 'horse', event_id }]
   if (mode === 'wrong-event') data = data.map(row => ({ ...row, event_id: 'autumn' }))
   if (mode === 'network-error') return { ok: false, status: 503 }
   return { ok: true, json: async () => data }
 }
 ;(async () => {
-  const data = await loadWinterData(); assert.equal(data.entries.length, 1); assert.equal(calls.length, 5); assert.deepEqual(data.competitions.map(c=>c.competition_no),['①','④','1','2','10','36']); assert.deepEqual(data.organizations.map(o=>o.id),['org3','org2','org']); assert.equal(data.competitions[0].name,'L-B級 障害飛越競技')
+  const data = await loadWinterData(); assert.equal(data.entries.length, 1); assert.equal(calls.length, 6); assert.deepEqual(data.competitions.map(c=>c.competition_no),['①','④','1','2','10','36']); assert.deepEqual(data.organizations.map(o=>o.id),['org3','org2','org']); assert.equal(data.competitions[0].name,'L-B級 障害飛越競技')
+  mode = 'affiliation'
+  const updated = await loadWinterData()
+  const {winterAffiliatedOrganizations} = require('../lib/winter-display-order')
+  assert.equal(updated.entries[0].organization_name, '大会用クラブ名')
+  assert.equal(updated.entries[0].organization_id, 'org')
+  assert.equal(winterAffiliatedOrganizations(updated).find(o => o.id === 'org').name, '大会用クラブ名')
+  assert.equal(updated.organizations.find(o => o.id === 'org').name, 'ライディングクラブフジファーム')
+  assert.deepEqual(updated.riders, data.riders)
   mode = 'wrong-event'; await assert.rejects(loadWinterData(), /Winter以外/)
   mode = 'bad-link'; await assert.rejects(loadWinterData(), /所属大会/)
   mode = 'network-error'; await assert.rejects(loadWinterData(), /取得に失敗/)

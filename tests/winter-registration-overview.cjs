@@ -12,6 +12,12 @@ const data={eventId,organizations:[{id:'a',name:'団体A',event_id:eventId},{id:
  horses:[{...person('h1','合成馬','a'),jef_registration_no:'301'},{...person('h2','未出場馬','a'),jef_registration_no:null}],
  competitions:[comp('day2','12','2026-11-14'),comp('circle','④','2026-11-13'),comp('day1','1','2026-11-13')],
  entries:[entry('withdrawn','day2','r1','h1','a','wd'),entry('later','day1','r1','h1','a','active',true),entry('earlier','circle','r2','h1','a')],timetable:[]}
+const withAffiliation=winterRegistrationOverview({...data,affiliationNames:{a:'大会用の正式所属'}})
+const formal=withAffiliation.find(g=>g.id==='a')
+assert.equal(formal.name,'大会用の正式所属')
+assert.ok(formal.horses.every(h=>h.organization===formal.name))
+assert.equal(formal.riders.find(r=>r.id==='r2').organization,'団体B')
+assert.equal(data.organizations[0].name,'団体A')
 const before=JSON.stringify(data),groups=winterRegistrationOverview(data),a=groups.find(g=>g.id==='a'),b=groups.find(g=>g.id==='b')
 assert.equal(a.riders.length,2,'other-club rider appears with affiliation; equal names are not merged')
 assert.deepEqual(a.riders.map(p=>p.number).sort(),['101','202'])

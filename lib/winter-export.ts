@@ -1,6 +1,6 @@
 import type { loadWinterData } from './winter-data'
 import { assertWinterEvent, winterTimetableSection } from './winter-event'
-import { winterCompetitionLabel } from './winter-display-order'
+import { winterAffiliatedOrganizations, winterCompetitionLabel } from './winter-display-order'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 export type WinterExportKind = 'riders' | 'horses' | 'entries'
@@ -15,9 +15,10 @@ export function winterCsv(rows: (string | number | null)[][]) {
 export function exportWinterCsv(data: Data, kind: WinterExportKind) {
  assertWinterEvent(data.eventId)
  for (const collection of [data.organizations,data.riders,data.horses,data.competitions,data.entries,data.timetable]) for(const row of collection) assertWinterEvent(row.event_id)
- const orgs=new Map(data.organizations.map(o=>[o.id,o.name]))
+ const eventOrganizations=winterAffiliatedOrganizations(data)
+ const orgs=new Map(eventOrganizations.map(o=>[o.id,o.name]))
  const organization=(id:string)=>{const name=orgs.get(id);if(!name)throw new Error('所属団体を確認できません');return name}
- const sort=<T extends {organization_id:string;name:string;id:string}>(rows:T[])=>[...rows].sort((a,b)=>data.organizations.findIndex(o=>o.id===a.organization_id)-data.organizations.findIndex(o=>o.id===b.organization_id)||a.name.localeCompare(b.name,'ja')||a.id.localeCompare(b.id))
+ const sort=<T extends {organization_id:string;name:string;id:string}>(rows:T[])=>[...rows].sort((a,b)=>eventOrganizations.findIndex(o=>o.id===a.organization_id)-eventOrganizations.findIndex(o=>o.id===b.organization_id)||a.name.localeCompare(b.name,'ja')||a.id.localeCompare(b.id))
  if(kind==='riders')return winterCsv([['所属団体','選手名','日馬連会員番号','選手ID','団体ID'],...sort(data.riders).map(r=>[organization(r.organization_id),r.name,r.jef_member_no,r.id,r.organization_id])])
  if(kind==='horses')return winterCsv([['所属団体','馬名','日馬連馬匹番号','馬ID','団体ID'],...sort(data.horses).map(h=>[organization(h.organization_id),h.name,h.jef_registration_no,h.id,h.organization_id])])
  const riders=new Map(data.riders.map(r=>[r.id,r])),horses=new Map(data.horses.map(h=>[h.id,h]))

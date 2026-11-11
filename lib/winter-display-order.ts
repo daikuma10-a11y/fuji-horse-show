@@ -10,3 +10,13 @@ const key=(org:NamedOrganization)=>normalize(org.reading?.trim()||readings.get(n
 export function compareWinterOrganizations(a:NamedOrganization,b:NamedOrganization){return key(a).localeCompare(key(b),'ja',{sensitivity:'base'})||a.name.localeCompare(b.name,'ja')}
 export function compareWinterCompetitions(a:CompetitionLabel,b:CompetitionLabel){return (positions.get(a.competition_no)??Number.MAX_SAFE_INTEGER)-(positions.get(b.competition_no)??Number.MAX_SAFE_INTEGER)||a.competition_no.localeCompare(b.competition_no,'ja',{numeric:true})}
 export function winterCompetitionLabel(c:CompetitionLabel){return `第${c.competition_no}競技 ${c.name.normalize('NFKC').replace(/\s+/g,' ').trim()}`}
+
+/** Event-facing labels only. Registration snapshots and billing keep their saved names and IDs. */
+export function winterAffiliatedOrganizations<T extends {id:string; name:string}>(data: {
+  organizations: T[]; affiliationNames?: Record<string,string>
+}): T[] {
+  const names = data.affiliationNames
+  if (!names) return data.organizations
+  return data.organizations.map(org => names[org.id] ? {...org, name:names[org.id]} : org)
+    .sort(compareWinterOrganizations)
+}
