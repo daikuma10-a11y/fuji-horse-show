@@ -4,18 +4,19 @@ const xmlEscape = (value: string) => value.replace(/[&<>"']/g, ch => ({'&':'&amp
 const elements = (root: Element | Document, name: string) => Array.from(root.getElementsByTagName(name))
 const first = (root: Element, name: string) => root.getElementsByTagName(name)[0]
 const fontFamily = '"ＭＳ Ｐゴシック","Yu Gothic","Hiragino Kaku Gothic ProN",Meiryo,sans-serif'
-type CellStyle = {size:number; bold:boolean; underline:boolean; align:string; vertical:string; fill:string; edges:string[]; format:string}
+type CellStyle = {size:number; bold:boolean; underline:boolean; align:string; vertical:string; fill:string; edges:string[]; isDate:boolean}
 const edgeNames = ['top','right','bottom','left']
 function cellStyles(xml: Document): CellStyle[] {
   const items = (group:string) => Array.from(xml.getElementsByTagName(group)[0].children)
   const fonts=items('fonts'), fills=items('fills'), borders=items('borders')
+  const numberFormats = new Map(elements(xml,'numFmt').map(fmt=>[fmt.getAttribute('numFmtId'),fmt.getAttribute('formatCode')]))
   return items('cellXfs').map(xf=>{
     const font=fonts[Number(xf.getAttribute('fontId'))], border=borders[Number(xf.getAttribute('borderId'))]
     const fill=first(fills[Number(xf.getAttribute('fillId'))],'fgColor')?.getAttribute('rgb') || ''
-    const alignment=first(xf,'alignment')
+    const alignment=first(xf,'alignment'), format=xf.getAttribute('numFmtId')
     return {size:Number(first(font,'sz')?.getAttribute('val') || 11)*4/3, bold:!!first(font,'b'), underline:!!first(font,'u'),
       align:alignment?.getAttribute('horizontal') || 'left', vertical:alignment?.getAttribute('vertical') || 'bottom',
-      fill:/^[\da-f]{8}$/i.test(fill)?'#'+fill.slice(2):'',edges:edgeNames.map(edge=>first(border,edge)?.getAttribute('style') || ''),format:xf.getAttribute('numFmtId') || '0'}
+      fill:/^[\da-f]{8}$/i.test(fill)?'#'+fill.slice(2):'',edges:edgeNames.map(edge=>first(border,edge)?.getAttribute('style') || ''),isDate:format==='14' || /^yyyy\/m\/d(?:;@)?$/i.test(numberFormats.get(format) ?? '')}
   })
 }
 type Box = {left:number; top:number; right:number; bottom:number}
@@ -26,7 +27,7 @@ function range(ref:string): Box {
 }
 function cellText(cell:Element, style:CellStyle) {
   const raw=first(cell,'v')?.textContent ?? Array.from(cell.getElementsByTagName('t'),e=>e.textContent).join('')
-  if(style.format==='14' && raw && Number.isFinite(Number(raw))){
+  if(style.isDate && raw && Number.isFinite(Number(raw))){
     const d=new Date((Number(raw)-25569)*86400000)
     return d.getUTCFullYear()+'/'+(d.getUTCMonth()+1)+'/'+d.getUTCDate()
   }

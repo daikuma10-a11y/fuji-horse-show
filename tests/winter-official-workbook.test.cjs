@@ -7,7 +7,7 @@ const {WINTER_EVENT_ID}=require('../lib/winter-event')
 const layouts=fs.readFileSync(path.join(__dirname,'../public/winter-forms/official-layouts.zip'))
 test('競技別の成績表を原本にし、障害と馬場で異なる明細開始行にリンクする',()=>{
  const entries=Array.from({length:62},(_,i)=>['',i+1,'同名','00042','馬＆A','','団体'])
- const jump={number:'①',name:'障害',dressage:false,official:false,venue:'第1競技場',entries}
+ const jump={number:'①',name:'障害',dressage:false,official:false,recognitionNumber:null,venue:'第1競技場',entries}
  const dressage={...jump,number:'15',dressage:true,entries:[['OP',1,'別選手','00001','別馬','','団体']]}
  const files=unzipSync(buildLinkedEventWorkbook(layouts,'大会','2026-11-14',[jump,dressage]))
  const get=i=>strFromU8(files['xl/worksheets/sheet'+i+'.xml'])
@@ -31,19 +31,19 @@ test('Winter番号の先頭ゼロと手書き枠を成績表から出番表・�
  const start=strFromU8(files['xl/worksheets/sheet1.xml']), result=strFromU8(files['xl/worksheets/sheet2.xml'])
  const cell=(sheet,at)=>sheet.match(new RegExp('<c r="'+at+'"[^>]*(?:/>|>.*?</c>)'))?.[0]
  assert.match(cell(result,'D13'),/t="inlineStr".*?>01234</)
- assert.match(cell(start,'D14'),/t="str".*?<v>01234<\/v>/)
+ assert.match(cell(start,'D13'),/t="str".*?<v>01234<\/v>/)
  assert.match(cell(result,'F14'),/>01234</)
- assert.match(cell(start,'F15'),/<v>01234<\/v>/)
+ assert.match(cell(start,'F14'),/<v>01234<\/v>/)
  for(const col of ['D','F']){
-  assert.match(cell(start,col+'16'),/<v>-<\/v>/)
+  assert.match(cell(start,col+'15'),/<v>-<\/v>/)
   assert.match(cell(result,col+'15'),/>-<\/t>/)
-  assert.match(cell(start,col+'48'),/<v><\/v>/)
+  assert.match(cell(start,col+'47'),/<v><\/v>/)
  }
  assert.match(cell(result,'B16'),/<v>6<\/v>/)
- assert.match(cell(start,'B46'),/'15'!B45.*?<v>35<\/v>/)
- assert.match(cell(start,'B47'),/<v><\/v>/)
- assert.match(cell(start,'C48'),/<v><\/v>/)
- assert.match(strFromU8(files['xl/workbook.xml']),/\$A\$6:\$G\$48/)
+ assert.match(cell(start,'B45'),/'15'!B45.*?<v>35<\/v>/)
+ assert.match(cell(start,'B46'),/<v><\/v>/)
+ assert.match(cell(start,'C47'),/<v><\/v>/)
+ assert.match(strFromU8(files['xl/workbook.xml']),/\$A\$6:\$G\$47/)
 })
 
 test('選択した日の競技だけを同じ帳票で印刷し、35番を超えた実出番も保持する',()=>{
@@ -61,13 +61,36 @@ test('選択した日の競技だけを同じ帳票で印刷し、35番を超え
   const sheet=strFromU8(single['xl/worksheets/sheet1.xml'])
   const venueCell=sheet.match(/<c r="G10"[^>]*>.*?<\/c>/)?.[0]
   assert.ok(venueCell?.includes('競技場：'+(c.competition_no==='15'?'インドア競技場':'第1競技場')))
-  assert.match(sheet,/<c r="B48"[^>]*><f>[^<]+<\/f><v>35<\/v>/)
+  assert.match(sheet,/<c r="B47"[^>]*><f>[^<]+<\/f><v>35<\/v>/)
   if(i===0){
-   assert.match(book,/\$A\$49:\$G\$83/)
-   assert.match(sheet,/<c r="B49"[^>]*><f>[^<]+<\/f><v>36<\/v>/)
-   assert.match(sheet,/<c r="B50"[^>]*><f>[^<]+<\/f><v><\/v>/)
-  }else assert.doesNotMatch(book,/\$A\$49:/)
+   assert.match(book,/\$A\$48:\$G\$82/)
+   assert.match(sheet,/<c r="B48"[^>]*><f>[^<]+<\/f><v>36<\/v>/)
+   assert.match(sheet,/<c r="B49"[^>]*><f>[^<]+<\/f><v><\/v>/)
+  }else assert.doesNotMatch(book,/\$A\$48:/)
  }
  assert.throws(()=>exportWinterWorkbook(layouts,data,date,'missing'),/競技を確認/)
  assert.throws(()=>exportWinterWorkbook(layouts,data,'2026-11-15','c1'),/競技を確認/)
+})
+
+test('大会通算の認定競技番号と開催日が成績表から出番表に連動する',()=>{
+ const program=require('../config/winter-2026-preparation.json')
+ const official=new Map(['6','9','11','12','26','27','28','30'].map((no,index)=>[no,index+1]))
+ const competitions=program.competitions.map(c=>({id:c.number,event_id:program.eventId,competition_no:c.number,competition_date:c.date,name:c.name,official:c.official}))
+ const data={eventId:program.eventId,competitions,riders:[],horses:[],entries:[]}
+ for(const date of new Set(competitions.map(c=>c.competition_date))){
+  const day=competitions.filter(c=>c.competition_date===date)
+  const files=unzipSync(exportWinterWorkbook(layouts,data,date))
+  const sheet=i=>strFromU8(files['xl/worksheets/sheet'+i+'.xml'])
+  const serial=Date.parse(date+'T00:00:00Z')/86400000+25569
+  for(const [i,c] of day.entries()){
+   const start=sheet(i+1),result=sheet(i+day.length+1),number=official.get(c.id)??'-'
+   const target=program.competitions.find(row=>row.number===c.id).arena==='第2競技場'?'C5':'D5'
+   assert.match(result,new RegExp('<c r="'+target+'"[^>]*>'+(number==='-'?'<is><t[^>]*>-</t></is>':'<v>'+number+'</v>')+'</c>'))
+   assert.match(start,new RegExp('<c r="D9"[^>]*><f>[^<]*!'+target+'[^<]*</f><v>'+number+'</v>'))
+   assert.match(start,new RegExp('<c r="G6"[^>]*><f>[^<]*!F2[^<]*</f><v>'+serial+'</v>'))
+   const header=start.match(/<row r="12"[^>]*>(.*?)<\/row>/)[1]
+   assert.deepEqual([...header.matchAll(/<t>(.*?)<\/t>/g)].map(m=>m[1]),['OP','出番','選手名','会員番号','馬匹名','登録番号','所属'])
+   assert.doesNotMatch(start,/<mergeCell ref="[A-G]12:/)
+  }
+ }
 })

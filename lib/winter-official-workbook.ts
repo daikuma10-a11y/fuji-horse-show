@@ -1,9 +1,9 @@
 import type {loadWinterData} from './winter-data'
-import {WINTER_DATES, WINTER_EVENT_NAME, WINTER_STARTS_PER_PAGE, assertWinterEvent, winterTimetableSection} from './winter-event'
+import {WINTER_DATES, WINTER_EVENT_NAME, WINTER_STARTS_PER_PAGE, assertWinterEvent, winterRecognitionNumber, winterTimetableSection} from './winter-event'
 import {buildLinkedEventWorkbook} from './master/linked-event-workbook'
 import {entryValues} from './official-excel'
 
-export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip?v=jef5'
+export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip?v=start-headers-2'
 export const winterWorkbookName=(date:string)=>'2026Winter_'+date.slice(5).replace('-','')+'_出番表・成績表.xlsx'
 
 // Excel identifiers are text. Older rosters can contain only the significant digits.
@@ -31,7 +31,7 @@ export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnTy
       if (!rider || !horse || !e.organization_name || !Number.isSafeInteger(e.start_order)) throw new Error('保存済みの出番・人馬・所属を確認してください')
       return entryValues({...e,rider_name:rider.name,jef_member_no:workbookJefNumber(rider.jef_member_no),horse_name:horse.name,jef_registration_no:workbookJefNumber(horse.jef_registration_no)})
     })
-    return {name:c.name, number:c.competition_no, venue:section.startListVenue ?? section.venue, official:c.official, dressage:section.id==='dressage', entries}
+    return {name:c.name, number:c.competition_no, venue:section.startListVenue ?? section.venue, official:c.official, recognitionNumber:winterRecognitionNumber(c.competition_no,c.official), dressage:section.id==='dressage', entries}
   })
   if (!competitions.length || new Set(competitions.map(c=>c.number)).size!==competitions.length) throw new Error('開催日の競技一覧を確認してください')
   return buildLinkedEventWorkbook(layouts,WINTER_EVENT_NAME,date,competitions, {startsPerPage:WINTER_STARTS_PER_PAGE, numberedThrough:WINTER_STARTS_PER_PAGE})
