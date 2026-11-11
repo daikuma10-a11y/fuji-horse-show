@@ -11,7 +11,7 @@ import {GroupRegistrationTools,groupActionClass,type GroupEdit} from './master/g
 import {WinterGroupPerson} from './winter-group-person'
 import {WinterEntryCancellation} from './winter-entry-cancellation'
 import {WinterHorseSubstitution} from './winter-horse-substitution'
-import {WinterGroupHorseCancel} from './winter-group-horse-cancel'
+import {horseCancelKey,WinterGroupHorseCancel} from './winter-group-horse-cancel'
 import {WinterSettlementPanel} from './winter-settlement-panel'
 import {WinterStableInformation} from './winter-stable-information'
 import {WinterGroupImportRecords} from './winter-group-import-records'
@@ -62,6 +62,13 @@ export function WinterRegistrationOverview({data,session,onSession,onChanged,rev
    }
    setPendingSwap(found)
  },[active,data,selectedId,session.email,edit])
+ const [pendingHorseId,setPendingHorseId]=useState('')
+ useEffect(()=>{
+   if(!selectedId)return
+   const raw=sessionStorage.getItem(horseCancelKey(session.email,selectedId))
+   try{setPendingHorseId(raw?JSON.parse(raw)?.quote?.horseId??'':'')}catch{setPendingHorseId('')}
+ },[selectedId,session.email,data,edit])
+ const cancelTarget=horse??(edit?.kind==='cancelHorse'&&pendingHorseId===edit.id?data?.historicalHorses?.find(h=>h.id===edit.id&&h.organization_id===selectedId):undefined)
  const owned=(kind:'horse'|'rider',id:string)=>data?.[kind==='horse'?'horses':'riders'].some(p=>p.id===id&&p.organization_id===selectedId)
  const eligibleEntry=(id:string)=>data?.entries.some(e=>e.entry_id===id&&e.source==='winter-initial'&&!/^(wd|withdrawn)$/i.test(e.status))
  return <MasterRegistrationOverview groups={view.groups} selectedId={selectedId} onSelect={select} loading={!data&&(loading||!error)} error={error||view.error} credentialNotice={current?.error}
@@ -71,12 +78,12 @@ export function WinterRegistrationOverview({data,session,onSession,onChanged,rev
        <button className={groupActionClass} onClick={()=>open({kind:'substitute',id})}>差し替え</button></>}
    </div>:<span>所属団体から編集</span>}
    entryAction={id=>eligibleEntry(id)&&<button className={groupActionClass} onClick={()=>open({kind:'cancelEntry',id})}>この出番を取消</button>}
-   tools={group&&data&&<>{pendingSwap&&<button className={groupActionClass} onClick={()=>open({kind:'substitute',id:pendingSwap.horseId})}>この団体の差し替えの確定結果を再確認</button>}<GroupRegistrationTools edit={edit} open={open} close={()=>setEdit(null)} message={message}>
+   tools={group&&data&&<>{pendingHorseId&&<button className={groupActionClass} onClick={()=>open({kind:'cancelHorse',id:pendingHorseId})}>この団体の参加取消の確定結果を再確認</button>}{pendingSwap&&<button className={groupActionClass} onClick={()=>open({kind:'substitute',id:pendingSwap.horseId})}>この団体の差し替えの確定結果を再確認</button>}<GroupRegistrationTools edit={edit} open={open} close={()=>setEdit(null)} message={message}>
      {edit?.kind==='payment'&&<WinterSettlementPanel key={group.id} data={data} organizationId={group.id} {...shared}/>}
      {edit?.kind==='stable'&&<WinterStableInformation key={group.id} data={data} loading={loading} error={error} active={active} organizationId={group.id} {...shared}/>}
      {edit?.kind==='source'&&<WinterGroupImportRecords key={group.id} orgId={group.id}/>}
      {edit?.kind==='identity'&&person&&<WinterGroupPerson key={person.id} kind={edit.type} person={person} orgId={group.id} session={session} onSession={onSession} onSaved={()=>saved(person.name+'の名簿を訂正しました。')}/>}
-     {edit?.kind==='cancelHorse'&&horse&&<WinterGroupHorseCancel key={horse.id} horse={horse} data={data} session={session} onSession={onSession} onSaved={()=>saved(horse.name+'の参加を取り消しました。馬匹登録料を請求から外しました。')}/>}
+     {edit?.kind==='cancelHorse'&&cancelTarget&&<WinterGroupHorseCancel key={cancelTarget.id} horse={cancelTarget} data={data} session={session} onSession={onSession} onSaved={()=>saved(cancelTarget.name+'の参加を取り消しました。馬匹登録料を請求から外しました。')}/>}
      {edit?.kind==='substitute'&&(horse||pendingSwap?.horseId===edit.id)&&<WinterHorseSubstitution key={edit.id} data={data} horseId={pendingSwap?.legacy&&pendingSwap.horseId===edit.id?undefined:edit.id} session={session} onSession={onSession} onSaved={()=>saved('馬の差し替えを保存しました。出番表と請求額に反映しました。')}/>}
      {edit?.kind==='cancelEntry'&&<WinterEntryCancellation key={edit.id} data={data} entryId={edit.id} session={session} onSession={onSession} onSaved={onChanged}/>}
    </GroupRegistrationTools></>}/>
