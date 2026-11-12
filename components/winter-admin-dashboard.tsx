@@ -6,6 +6,8 @@ import {AppHeader} from '@/components/app-header'
 import {signInAdmin,verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import {loadWinterData} from '@/lib/winter-data'
 import {WINTER_EVENT_NAME,winterStorageKey} from '@/lib/winter-event'
+import {loadWinterPickerReadings} from '@/lib/shared-roster'
+import {winterAffiliatedOrganizations,winterPickerOrder} from '@/lib/winter-display-order'
 import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
 import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
@@ -35,6 +37,7 @@ export function WinterAdminDashboard(){
  const[tab,setTab]=useState<WinterAdminTab>('requests'),[visited,setVisited]=useState<WinterAdminTab[]>(['requests'])
  const[registrationSection,setRegistrationSection]=useState<PreRegistrationSection>('roster')
  const[data,setData]=useState<Data|null>(null),[dataError,setDataError]=useState(''),[revision,setRevision]=useState(0),[loading,setLoading]=useState(false)
+ const pickerToken=useRef(session?.accessToken);pickerToken.current=session?.accessToken
  const signedIn=!!session
  const[liveStatus,setLiveStatus]=useState('')
  const updateSession=useCallback((next:AdminSession)=>{sessionStorage.setItem(sessionKey,JSON.stringify(next));setSession(next)},[])
@@ -54,6 +57,7 @@ export function WinterAdminDashboard(){
   if(window.location.hash==='#winter-initial-registration'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('entries')}
   if(window.location.hash==='#winter-application-import'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('application')}
   if(window.location.hash==='#winter-startlist'){setTab('startlist');setVisited(['requests','startlist'])}
+  if(window.location.hash==='#winter-settlement'){setTab('settlement');setVisited(['requests','settlement'])}
   if(window.location.hash==='#winter-timetable'){setTab('timetable');setVisited(['requests','timetable'])}
   if(window.location.hash==='#winter-entry-cancellation'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-horse-substitution'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
@@ -70,7 +74,12 @@ export function WinterAdminDashboard(){
  useEffect(()=>{
   if(!signedIn)return
   const controller=new AbortController();setLoading(true);setDataError('')
-  loadWinterData(controller.signal).then(value=>{if(!controller.signal.aborted)setData(value)}).catch(e=>{if(!controller.signal.aborted)setDataError(e instanceof Error?e.message:'Winterのデータを読み込めません')}).finally(()=>{if(!controller.signal.aborted)setLoading(false)})
+  Promise.all([loadWinterData(controller.signal),loadWinterPickerReadings(pickerToken.current!).catch(()=>new Map<string,string>())]).then(([value,readings])=>{
+   if(controller.signal.aborted)return
+   const order=winterPickerOrder(winterAffiliatedOrganizations(value),readings)
+   const withReading=<T extends {id:string},>(rows:T[])=>rows.map(row=>readings.has(row.id)?{...row,reading:readings.get(row.id)}:row)
+   setData({...value,riders:withReading(value.riders.sort(order)),horses:withReading(value.horses.sort(order))})
+  }).catch(e=>{if(!controller.signal.aborted)setDataError(e instanceof Error?e.message:'Winterのデータを読み込めません')}).finally(()=>{if(!controller.signal.aborted)setLoading(false)})
   return()=>controller.abort()
  },[signedIn,revision])
  async function login(e:FormEvent){e.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setLoginError('');try{updateSession(await signInAdmin(email.trim(),password));setPassword('')}catch(e){setLoginError(e instanceof Error?e.message:'ログインできません')}finally{lock.current=false;setBusy(false)}}

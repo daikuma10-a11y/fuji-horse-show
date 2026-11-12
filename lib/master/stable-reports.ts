@@ -3,7 +3,7 @@ import type { StableGroup } from './stable-information'
 import type { UnsettledFollowup } from './unsettled-followup'
 
 export type BookletRow = { id: string; name: string; count: number; received: string; arrival: string; departure: string; returned: string; notes: string }
-export type UnsettledRow = { id: string; name: string; status: '未精算' | '未入金' | '過入金' | '入金不足'; amount: number | null; notes: string; review: boolean }
+export type UnsettledRow = { id: string; name: string; status: '未精算' | '未入金' | '過入金' | '入金不足'; amount: number | null; review: boolean }
 // Use the same high-contrast status colors on screen and on the printed list.
 export const unsettledColors = {
   '入金不足': {backgroundColor:'#ffedd5', color:'#9a3412'},
@@ -56,7 +56,7 @@ export function unsettledPrintHtml(rows: UnsettledRow[], eventName: string, gene
   const body = rows.length ? `<table>${head(unsettledHeaders, [4,23,14,16,43])}<tbody>${rows.map(row => {
     const {backgroundColor, color} = unsettledColors[row.status]
     const note = followups.get(row.id)
-    return `<tr><td class="number"><span class="report-box"></span></td><td>${escape(row.name)}</td><td><span class="payment-status" style="background-color:${backgroundColor};color:${color}">${row.status}</span></td><td class="money">${row.amount === null ? '—' : yen(row.amount)}${row.review ? '<br><span class="small review">要確認</span>' : ''}</td><td><div class="small">${escape(row.notes)}</div><div class="followup-note">理由・備考　${escape(note?.reason ?? '')}</div><div>${note?.contact ? '連絡状況：'+escape(note.contact) : '□ 未連絡　□ 連絡済み'}</div></td></tr>`
+    return `<tr><td class="number"><span class="report-box"></span></td><td>${escape(row.name)}</td><td><span class="payment-status" style="background-color:${backgroundColor};color:${color}">${row.status}</span></td><td class="money">${row.amount === null ? '—' : yen(row.amount)}${row.review ? '<br><span class="small review">要確認</span>' : ''}</td><td><div class="followup-note">理由・備考　${escape(note?.reason ?? '')}</div><div>${note?.contact ? '連絡状況：'+escape(note.contact) : '□ 未連絡　□ 連絡済み'}</div></td></tr>`
   }).join('')}</tbody></table><p>${rows.length}団体（要確認 ${rows.filter(row => row.review).length}団体）</p>` : `<p>${unsettledEmptyMessage}</p>`
   return document('未精算リスト', eventName, generatedAt, body)
 }

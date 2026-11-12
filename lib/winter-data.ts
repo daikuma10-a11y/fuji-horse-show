@@ -1,11 +1,11 @@
 import {isMasterTimetableTime} from './master/timetable'
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from "./winter-event"
 
-import { compareWinterCompetitions, compareWinterOrganizations } from "./winter-display-order"
+import { compareWinterCompetitions, compareWinterOrganizations, winterAffiliatedOrganizations, winterPickerOrder } from "./winter-display-order"
 
 const URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
-type ReceptionRosterState = { is_participant?: boolean; roster_source?: string | null }
+type ReceptionRosterState = { reading?:string; is_participant?: boolean; roster_source?: string | null }
 export function isWinterReceptionParticipant(row: ReceptionRosterState) { return row.roster_source !== "winter-substituted" && (row.roster_source !== "shared_roster" || row.is_participant === true) }
 type EventRow = { event_id: string }
 export type WinterOrganizationRow = EventRow & { id: string; name: string }
@@ -65,8 +65,9 @@ export async function loadWinterData(signal?: AbortSignal) {
   organizations.sort(compareWinterOrganizations)
   for (const row of competitions) row.name=row.name.normalize("NFKC").replace(/\s+/g," ").trim()
   competitions.sort(compareWinterCompetitions)
-  const riders=allRiders.filter(isWinterReceptionParticipant)
-  const horses=allHorses.filter(isWinterReceptionParticipant)
+  const pickerOrder=winterPickerOrder(winterAffiliatedOrganizations({organizations, affiliationNames}))
+  const riders=allRiders.filter(isWinterReceptionParticipant).sort(pickerOrder)
+  const horses=allHorses.filter(isWinterReceptionParticipant).sort(pickerOrder)
   const orgIds = new Set(organizations.map(row => row.id))
   const riderIds = new Set(riders.map(row => row.id))
   const horseIds = new Set(horses.map(row => row.id))

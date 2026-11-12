@@ -21,6 +21,16 @@ async function rows<T>(table:string,token:string,filters:Record<string,string>={
   result.push(...page as T[]);if(page.length<500)return result
  }
 }
+export async function loadWinterPickerReadings(token:string) {
+ const [participants,bindings]=await Promise.all([rows<Participant>('fhs_winter_participants',token),loadWinterRosterBindings(token)])
+ const byMembership=new Map(participants.map(p=>[p.entity_id+':'+p.club_id,p.reading_snapshot]))
+ const byTarget=new Map<string,string>()
+ for(const b of bindings){
+   const id=b.rider_id??b.horse_id, reading=byMembership.get(b.entity_id+':'+b.club_id)
+   if(id && reading?.trim())byTarget.set(id,reading.trim())
+ }
+ return byTarget
+}
 export async function loadSharedRoster(token:string,onClubs?:(clubs:RosterClub[])=>void):Promise<SharedRoster>{
  if(!token)throw new Error('本部ログインが必要です')
  const [entities,clubs,affiliations,participants]=await Promise.all([rows<RosterEntity>('fhs_roster_entities',token),rows<RosterClub>('fhs_roster_clubs',token).then(clubs=>{onClubs?.(clubs);return clubs}),rows<Affiliation>('fhs_roster_affiliations',token),rows<Participant>('fhs_winter_participants',token)])
@@ -66,7 +76,7 @@ async function rosterRpc(name:string,args:Record<string,unknown>,token:string){
 
 export function clubEntities(data:SharedRoster,clubId:string){
  const ids=new Set(data.affiliations.filter(x=>x.club_id===clubId&&x.ended_at===null).map(x=>x.entity_id))
- return data.entities.filter(x=>ids.has(x.id)&&!x.archived_at).sort((a,b)=>a.name.localeCompare(b.name,'ja'))
+ return data.entities.filter(x=>ids.has(x.id)&&!x.archived_at).sort((a,b)=>(a.reading||a.name).localeCompare(b.reading||b.name,'ja')||a.name.localeCompare(b.name,'ja'))
 }
 export function saveRosterEntity(input:{kind:'rider'|'horse';name:string;reading:string;jefNumber:string;clubName:string;id?:string;expectedUpdatedAt?:string;replaceAffiliations?:boolean},token:string){
  return rosterRpc('save_fhs_roster_entity',{p_kind:input.kind,p_name:input.name,p_reading:input.reading,p_jef_number:input.jefNumber,p_club_name:input.clubName,p_id:input.id??null,p_expected_updated_at:input.expectedUpdatedAt??null,p_replace_affiliations:!!input.replaceAffiliations},token)
