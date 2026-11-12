@@ -5,7 +5,7 @@
   "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack && node scripts/build-winter-offline.cjs",
+    "build": "node tests/winter-data.cjs && node tests/winter-stable-reports.cjs && node tests/winter-receipts.cjs && node scripts/verify-rider-receipt.cjs && node scripts/verify-rider-receipt-render.cjs && node scripts/verify-settlement-workspace.cjs && node tests/winter-master-input.cjs && node tests/winter-settlement.cjs && next build --webpack && node scripts/build-winter-offline.cjs && tsc --noEmit --incremental false",
     "start": "next start"
   },
   "dependencies": {
