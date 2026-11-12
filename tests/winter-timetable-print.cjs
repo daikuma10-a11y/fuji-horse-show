@@ -19,7 +19,9 @@ assert.equal((html.match(/<td data-competition-name>/g)||[]).length,40)
 assert.equal(mapped.items.length,40);assert.equal(mapped.items.filter(i=>i.section==='dressage').length,9)
 assert(mapped.items.every(i=>i.count===2),'OP counted and withdrawn excluded')
 assert.equal((html.match(/data-timetable-sheet/g)||[]).length,1);assert.equal((html.match(/data-competition-id=/g)||[]).length,40)
-assert(html.includes('第1競技場')&&html.includes('第2競技場')&&html.includes('15:00'));assert(!html.includes('2025'))
+assert.match(html, /data-section="jump"><h3>障害馬術 ～Jump～ <span class="venue">第1競技場<\/span>/)
+assert.match(html, /data-section="dressage"><h3>馬場馬術 ～Dressage～ <span class="venue">インドア競技場<\/span>/)
+assert(!html.includes('第2競技場') && !html.includes('2025'))
 const single=timetablePrintHtml(mapped,'now',['2026-11-15']);assert.equal((single.match(/data-timetable-sheet/g)||[]).length,1);assert.equal((single.match(/data-competition-id=/g)||[]).length,18)
 assert.throws(()=>timetablePrintHtml(mapped,'now',['2025-12-12']),/日付/)
 assert.throws(()=>timetablePrintHtml(mapped,'now',[]),/日付/)
@@ -45,7 +47,15 @@ global.fetch=async(url,options)=>{
 }
 ;(async()=>{
  const tree=WinterTimetable({data,session:{},onSession(){},onChanged(){}})
- const refreshed=await tree.props.loadPrint(['2026-11-15']);assert(refreshed.includes('<td>16:45</td>')&&!refreshed.includes('<td>15:00</td>'),'reload saved times rather than stale editor props');assert.equal(requests.length,5)
+ const screen=require('react-dom/server').renderToStaticMarkup(tree)
+ for(const date of ['11/14(土)','11/15(日)']){
+  assert(screen.includes(date+'のタイムテーブル </span>馬場馬術 ～Dressage～　インドア競技場</caption>'))
+ }
+ assert.match(screen, /<h4[^>]*>馬場馬術 ～Dressage～　インドア競技場<\/h4>/)
+ assert(!screen.includes('第2競技場'))
+ const refreshed=await tree.props.loadPrint(['2026-11-15']);assert(refreshed.includes('<td>16:45</td>')&&!refreshed.includes('<td>15:00</td>'),'reload saved times rather than stale editor props')
+ assert.deepEqual(requests.map(url=>url.pathname.split('/').at(-1)).sort(),
+  ['competitions','fhs_winter_event_affiliations','horses','organizations','reception_entries','riders'])
  global.fetch=async()=>{throw Error('offline')};await assert.rejects(tree.props.loadPrint(['2026-11-15']),/offline/)
  if(process.env.TIMETABLE_TEST_OUTPUT){fs.mkdirSync(process.env.TIMETABLE_TEST_OUTPUT,{recursive:true});fs.writeFileSync(path.join(process.env.TIMETABLE_TEST_OUTPUT,'timetable.html'),html)
  for(let mask=1;mask<8;mask++){

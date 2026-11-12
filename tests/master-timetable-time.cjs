@@ -32,6 +32,7 @@ const table=()=>({competition_id:'c',event_id:ev,inspection_time:inspection,star
 const row=x=>({event_id:ev,...x})
 const data={eventId:ev,organizations:[row({id:'o',name:'団体'})],riders:[row({id:'r',name:'選手',organization_id:'o'})],horses:[row({id:'h',name:'馬',organization_id:'o'})],competitions:[row({id:'c',competition_no:'1',competition_date:'2026-11-14',name:'競技',official:false})],entries:[row({entry_id:'e',competition_id:'c',rider_id:'r',horse_id:'h',organization_id:'o',organization_name:'団体',status:'active',start_order:1})],timetable:[]}
 const state={version:1,eventId:ev,competitionId:'c',page:0,draft:false,rows:[]}
+data.fhs_winter_event_affiliations=[]
 global.fetch=async url=>{const name=new URL(url).pathname.split('/').at(-1);const rows=name==='reception_entries'?data.entries:name==='competitions'?data.competitions.map(c=>({...c,notes:JSON.stringify({originalNotes:'残す競技メモ',winterTimetable:table()})})):data[name];return{ok:true,json:async()=>rows}}
 ;(async()=>{
  for(const v of ['オープン','組み換え時間','前競技と同時','08:15']){

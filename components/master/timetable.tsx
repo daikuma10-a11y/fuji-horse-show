@@ -32,7 +32,7 @@ export function MasterTimetable({title,dates,items,renderEditor,loadPrint,render
        return <div key={section?.id ?? 'timetable'} className="overflow-x-auto">
          <table className="w-full min-w-[620px] border-collapse bg-card">
            <caption className={section ? 'py-2 text-left font-bold' : 'sr-only'}>
-             <span className="sr-only">{date.label}のタイムテーブル </span>{section?.label}
+             <span className="sr-only">{date.label}のタイムテーブル </span>{section?.label}{section?.venue && `　${section.venue}`}
            </caption>
            <thead><tr>{headers.map(label =>
              <th scope="col" key={label} className={`border p-2 text-left ${label === '操作' ? 'print-hide' : ''}`}>{label}</th>
