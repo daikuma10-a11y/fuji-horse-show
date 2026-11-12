@@ -18,7 +18,7 @@ const paidRows=winterUnsettledRows(data,{...ledger,advances:[{...advance,paid_am
 assert.deepEqual(paidRows,[],'A fully paid club drops off the list')
 assert.equal(winterUnsettledRows(data,ledger)[0].status,'入金不足')
 const unpaid=winterUnsettledRows(data,{...ledger,advances:[]})
-assert.equal(unpaid[0].status,'未入金');assert.equal(unpaid[0].amount,20000);assert.equal(unpaid[0].review,true);assert.match(unpaid[0].notes,/未確認/)
+assert.equal(unpaid[0].status,'未入金');assert.equal(unpaid[0].amount,20000);assert.equal(unpaid[0].review,true);assert.equal(unpaid[0].notes,undefined)
 const plan={event_id:eventId,organization_key:'o',payment_method:'bank_transfer',bank_details:'振込先'}
 assert.equal(winterUnsettledRows(data,{...ledger,instructions:[plan]})[0].amount,10000,'Choosing bank transfer does not count as payment')
 const payment={id:'p',event_id:eventId,organization_key:'o',amount:3000,payment_method:'cash_at_venue',note:'入金確認',reverses_id:null}
@@ -27,13 +27,13 @@ assert.equal(winterUnsettledRows(data,{...ledger,payments:[payment,{...payment,i
 const adjustment={id:'a',sequence:1,event_id:eventId,organization_key:'o',delta:-1000,reason:'訂正',previous_id:null,before_total:20000,after_total:19000}
 assert.equal(winterUnsettledRows(data,{...ledger,adjustments:[adjustment]})[0].amount,9000)
 const unknown=winterUnsettledRows({...data,entries:[{...data.entries[0],entry_id:'unknown'}]},ledger)
-assert.equal(unknown[0].status,'未精算');assert.equal(unknown[0].review,true);assert.equal(unknown[0].amount,null);assert.match(unknown[0].notes,/料金履歴/)
+assert.equal(unknown[0].status,'未精算');assert.equal(unknown[0].review,true);assert.equal(unknown[0].amount,null);assert.equal(unknown[0].notes,undefined)
 const refund=winterUnsettledRows(data,{...ledger,advances:[{...advance,paid_amount:21000}]})
-assert.equal(refund[0].status,'過入金');assert.equal(refund[0].amount,1000);assert.match(refund[0].notes,/返金.*1,000円/)
+assert.equal(refund[0].status,'過入金');assert.equal(refund[0].amount,1000);assert.equal(refund[0].notes,undefined)
 const pending={id:'pending',event_id:eventId,organization_id:'o',status:'pending'}
 const pendingRows=winterUnsettledRows(data,{...ledger,advances:[{...advance,paid_amount:20000}],requests:[pending]})
 assert.deepEqual(pendingRows.map(r=>[r.status,r.amount,r.review]),[['未精算',null,true]])
-assert.match(pendingRows[0].notes,/未反映/)
+;assert.equal(pendingRows[0].notes,undefined)
 const lastPayment={...payment,amount:10000}
 assert.deepEqual(winterUnsettledRows(data,{...ledger,payments:[lastPayment]}),[])
 const reversed=winterUnsettledRows(data,{...ledger,payments:[lastPayment,{...lastPayment,id:'reverse',reverses_id:'p'}]})
@@ -67,7 +67,7 @@ assert.deepEqual(readFollowup(storage,'other-event','o'),emptyFollowup)
 assert.deepEqual(readFollowup(storage,'winter','other-club'),emptyFollowup)
 assert.throws(()=>writeFollowup(storage,'winter','o',emptyFollowup,{...followup,reason:'同時編集'}),/別の画面/)
 const printed=unsettledPrintHtml(unpaid,'Winter','現在',new Map([['o',readFollowup(storage,'winter','o')]]))
-assert.ok(printed.includes('確認用 &lt;差額&gt;\n再確認予定') && printed.includes('連絡状況：連絡済み') && printed.includes('事前入金は未確認'))
+assert.ok(printed.includes('確認用 &lt;差額&gt;\n再確認予定') && printed.includes('連絡状況：連絡済み') && !printed.includes('事前入金は未確認'))
 writeFollowup(storage,'winter','o',followup,emptyFollowup)
 assert.equal(savedNotes.size,0)
 assert.ok(!html.includes('保存済みの申込内容から自動反映'));assert.ok(!uh.includes('未反映の申請や料金履歴の不足は備考で確認できます'));assert.ok(html.includes('色付きボールペン'))

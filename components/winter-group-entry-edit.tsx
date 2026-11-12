@@ -109,7 +109,7 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
       sessionStorage.removeItem(key);onSaved()
     }catch(e){setError(e instanceof Error?e.message:'保存結果を確認できません。同じ内容で再確認してください。')}finally{lock.current=false;setBusy(false)}
   }
-  const person=(p:{id:string;name:string;organization_id:string},number:string|null)=>({id:p.id,label:[p.name,orgName(p.organization_id),number].filter(Boolean).join(' ／ ')})
+  const person=(p:{id:string;name:string;organization_id:string},number:string|null)=>({id:p.id,group:{id:p.organization_id,name:data.affiliationNames?.[p.organization_id]??orgName(p.organization_id)},label:[p.name,number].filter(Boolean).join(' ／ ')})
   return <section className="space-y-3"><h4 className="text-xl font-bold">エントリーを修正</h4>
     {review?<><p>修正前　{review.before}</p><p>修正後　{review.after}</p>{review.lines.map(line=><p key={line}>{line}</p>)}
       <button type="button" className={groupActionClass} disabled={busy} onClick={()=>void confirm()}>{attempted?'同じ修正の確定結果を再確認':'この内容で確定'}</button>

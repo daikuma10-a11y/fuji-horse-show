@@ -308,3 +308,11 @@
 .stall-map [data-dragging] { cursor: grabbing; }
 .stall-map [data-dragging] > rect { stroke: #2563eb; stroke-width: 4; }
 .stall-map [data-drop-target] > rect { fill: #bfdbfe; stroke: #174aaa; stroke-width: 5; }
+
+.winter-receipt-sheet { display: none; }
+@media print {
+  body.winter-printing-receipt > :not(.winter-receipt-sheet) { display: none !important; }
+  body.winter-printing-receipt > .winter-receipt-sheet { display: block !important; }
+  .winter-receipt-sheet .receipt-paper { break-inside: auto; }
+  .winter-receipt-sheet .receipt-bottom, .winter-receipt-sheet .receipt-items p { break-inside: avoid; }
+}

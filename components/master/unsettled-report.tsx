@@ -79,7 +79,7 @@ export function UnsettledReport({rows, storageKey, loading, error, printing, onP
         return <tr key={row.id}><td className={cell}>□</td><td className={cell}>{row.name}</td>
           <td className={cell}><strong className="inline-block whitespace-nowrap rounded border border-current px-2 py-1" style={unsettledColors[row.status]}>{row.status}</strong></td>
           <td className={`${cell} whitespace-nowrap`}>{row.amount === null ? '—' : yen(row.amount)}{row.review && <span className="block text-sm font-bold text-amber-900">要確認</span>}</td>
-          <td className={`${cell} min-w-56 space-y-2`}>{row.notes && <p className="text-sm">{row.notes}</p>}
+          <td className={`${cell} min-w-56 space-y-2`}>
             {draft?.id === row.id ? editor : <>
               {note?.reason && <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{note.reason}</p>}
               {note?.contact && <p>連絡状況：{note.contact}</p>}

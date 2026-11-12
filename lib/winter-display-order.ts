@@ -20,3 +20,13 @@ export function winterAffiliatedOrganizations<T extends {id:string; name:string}
   return data.organizations.map(org => names[org.id] ? {...org, name:names[org.id]} : org)
     .sort(compareWinterOrganizations)
 }
+
+type PickerMember = {id:string; name:string; organization_id:string}
+export function winterPickerOrder(organizations: {id:string;name:string}[], readings = new Map<string,string>()) {
+  const positions = new Map([...organizations].sort((a,b) => compareWinterOrganizations(a,b) || a.id.localeCompare(b.id)).map((org,index) => [org.id,index]))
+  const collator = new Intl.Collator('ja',{numeric:true})
+  return (a:PickerMember,b:PickerMember) =>
+    (positions.get(a.organization_id) ?? Infinity) - (positions.get(b.organization_id) ?? Infinity)
+    || collator.compare(normalize(readings.get(a.id) || a.name), normalize(readings.get(b.id) || b.name))
+    || collator.compare(a.name,b.name) || a.id.localeCompare(b.id)
+}
