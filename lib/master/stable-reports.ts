@@ -13,7 +13,7 @@ export const unsettledColors = {
 } as const
 export const bookletHeaders = ['No.', '団体名', '手帳受取日', '頭数', '入厩日時', '退厩日時', '手帳返却日', '備考']
 export const unsettledHeaders = ['✓', '乗馬クラブ名', '入金状況', '差額', '備考']
-export const bookletExplanation = '団体名・頭数は参加登録、入退厩日時は保存済みの申込内容から自動反映します。日時の空欄は未登録です。手帳受取日・返却日は印刷後に記入してください。'
+export const bookletExplanation = '団体名・頭数は参加登録、入退厩日時は保存済みの申込内容から自動反映します。日時の空欄は未登録です。手帳受取日・返却日・備考は印刷後に記入してください。'
 export const unsettledExplanation = '入金不足・未入金・過入金の団体を表示します。差額を確定できない団体は「未精算」と表示します。'
 export const unsettledEmptyMessage = '未精算・過入金・入金不足の団体はありません。'
 export const yen = (value: number) => `${value.toLocaleString('ja-JP')}円`
@@ -31,7 +31,7 @@ export function bookletRows(groups: StableGroup[], schedules: {id:string;value:S
       id: group.id, name: group.name, count: group.horses.length, received: '', returned: '',
       arrival: schedule ? stableDateLabel(schedule.arrivalDate, schedule.arrivalTime) : '',
       departure: schedule ? stableDateLabel(schedule.departureDate, schedule.departureTime) : '',
-      notes: schedule?.notes ?? '',
+      notes: '',
     }))
 }
 function escape(value: string | number) { return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!) }

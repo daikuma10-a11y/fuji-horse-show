@@ -195,6 +195,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Noto Sans JP Variable', Arial, sans-serif;
     font-size: 1.125rem;
     -webkit-tap-highlight-color: transparent;
   }

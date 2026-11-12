@@ -1,13 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { Noto_Sans_JP } from 'next/font/google'
+import '@fontsource-variable/noto-sans-jp/index.css'
 import './globals.css'
 import { EventStoreBoundary } from '@/components/event-store-boundary'
-
-const notoSansJP = Noto_Sans_JP({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  display: 'swap',
-})
 
 export const metadata: Metadata = {
   title: 'Fuji Horse Show 大会受付',
@@ -38,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className="light">
-      <body className={`${notoSansJP.className} antialiased`}>
+      <body className="antialiased">
         <EventStoreBoundary>{children}</EventStoreBoundary>
       </body>
     </html>

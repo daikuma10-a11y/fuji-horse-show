@@ -43,7 +43,11 @@ assert.deepEqual(cleared,[],'No charge remains, even with historical adjustments
 assert.throws(()=>winterUnsettledRows({...data,eventId:'autumn'},ledger),/Winter/)
 assert.throws(()=>winterUnsettledRows(data,{...ledger,advances:[{...advance,event_id:'autumn'}]}),/Winter/)
 assert.equal(JSON.stringify([data,ledger]),before,'Reports never mutate registration or payments')
-const booklets=bookletRows([{id:'o',name:'団体<script>x</script>',horses:[{id:'h1',name:'馬'},{id:'h2',name:'馬'}]}])
+const arrivalNote='入退厩画面専用の連絡事項'
+const schedule={...emptyStableSchedule(),notes:arrivalNote}
+const booklets=bookletRows([{id:'o',name:'団体<script>x</script>',horses:[{id:'h1',name:'馬'},{id:'h2',name:'馬'}]}],[{id:'o',value:schedule}])
+assert.equal(booklets[0].notes,'')
+assert.equal(schedule.notes,arrivalNote)
 assert.equal(booklets[0].count,2);assert.equal(booklets[0].arrival,'');assert.equal(booklets[0].received,'')
 const groups=['unknown','next-day','no-time','morning','afternoon','same-time'].map(id=>({id,name:id,horses:[]}))
 const arrival=(id,date,time)=>({id,value:{...emptyStableSchedule(),arrivalDate:date,arrivalTime:time}})
@@ -57,6 +61,7 @@ const html=bookletPrintHtml(booklets,'Winter','2026/10/29 12:00')
 assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('合計 2頭'))
 assert.match(html, /class="booklet-name" data-fit-size="10"><span>団体&lt;script&gt;x&lt;\/script&gt;<\/span>/)
 for(const label of ['手帳受取日','入厩日時','退厩日時','手帳返却日','備考'])assert.ok(html.includes(label))
+assert.ok(!html.includes(arrivalNote));assert.match(html,/<td><\/td><\/tr>/)
 const uh=unsettledPrintHtml(unpaid,'Winter','2026/10/29 12:00')
 const savedNotes=new Map()
 const storage={getItem:key=>savedNotes.get(key)??null,setItem:(key,value)=>savedNotes.set(key,value),removeItem:key=>savedNotes.delete(key)}
@@ -77,6 +82,7 @@ const emptyPrint=unsettledPrintHtml(paidRows,'Winter','現在')
 assert.ok(emptyPrint.includes(emptyMessage));assert.ok(!emptyPrint.includes('&lt;script&gt;'))
 const props={booklets,unsettled:unpaid,loading:false,error:'',unsettledLoading:false,unsettledError:'',loadBookletPrint:async()=>html,loadUnsettledPrint:async()=>uh}
 const view=renderToStaticMarkup(React.createElement(MasterStableReports,props));assert.ok(view.includes('手帳チェックを印刷'));assert.ok(view.includes('未精算リストを印刷'))
+assert.ok(!view.includes(arrivalNote))
 const emptyView=renderToStaticMarkup(React.createElement(MasterStableReports,{...props,booklets:[],unsettled:paidRows}))
 assert.ok(emptyView.includes(emptyMessage));assert.ok(!emptyView.includes('&lt;script&gt;'))
 for(const rows of [unpaid,refund,unknown,pendingRows,winterUnsettledRows(data,ledger)]){
