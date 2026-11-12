@@ -99,3 +99,19 @@ for (const advancePaid of [0, 5000]) {
   assert.equal(printed.organization, 'STAR HORSES'); assert.equal(printed.advancePaid, advancePaid)
 }
 console.log('PASS: unpaid and partially paid advance entries can be checked and included in printed settlement balances')
+
+const {ScopedReceiptForm}=load(path.join(root,'components/master/scoped-receipt-form.tsx'))
+const horseSources=sources.map((s,i)=>({...s,horseId:i===0?'h1':'h2',horse:i===0?'馬A':'馬B'}))
+const winter=harness(ScopedReceiptForm,{embedded:true,includeHorses:true,defaultPurpose:'Winter参加料',organization:'テスト団体',sources:horseSources,receipts:[],availableAmount:9000,scopeOptions:[{kind:'rider',id:'p1',name:'選手A',group:'クラブA'},{kind:'horse',id:'h1',name:'馬A',group:'クラブA'}]})
+let scope=winter.render()
+function selectScope(id){
+  elements(scope,node=>node.type==='select')[0].props.onChange({target:{value:id}})
+  scope=winter.render()
+}
+selectScope('horse:h1')
+assert.match(text(scope),/対象：1件 ／ ¥9,000/)
+selectScope('p1')
+assert.ok(elements(scope,node=>node.type==='input' && node.props.value==='選手A').length)
+selectScope('__all__')
+assert.match(text(scope),/対象：2件 ／ ¥9,000/)
+console.log('PASS: horse, rider and group scopes, recipient prefill, amount limited to confirmed unissued funds')

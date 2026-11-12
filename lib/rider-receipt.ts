@@ -1,7 +1,7 @@
 import type { SettlementReceipt } from './settlement-receipts'
 import type { SettlementChoice } from './settlement-selection'
 
-export type ReceiptSourceItem = { key: string; riderId: string; rider: string; label: string; amount: number; paid: number }
+export type ReceiptSourceItem = { key: string; riderId: string; rider: string; horseId?:string; horse?:string; label: string; amount: number; paid: number }
 export type RiderReceiptChoice = ReceiptSourceItem & SettlementChoice
 
 // Receipt-only documents describe existing payments. They never become payment allocations.
