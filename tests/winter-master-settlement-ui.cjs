@@ -15,6 +15,15 @@ const render=()=>h.render(()=>{const tree=WinterSelfSettlement();return tree.typ
 ;(async()=>{
  account.warnings=['事前入金は未確認です。本部に確認してください。']
  let t=render();await flush();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.ok(text(t).includes('馬匹登録料（1頭）'));assert.ok(text(t).includes('¥14,000'));assert.ok(!text(t).includes('事前エントリーの明細'));assert.ok(text(t).includes('入金は合計欄を参照'))
+ const draftLabel='精算書を印刷（確認用）'
+ const draftPaper=nodes(t).find(n=>n.props?.record?.draft)?.props.record
+ assert.ok(draftPaper);assert.match(draftPaper.document.document.title,/精算書（確認用）/)
+ assert.match(draftPaper.document.document.notice,/事前入金は未確認/)
+ assert.equal(draftPaper.document.document.due,31000)
+ assert.equal(draftPaper.document.document.method,'未設定')
+ const draftButton=button(t,draftLabel)
+ assert.ok(!draftButton.props.disabled);draftButton.props.onClick();draftButton.props.onClick()
+ assert.equal(prints,2);assert.equal(posts.length,0,'draft printing does not confirm or receive a payment')
  // Acknowledging the displayed statement is possible; unresolved payment warnings still block saving.
  let checkbox=nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox');assert.equal(checkbox.props.disabled,false);assert.equal(checkbox.props['aria-describedby'],'settlement-confirmation-blockers');assert.match(text(t),/「未確認」と「未入金」は別の状態/)
  checkbox.props.onChange({target:{checked:true}});nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.onChange({target:{value:'確認者'}});nodes(t).find(n=>n.type==='input'&&n.props.value==='cash_at_venue').props.onChange();t=render()
@@ -30,11 +39,12 @@ const render=()=>h.render(()=>{const tree=WinterSelfSettlement();return tree.typ
  nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.onChange({target:{value:'確認者'}});nodes(t).find(n=>n.type==='input'&&n.props.value==='cash_at_venue').props.onChange();t=render()
  assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.disabled,false,'official event bank is available without individual instructions')
  if(process.env.FHS_TEST_BANK==='1'){nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.onChange();t=render()}
- const confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,false);confirm.props.onClick();confirm.props.onClick();t=render();assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.disabled,true,'busy saving still locks acknowledgement');await flush();t=render();assert.equal(posts.length,1);assert.ok(text(t).includes('同じ内容で再確認'));assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.disabled,true,'uncertain saving still locks acknowledgement')
+ assert.equal(button(t,draftLabel).props.disabled,false);button(t,draftLabel).props.onClick();assert.equal(posts.length,0)
+ const confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,false);confirm.props.onClick();confirm.props.onClick();t=render();assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.disabled,true,'busy saving still locks acknowledgement');await flush();t=render();assert.equal(posts.length,1);assert.equal(button(t,draftLabel).props.disabled,true);button(t,draftLabel).props.onClick();assert.equal(prints,3);assert.ok(text(t).includes('同じ内容で再確認'));assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.disabled,true,'uncertain saving still locks acknowledgement')
  assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.disabled,true);assert.equal(button(t,'← 団体を選び直す').props.disabled,true);now+=121000;timers.forEach(fn=>fn());t=render();assert.ok(text(t).includes('馬匹登録料'))
  mode='ok';button(t,'同じ登録番号で保存を再確認').props.onClick();await flush();t=render();assert.equal(posts.length,2);assert.deepEqual(posts[0],posts[1]);assert.ok(text(t).includes('サーバーに保存済み'));assert.equal(posts[1].method,process.env.FHS_TEST_BANK==='1'?'bank_transfer':'cash_at_venue');assert.equal(nodes(t).find(n=>n.props?.record?.document)?.props.record.document.document.bankDetails,process.env.FHS_TEST_BANK==='1'?bank:'')
- button(t,'精算書を印刷・再印刷').props.onClick();button(t,'精算書を印刷・再印刷').props.onClick();assert.equal(prints,2);assert.equal(posts.length,2,'reprint never saves')
- button(t,'終了・次の団体へ').props.onClick();t=render();assert.ok(text(t).includes('ご所属の団体'));assert.ok(!text(t).includes('馬匹登録料'))
+ assert.ok(!nodes(t).some(n=>n.props?.record?.draft));assert.ok(!text(t).includes(draftLabel));button(t,'精算書を印刷・再印刷').props.onClick();button(t,'精算書を印刷・再印刷').props.onClick();assert.equal(prints,5);assert.equal(posts.length,2,'reprint never saves')
+ button(t,'終了・次の団体へ').props.onClick();t=render();assert.ok(text(t).includes('ご所属の団体'));assert.ok(!text(t).includes('馬匹登録料'));assert.ok(!nodes(t).some(n=>n.props?.record?.document));assert.ok(!text(t).includes(draftLabel))
  button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.ok(text(t).includes('サーバーに保存済み'));assert.equal(posts.length,2,'reload existing snapshot does not save')
  h.close();Date.now=originalNow;Module._load=load;console.log('PASS: unconfirmed payment allows statement acknowledgement but blocks save; explicit reason and read-only recovery; fresh confirmation of zero paid; shared Winter checkout, uncertain retry, double-click guard, reprints and visitor reset')
 })().catch(error=>{console.error(error);process.exitCode=1})

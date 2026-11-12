@@ -6,13 +6,14 @@ import type {MasterSettlementViewProps,MasterSettlementAccount as Account,Master
 const button='min-h-16 rounded-2xl border-2 px-5 py-3 text-xl font-bold disabled:opacity-40'
 export function MasterSelfSettlementView(props:MasterSettlementViewProps){
  const {organizations,query,org,account,record,history,busy,error,consult,checked,name,method}=props
+ const paper=record??props.draftPaper
  const reset=props.onReset,select=props.onSelect,confirm=props.onConfirm,print=props.onPrint,loadHistory=props.onHistory
  const setQuery=props.onQuery,setName=props.onName,setMethod=props.onMethod,setChecked=props.onChecked
  const setConsult=(_value:boolean)=>props.onConsult(),setRecord=props.onChooseHistory
  return <>
   <main className="print-hide mx-auto min-h-dvh max-w-5xl space-y-5 bg-background px-5 py-6 text-foreground">
    <header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-3xl font-bold">大会精算</h1>{!busy&&<Link href={props.homeHref??"/"} onClick={props.locked?event=>event.preventDefault():reset} aria-disabled={props.locked||undefined} className="rounded-xl border-2 px-4 py-3 text-lg font-bold">受付へ戻る</Link>}</header>
-   <p className="text-lg">団体を選択 → 明細確認 → 支払い方法 → 確定・印刷</p>
+   <p className="text-lg">{props.onPrintDraft?'団体を選ぶと、明細の確認・印刷ができます。精算を確定する場合は支払い方法と確認者を入力してください。':'団体を選択 → 明細確認 → 支払い方法 → 確定・印刷'}</p>
    {props.pendingMessage&&<div role="status" className="rounded-xl bg-orange-100 p-4 text-xl"><p>{props.pendingMessage}</p>{props.onRetry&&<button type="button" className={button} disabled={busy} onClick={props.onRetry}>同じ登録番号で保存を再確認</button>}</div>}
    {error&&<p role="alert" className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-xl font-bold text-red-800">{error}</p>}
    {!org?<>
@@ -28,6 +29,7 @@ export function MasterSelfSettlementView(props:MasterSettlementViewProps){
     </>:account?<>
      <h2 className="text-3xl font-bold">{account.document.organization}</h2>
      <section className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5"><p className="text-xl font-bold">お支払いいただく金額</p><p className="mt-2 text-5xl font-bold text-blue-800">{formatYen(account.document.due)}</p><dl className="mt-5 grid grid-cols-2 gap-3 text-lg"><dt>事前エントリー</dt><dd>{formatYen(account.document.normalTotal)}</dd><dt>事前分の入金済み</dt><dd>{formatYen(account.document.advancePaid)}{!account.document.advanceRecorded&&'（未確認）'}</dd><dt>追加・変更など</dt><dd>{formatYen(account.document.extraTotal)}</dd><dt>追加・変更などの入金済み</dt><dd>{formatYen(account.document.extraPaid)}</dd>{account.document.summaryRows?.map(row=><div key={row.label} className="contents"><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></section>
+     {props.onPrintDraft&&<button type="button" disabled={!props.draftPaper||busy||props.locked} onClick={props.onPrintDraft} className={`${button} w-full border-blue-700 bg-white text-blue-800`}>精算書を印刷（確認用）</button>}
      {props.normalDetails!==false&&<details className="rounded-xl border-2 bg-card p-4"><summary className="cursor-pointer text-xl font-bold">事前エントリーの明細（{account.normalLines.length}件）</summary><NormalLines account={account}/></details>}
      <section className="rounded-xl border-2 bg-card p-4"><h3 className="mb-3 text-2xl font-bold">追加・変更・棄権の明細</h3>{account.document.lines.length?account.document.lines.map((line,i)=><div key={line.key??i} className="border-t py-4 text-lg"><p className="font-bold">{line.action} ／ {line.competition}</p><p className="mt-1 whitespace-pre-line">{line.rider} ／ {line.horse}</p><p className="mt-2 font-bold">料金 {formatYen(line.amount)}{typeof line.paid==='number'?` ／ 入金済み ${formatYen(line.paid)}`:' ／ 入金は合計欄を参照'}</p>{line.note&&<p className="mt-1">{line.note}</p>}</div>):<p className="text-lg">追加・変更・棄権はありません。</p>}</section>
      {!!account.warnings.length&&<section id="settlement-confirmation-blockers" className="space-y-3 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-lg text-amber-950">
@@ -49,7 +51,7 @@ export function MasterSelfSettlementView(props:MasterSettlementViewProps){
     </>:null}
    </>}
   </main>
-  {record&&<div className="print-only document-page hidden bg-white text-black"><MasterConfirmationPaper record={record}/></div>}
+  {paper&&<div className="print-only document-page hidden bg-white text-black"><MasterConfirmationPaper record={paper}/></div>}
  </>
 }
 function NormalLines({account}:{account:Account}){return <table className="settlement-normal-lines mt-3 w-full text-left text-base"><colgroup><col style={{width:'46%'}}/><col style={{width:'20%'}}/><col style={{width:'22%'}}/><col style={{width:'12%'}}/></colgroup><thead><tr><th>競技</th><th>選手</th><th>馬</th><th>金額</th></tr></thead><tbody>{account.normalLines.map(line=><tr key={line.id}><td>{line.competition}</td><td>{line.rider}</td><td>{line.horse}</td><td className="amount">{formatYen(line.amount)}</td></tr>)}</tbody></table>}
