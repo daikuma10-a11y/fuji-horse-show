@@ -9,7 +9,7 @@ export type MasterSettlementAccount={document:MasterSettlementDocument;normalLin
 export type MasterSavedSettlement={id:string;organization_key?:string;confirmed_by?:string;payment_method:string;amount:number;created_at:string;document:MasterSettlementAccount;draft?:boolean}
 export type MasterSettlementViewProps={
  organizations:{id:string;name:string}[];query:string;org:string;account:MasterSettlementAccount|null;record:MasterSavedSettlement|null;history:MasterSavedSettlement[];busy:boolean;error:string;consult:boolean;checked:boolean;name:string;method:string
- homeHref?:string;normalDetails?:boolean;locked?:boolean;pendingMessage?:string;canEditSaved?:boolean
+ draftPaper?:MasterSavedSettlement|null;onPrintDraft?:()=>void;homeHref?:string;normalDetails?:boolean;locked?:boolean;pendingMessage?:string;canEditSaved?:boolean
  canUseMethod?:(method:string)=>boolean
  onQuery:(value:string)=>void;onName:(value:string)=>void;onMethod:(value:string)=>void;onChecked:(value:boolean)=>void;onConsult:()=>void;onSelect:(id:string)=>void;onReset:()=>void;onConfirm:()=>void;onPrint:()=>void;onEditSaved:()=>void;onHistory:()=>void;onChooseHistory:(record:MasterSavedSettlement)=>void;onRetry?:()=>void
 }
