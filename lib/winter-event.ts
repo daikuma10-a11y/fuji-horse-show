@@ -6,15 +6,17 @@ export const WINTER_EVENT_NAME = preparation.name
 export const WINTER_BANK_DETAILS = preparation.bankDetails
 export const WINTER_STARTS_PER_PAGE = 35
 export const WINTER_DATES = ["2026-11-13", "2026-11-14", "2026-11-15"] as const
-// The Winter program assigns one discipline to each arena.
+export const WINTER_DRESSAGE_VENUE = 'インドア競技場'
+
+// Keep the original program arena for matching competitions to their timetable section.
 export const winterTimetableSections = [
-  {id: 'jump', label: '障害馬術 ～Jump～', venue: '第1競技場', startListVenue: null, showInspection: true},
-  {id: 'dressage', label: '馬場馬術 ～Dressage～', venue: '第2競技場', startListVenue: 'インドア競技場', showInspection: false},
+  {id: 'jump', label: '障害馬術 ～Jump～', programArena: '第1競技場', venue: '第1競技場', startListVenue: null, showInspection: true},
+  {id: 'dressage', label: '馬場馬術 ～Dressage～', programArena: '第2競技場', venue: WINTER_DRESSAGE_VENUE, startListVenue: WINTER_DRESSAGE_VENUE, showInspection: false},
 ] as const
 
 const timetableSectionsByNumber = new Map(preparation.competitions.map(competition => [
   competition.number,
-  winterTimetableSections.find(section => section.venue === competition.arena),
+  winterTimetableSections.find(section => section.programArena === competition.arena),
 ]))
 
 export function winterTimetableSection(competitionNo: string) {
