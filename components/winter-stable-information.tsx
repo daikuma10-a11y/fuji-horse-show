@@ -16,6 +16,7 @@ import { loadWinterData } from '@/lib/winter-data'
 import { WINTER_EVENT_NAME } from '@/lib/winter-event'
 import { winterStableGroups } from '@/lib/winter-stable-information'
 import { bookletRows, bookletPrintHtml, unsettledPrintHtml, type UnsettledRow } from '@/lib/master/stable-reports'
+import { readFollowup } from '@/lib/master/unsettled-followup'
 import { winterUnsettledRows } from '@/lib/winter-stable-reports'
 import { loadWinterSettlement } from '@/lib/winter-settlement'
 import { verifyAdminSession, type AdminSession } from '@/lib/supabase-rest'
@@ -23,6 +24,7 @@ import { MasterStallAllocation } from './master/stall-allocation'
 import { loadWinterStallPlan, saveWinterStallPlan } from '@/lib/winter-stall-allocation'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
+const followupKey = winterStorageKey('unsettled-followup')
 const printedAt = () => new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
 export function WinterStableInformation({ data, loading, error, session, onSession, active, revision, organizationId, onChanged }: {
   organizationId?:string; onChanged?:()=>void; data: Data | null; loading: boolean; error: string; session: AdminSession; onSession: (session: AdminSession) => void; active: boolean; revision: number
@@ -96,7 +98,9 @@ export function WinterStableInformation({ data, loading, error, session, onSessi
     const verified = await verifyAdminSession(sessionRef.current)
     onSession(verified)
     const [fresh, ledger] = await Promise.all([loadWinterData(), loadWinterSettlement(verified.accessToken)])
-    return unsettledPrintHtml(winterUnsettledRows(fresh, ledger), WINTER_EVENT_NAME, printedAt())
+    const rows = winterUnsettledRows(fresh, ledger)
+    const followups = new Map(rows.map(row => [row.id, readFollowup(localStorage, followupKey, row.id)]))
+    return unsettledPrintHtml(rows, WINTER_EVENT_NAME, printedAt(), followups)
   }
   const scheduleEditor = <MasterStableScheduleEditor organizationId={organizationId} rows={(organizationId?(data?.organizations??[]):view.groups).map(g=>{const row=schedules.find(s=>s.organization_id===g.id);return {id:g.id,name:g.name,value:row?.value??emptyStableSchedule(),revision:row?.request_id??null}})} loading={pending||scheduleLoading} error={problem||scheduleError} year="2026" onReload={async()=>{await reloadSchedules()}} onSave={saveSchedule} onReadExcel={async file=>{const app=await readWinterApplication(new Uint8Array(await file.arrayBuffer()),file.name);return {club:app.club,value:app.stable??emptyStableSchedule()}}}/>
   const requestEditor = <MasterStallRequestEditor organizationId={organizationId} rows={(data?.organizations??[]).map(g=>{const r=requests.find(r=>r.organization_id===g.id);return {id:g.id,name:g.name,value:r?.value??emptyStallRequest(),revision:r?.request_id??null}})} loading={pending||requestLoading} error={problem||requestError} onReload={async()=>{await reloadRequests()}} onSave={saveRequest}/>
@@ -105,6 +109,6 @@ export function WinterStableInformation({ data, loading, error, session, onSessi
     vendorLayout={<MasterVendorLayout eventId={WINTER_EVENT_ID} eventName={WINTER_EVENT_NAME} storageKey={winterStorageKey('vendor-layout')} venue={<WinterVendorVenue />} origin={{x:112,y:458}} />}
     allocation={<>{requestEditor}<MasterStallAllocation eventId={WINTER_EVENT_ID} requestSource={Object.fromEntries(requests.filter(r=>view.groups.some(g=>g.id===r.organization_id)).map(r=>[r.organization_id,{value:r.value,revision:r.request_id}]))} groups={view.groups} eventName={WINTER_EVENT_NAME} active={active&&!pending&&!problem} onLoad={async()=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);const [fresh,saved,latestRequests]=await Promise.all([loadWinterData(),loadWinterStallPlan(verified.accessToken),loadWinterStallRequests(verified.accessToken)]);setRequests(latestRequests);return {groups:winterStableGroups(fresh),saved,requestSource:Object.fromEntries(latestRequests.map(r=>[r.organization_id,{value:r.value,revision:r.request_id}]))}}} onSave={async(plan,expected)=>{const verified=await verifyAdminSession(sessionRef.current);onSession(verified);return saveWinterStallPlan(plan,expected,verified.accessToken)}}/></>}
     reports={<>{scheduleEditor}
-    <MasterStableReports booklets={bookletRows(view.groups,schedules.map(row=>({id:row.organization_id,value:row.value})))} bookletLoading={scheduleLoading} bookletError={scheduleError} unsettled={unsettled} loading={pending} error={problem} unsettledLoading={ledgerLoading} unsettledError={ledgerError}
+    <MasterStableReports followupStorageKey={followupKey} booklets={bookletRows(view.groups,schedules.map(row=>({id:row.organization_id,value:row.value})))} bookletLoading={scheduleLoading} bookletError={scheduleError} unsettled={unsettled} loading={pending} error={problem} unsettledLoading={ledgerLoading} unsettledError={ledgerError}
       loadBookletPrint={loadBookletPrint} loadUnsettledPrint={loadUnsettledPrint}/></>}/>
 }

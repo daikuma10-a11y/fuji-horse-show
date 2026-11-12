@@ -4,6 +4,8 @@ const React = require('react'), {renderToStaticMarkup} = require('react-dom/serv
 const {WINTER_EVENT_ID:eventId} = require('../lib/winter-event.ts')
 const {winterUnsettledRows} = require('../lib/winter-stable-reports.ts')
 const {bookletRows,bookletPrintHtml,unsettledPrintHtml} = require('../lib/master/stable-reports.ts')
+const {emptyStableSchedule} = require('../lib/master/stable-schedule.ts')
+const {emptyFollowup,readFollowup,writeFollowup} = require('../lib/master/unsettled-followup.ts')
 const {MasterStableReports} = require('../components/master/stable-reports.tsx')
 const data={eventId,organizations:[{id:'o',name:'団体<script>x</script>',event_id:eventId},{id:'empty',name:'未参加団体',event_id:eventId}],riders:[{id:'r',name:'選手',organization_id:'o',event_id:eventId}],horses:[{id:'h',name:'馬',organization_id:'o',event_id:eventId}],competitions:[{id:'c',name:'競技',competition_no:'1',event_id:eventId}],entries:[{entry_id:'i',rider_id:'r',horse_id:'h',competition_id:'c',event_id:eventId}],timetable:[]}
 const initial={id:'i',event_id:eventId,entry_fee:6000,inputs:{organizationId:'o',competitionId:'c',riderId:'r',horseId:'h'}}
@@ -16,7 +18,7 @@ const paidRows=winterUnsettledRows(data,{...ledger,advances:[{...advance,paid_am
 assert.deepEqual(paidRows,[],'A fully paid club drops off the list')
 assert.equal(winterUnsettledRows(data,ledger)[0].status,'入金不足')
 const unpaid=winterUnsettledRows(data,{...ledger,advances:[]})
-assert.equal(unpaid[0].status,'未精算');assert.equal(unpaid[0].amount,20000);assert.equal(unpaid[0].review,true);assert.match(unpaid[0].notes,/未確認/)
+assert.equal(unpaid[0].status,'未入金');assert.equal(unpaid[0].amount,20000);assert.equal(unpaid[0].review,true);assert.match(unpaid[0].notes,/未確認/)
 const plan={event_id:eventId,organization_key:'o',payment_method:'bank_transfer',bank_details:'振込先'}
 assert.equal(winterUnsettledRows(data,{...ledger,instructions:[plan]})[0].amount,10000,'Choosing bank transfer does not count as payment')
 const payment={id:'p',event_id:eventId,organization_key:'o',amount:3000,payment_method:'cash_at_venue',note:'入金確認',reverses_id:null}
@@ -43,12 +45,33 @@ assert.throws(()=>winterUnsettledRows(data,{...ledger,advances:[{...advance,even
 assert.equal(JSON.stringify([data,ledger]),before,'Reports never mutate registration or payments')
 const booklets=bookletRows([{id:'o',name:'団体<script>x</script>',horses:[{id:'h1',name:'馬'},{id:'h2',name:'馬'}]}])
 assert.equal(booklets[0].count,2);assert.equal(booklets[0].arrival,'');assert.equal(booklets[0].received,'')
+const groups=['unknown','next-day','no-time','morning','afternoon','same-time'].map(id=>({id,name:id,horses:[]}))
+const arrival=(id,date,time)=>({id,value:{...emptyStableSchedule(),arrivalDate:date,arrivalTime:time}})
+const sorted=bookletRows(groups,[
+ arrival('next-day','2026-11-14','07:00'),arrival('no-time','2026-11-13',''),
+ arrival('afternoon','2026-11-13','13:00'),arrival('same-time','2026-11-13','08:30'),arrival('morning','2026-11-13','08:30'),
+])
+assert.deepEqual(sorted.map(row=>row.id),['morning','same-time','afternoon','no-time','next-day','unknown'])
+assert.equal(groups[0].id,'unknown','sorting the booklet preserves the supplied roster order')
 const html=bookletPrintHtml(booklets,'Winter','2026/10/29 12:00')
 assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('合計 2頭'))
+assert.match(html, /class="booklet-name" data-fit-size="10"><span>団体&lt;script&gt;x&lt;\/script&gt;<\/span>/)
 for(const label of ['手帳受取日','入厩日時','退厩日時','手帳返却日','備考'])assert.ok(html.includes(label))
 const uh=unsettledPrintHtml(unpaid,'Winter','2026/10/29 12:00')
+const savedNotes=new Map()
+const storage={getItem:key=>savedNotes.get(key)??null,setItem:(key,value)=>savedNotes.set(key,value),removeItem:key=>savedNotes.delete(key)}
+const followup={reason:'確認用 <差額>\n再確認予定',contact:'連絡済み'}
+writeFollowup(storage,'winter','o',emptyFollowup,followup)
+assert.deepEqual(readFollowup(storage,'winter','o'),followup)
+assert.deepEqual(readFollowup(storage,'other-event','o'),emptyFollowup)
+assert.deepEqual(readFollowup(storage,'winter','other-club'),emptyFollowup)
+assert.throws(()=>writeFollowup(storage,'winter','o',emptyFollowup,{...followup,reason:'同時編集'}),/別の画面/)
+const printed=unsettledPrintHtml(unpaid,'Winter','現在',new Map([['o',readFollowup(storage,'winter','o')]]))
+assert.ok(printed.includes('確認用 &lt;差額&gt;\n再確認予定') && printed.includes('連絡状況：連絡済み') && printed.includes('事前入金は未確認'))
+writeFollowup(storage,'winter','o',followup,emptyFollowup)
+assert.equal(savedNotes.size,0)
 assert.ok(!html.includes('保存済みの申込内容から自動反映'));assert.ok(!uh.includes('未反映の申請や料金履歴の不足は備考で確認できます'));assert.ok(html.includes('色付きボールペン'))
-assert.ok(uh.includes('20,000円'));assert.ok(uh.includes('要確認'));assert.ok(uh.includes('size:A4 portrait'))
+assert.ok(uh.includes('理由・備考') && uh.includes('未連絡') && uh.includes('連絡済み'));assert.ok(uh.includes('20,000円'));assert.ok(uh.includes('要確認'));assert.ok(uh.includes('size:A4 portrait'))
 const emptyMessage='未精算・過入金・入金不足の団体はありません。'
 const emptyPrint=unsettledPrintHtml(paidRows,'Winter','現在')
 assert.ok(emptyPrint.includes(emptyMessage));assert.ok(!emptyPrint.includes('&lt;script&gt;'))
