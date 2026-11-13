@@ -12,4 +12,27 @@ const zero={...record,payment_method:'no_payment_due',account:{...account,extraP
 assert(print.winterCheckoutPrintHtml(zero).includes('<td>お支払い不要</td>'))
 const provisional=draft.winterSettlementPrintHtml(account,new Date(record.created_at))
 assert(provisional.includes('精算書（確認用）'));assert(!provisional.includes('受付番号：'));assert(!provisional.includes('保存日時：'));assert(provisional.includes('¥2,000'))
+// The recipient sees the final charge once on the affected row, in both print paths.
+const changes=[{id:'op',action:'変更',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:2000},
+ {id:'added',action:'追加',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:8000},
+ {id:'swap',action:'変更',competitionLabel:'第16競技',rider:'別選手',horse:'旧馬 → 新馬',amount:2000}]
+const corrections=[{delta:-2000,reason:'内部記録A',statement_items:[{lineId:'op',delta:-2000,note:'OP後付け・変更料免除'}]},
+ {delta:-1000,reason:'内部記録B',statement_items:[{lineId:'added',delta:-1000,note:'OP競技料4,000円＋追加料3,000円'}]},
+ {delta:500,reason:'別途追加料金'}]
+const linked={...account,lines:changes,adjustments:corrections,extraTotal:12000,adjustmentTotal:-2500,total:33500,remaining:9500}
+const original=JSON.stringify(linked)
+for(const page of [draft.winterSettlementPrintHtml(linked),print.winterCheckoutPrintHtml({...record,account:linked})]){
+ const detail=[...page.matchAll(/<tr>(.*?)<td class="amount">([^<]*)<\/td><\/tr>/gs)].map(m=>m[2])
+ assert.deepEqual(detail,['¥0','¥7,000','¥2,000'])
+ for(const value of ['変更料免除','OP競技料4,000円＋追加料3,000円','¥9,000','¥9,500','別途追加料金','¥500'])assert(page.includes(value))
+ assert(!page.includes('内部記録')&&!page.includes('金額訂正合計'))
+}
+assert.equal(JSON.stringify(linked),original)
+const historical=print.winterCheckoutPrintHtml({...record,account:{...linked,adjustments:corrections.map(({statement_items,...row})=>row)}})
+assert(historical.includes('内部記録A')&&historical.includes('¥12,000')&&historical.includes('¥9,500'))
+const missing={...linked,lines:changes.slice(1),extraTotal:10000,total:31500,remaining:7500}
+const missingDocument=model.winterMasterSettlementAccount(missing).document
+assert.equal(missingDocument.extraTotal,9000)
+assert(missingDocument.summaryRows.some(row=>row.value==='¥-2,000'))
+assert.throws(()=>model.winterMasterSettlementAccount({...linked,adjustments:[{...corrections[0],statement_items:[{lineId:'op',delta:-1,note:'免除'}]},...corrections.slice(1)]}),/内訳/)
 console.log('PASS: snapshot totals/event/org guards, saved print escaping, cash not implicitly paid, zero balance, read-only reprint without POST')
