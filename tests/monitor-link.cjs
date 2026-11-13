@@ -33,3 +33,41 @@ within(winterPreview,()=>winterPreview.window.scrollTo({left:0,top:360}))
 assert.equal(winterExternal.window.scrollY,360)
 winterExternal.close();winterPreview.close()
 console.log('PASS: Winter daily monitor handshake, fullscreen and manual scroll')
+
+const sender=make(false),mini=make(true),queue=[]
+class DelayedChannel extends Channel{
+ postMessage(data){for(const p of channels)if(p!==this&&!p.closed&&p.name===this.name)queue.push(()=>within(p.context,()=>p.onmessage?.({data})))}
+}
+global.BroadcastChannel=DelayedChannel
+const delivered=[]
+mini.document.scrollingElement={scrollHeight:2720}
+winterLink(sender,{})
+winterLink(mini,{onPreviewScroll:p=>delivered.push(p.y)})
+function flush(){for(let count=0;queue.length;count++){assert.ok(count<40);queue.shift()()}}
+flush()
+within(sender,()=>sender.timers[0]()) // A stale report is already in flight.
+within(mini,()=>mini.window.scrollTo({left:0,top:200}))
+within(mini,()=>mini.window.scrollTo({left:0,top:420}))
+flush()
+assert.equal(sender.window.scrollY,420)
+assert.equal(mini.window.scrollY,420)
+within(sender,()=>sender.window.scrollTo({left:0,top:900}));flush()
+within(mini,()=>mini.window.scrollTo({left:0,top:700}));flush()
+assert.equal(sender.window.scrollY,700,'immediate reverse is accepted after following external scroll')
+sender.close()
+within(mini,()=>mini.window.scrollTo({left:0,top:333}));flush()
+assert.equal(delivered.at(-1),333,'manual input can reach a monitor on a different device without local reports')
+mini.close()
+const packet=load('lib/winter-monitor-scroll.ts')
+;(async()=>{
+ const owner=await packet.createScrollController(),foreign=await packet.createScrollController(),view='2026-11-14/day/0',seen=[]
+ const sub=packet.listenToScroll({view,controller:owner.controller},p=>seen.push(p.y))
+ const first=await owner.sign(view,{y:120,extent:600,fraction:.2})
+ const second=await owner.sign(view,{y:300,extent:600,fraction:.5})
+ await sub.receive(second);await sub.receive(first);await sub.receive({...second,sequence:100,y:599})
+ await sub.receive(await foreign.sign(view,{y:10,extent:600,fraction:1/60}))
+ await sub.receive(await owner.sign('other',{y:90,extent:600,fraction:.15}))
+ assert.deepEqual(seen,[300],'ignore late replay, tampered, other view and unauthorized device packets')
+ sub.close();await sub.receive(await owner.sign(view,{y:0,extent:600,fraction:0}));assert.deepEqual(seen,[300])
+ console.log('PASS queued reports, direction reversal, standalone preview, cross-device authorization and ordering')
+})().catch(e=>{console.error(e);process.exitCode=1})

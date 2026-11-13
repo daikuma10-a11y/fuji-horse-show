@@ -1,3 +1,4 @@
+import {winterScrollTopic} from './winter-monitor-scroll'
 import {WINTER_EVENT_ID} from './winter-event'
 export const WINTER_PUBLIC_URL='https://mhgyhyxagkkwdiepifdp.supabase.co'
 export const WINTER_PUBLIC_KEY='sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95'
@@ -8,7 +9,7 @@ export function winterSignalRevision(record:unknown,kind:'data'|'monitor'){
  return row.event_id===WINTER_EVENT_ID&&Number.isSafeInteger(n)&&n>=0?n:null
 }
 /** Supabase's documented Phoenix JSON protocol. Only non-sensitive Winter counters. */
-export function subscribeWinterUpdates(kind:'data'|'monitor',onChanged:()=>void,onStatus:(message:string)=>void){
+export function subscribeWinterUpdates(kind:'data'|'monitor',onChanged:()=>void,onStatus:(message:string)=>void,onScroll?:(payload:unknown)=>void){
  let stopped=false,socket:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|undefined,heartbeat:ReturnType<typeof setInterval>|undefined,joinTimeout:ReturnType<typeof setTimeout>|undefined,debounce:ReturnType<typeof setTimeout>|undefined,attempt=0,ref=0,pendingHeartbeat:string|null=null,lastRevision:number|null=null
  const notify=()=>{clearTimeout(debounce);debounce=setTimeout(()=>{if(!stopped)onChanged()},250)}
  function connect(){
@@ -16,11 +17,23 @@ export function subscribeWinterUpdates(kind:'data'|'monitor',onChanged:()=>void,
   clearTimeout(retry);onStatus('自動更新に接続中…')
   const ws=new WebSocket(WINTER_PUBLIC_URL.replace('https:','wss:')+`/realtime/v1/websocket?apikey=${WINTER_PUBLIC_KEY}&vsn=1.0.0`);socket=ws
   const topic='realtime:winter-updates-'+kind,joinRef=String(++ref)
-  const send=(event:string,payload:unknown,eventRef=String(++ref),channel=topic)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({topic:channel,event,payload,ref:eventRef,join_ref:channel==='phoenix'?null:joinRef}));return eventRef}
-  ws.onopen=()=>{send('phx_join',{config:{broadcast:{ack:false,self:false},presence:{enabled:false},postgres_changes:[{event:'UPDATE',schema:'public',table:'fhs_winter_updates',filter:`event_id=eq.${WINTER_EVENT_ID}`}],private:false}},joinRef);joinTimeout=setTimeout(()=>ws.close(),15000)}
+  const send=(event:string,payload:unknown,eventRef=String(++ref),channel=topic)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({topic:channel,event,payload,ref:eventRef,join_ref:channel==='phoenix'?null:channel===winterScrollTopic?eventRef:joinRef}));return eventRef}
+  ws.onopen=()=>{
+   if(onScroll){
+    const join=String(++ref)
+    send('phx_join',{config:{private:false,broadcast:{ack:false,self:false},presence:{enabled:false},postgres_changes:[]}},join,winterScrollTopic)
+   }
+   send('phx_join',{config:{broadcast:{ack:false,self:false},presence:{enabled:false},postgres_changes:[{event:'UPDATE',schema:'public',table:'fhs_winter_updates',filter:`event_id=eq.${WINTER_EVENT_ID}` }],private:false}},joinRef)
+   joinTimeout=setTimeout(()=>ws.close(),15000)
+  }
   ws.onmessage=event=>{
    let value;try{value=JSON.parse(String(event.data))}catch{return}
    if(value.topic==='phoenix'&&value.event==='phx_reply'&&value.ref===pendingHeartbeat){pendingHeartbeat=null;return}
+   if(onScroll&&value.topic===winterScrollTopic){
+    if(value.event==='broadcast'&&value.payload?.event==='scroll')onScroll(value.payload.payload)
+    else if(value.event==='phx_error'||value.event==='phx_close'||value.event==='phx_reply'&&value.payload?.status==='error')ws.close()
+    return
+   }
    if(value.topic!==topic)return
    if(value.event==='phx_reply'&&value.ref===joinRef){
     if(value.payload?.status!=='ok'){ws.close();return}

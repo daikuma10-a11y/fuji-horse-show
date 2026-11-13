@@ -133,7 +133,7 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
   </section>
   <section className="space-y-4 rounded-xl border-2 p-5"><h2 ref={section} tabIndex={-1} className="text-2xl font-bold">全競技の確認一覧</h2>
    <p>{summaries.length}件 ／ 出番順の変更 {Object.keys(work?.orders??{}).length}競技 ／ 料金合計 {summaries.reduce((n,s)=>n+s.total,0).toLocaleString('ja-JP')}円</p>
-   {groups.map(org=><details open key={org.id} className="rounded-lg border p-3"><summary className="font-bold">{org.name}</summary>{summaries.filter(s=>s.organizationId===org.id).map(s=><article key={s.id} className="border-t py-2"><p>{s.type}　{s.label}</p><p>{s.category} ／ {s.total.toLocaleString('ja-JP')}円 ／ 担当：{s.visitorName}</p><button className={button} disabled={locked} onClick={()=>remove(s.id)}>保留一覧から外す</button></article>)}</details>)}
+   {groups.map(org=><details open key={org.id} className="rounded-lg border p-3"><summary className="font-bold">{org.name}</summary>{summaries.filter(s=>s.organizationId===org.id).map(s=><article key={s.id} className="border-t py-2"><p>{s.type}　{s.label}</p><p>{s.category} ／ {s.total.toLocaleString('ja-JP')}円{s.visitorName&&' ／ 担当：'+s.visitorName}</p><button className={button} disabled={locked} onClick={()=>remove(s.id)}>保留一覧から外す</button></article>)}</details>)}
    {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
    {current.attempted&&<p>確定結果の確認待ちです。同じ登録番号で再確認してください。</p>}
    {available===true&&<div className="flex flex-wrap gap-2"><button className={button} disabled={locked||!hasWork||work?.saved} onClick={()=>void operate('save')}>{work?.saved?'本部に下書き保存済み':'全競技をまとめて下書き保存'}</button><button className={button} disabled={locked} onClick={()=>void operate('load')}>本部の保存済み下書きを開く</button></div>}

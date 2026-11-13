@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { isMonitorReport, type MonitorReport } from '@/lib/monitor-link'
-export function MonitorStatus({ token, displayPath }: { token: string | null; displayPath?: string }) {
+export function MonitorStatus({ token, displayPath, onPreviewScroll }: { token: string | null; displayPath?: string; onPreviewScroll?:(value:unknown)=>void }) {
  const [report, setReport] = useState<(MonitorReport & { receivedAt: number }) | null>(null)
  const [now, setNow] = useState(Date.now())
+ const previewFrame=useRef<HTMLIFrameElement>(null)
  const panel = useRef<HTMLElement>(null)
  const drag = useRef<{id:number; x:number; y:number; left:number; top:number} | null>(null)
  const [position, setPosition] = useState<{left:number;top:number} | null>(null)
@@ -39,6 +40,25 @@ export function MonitorStatus({ token, displayPath }: { token: string | null; di
   const timer = window.setInterval(() => setNow(Date.now()), 2000)
   return () => { window.clearInterval(timer); channel.close() }
  }, [token])
+ useEffect(()=>{
+  if(!onPreviewScroll)return
+  const receive=(e:MessageEvent)=>{if(e.origin===window.location.origin&&e.source===previewFrame.current?.contentWindow&&e.data?.kind==='winter-preview-scroll')onPreviewScroll(e.data)}
+  window.addEventListener('message',receive);return()=>window.removeEventListener('message',receive)
+ },[onPreviewScroll])
+ useEffect(()=>{
+  const box=panel.current
+  if(!box)return
+  const wheel=(e:WheelEvent)=>{
+   const frame=previewFrame.current
+   if(!frame?.contentWindow||!frame.closest('details')?.open||e.ctrlKey||!e.deltaY||!e.cancelable)return
+   // The iframe handles wheel/touch on the table itself. Route wheel on its surrounding card too.
+   if(box.scrollHeight>box.clientHeight+1)return
+   const win=frame.contentWindow
+   const unit=e.deltaMode===1?16:e.deltaMode===2?win.innerHeight:1
+   e.preventDefault();win.scrollBy({top:e.deltaY*unit,behavior:'instant'})
+  }
+  box.addEventListener('wheel',wheel,{passive:false});return()=>box.removeEventListener('wheel',wheel)
+ },[token])
  if (!token) return null
  const connected = !!report && now - report.receivedAt < 8000
  const previewUrl=displayPath ? displayPath.split('#')[0]+'?control=1'+(displayPath.includes('#')?'#'+displayPath.split('#')[1]:'') : `/${token.startsWith('fhs-startlist-')?'startlist-display':'meeting-display'}?control=1#${token}`
@@ -57,10 +77,10 @@ export function MonitorStatus({ token, displayPath }: { token: string | null; di
    <button type="button" className="min-h-11 rounded-lg border border-current px-3 font-bold" aria-expanded={!collapsed} onClick={()=>setCollapsed(value=>!value)}>{collapsed?'開く':'畳む'}</button>
   </div>
   <div hidden={collapsed}>
-  <p className="text-lg font-bold">{connected ? 'モニターから表示状況を受信中' : report ? 'モニターとの接続が途切れています' : displayPath ? '同じPCの外部モニターを待っています' : 'モニターの接続を待っています'}</p>
+  <p className="text-lg font-bold">{connected ? 'モニターから表示状況を受信中' : report ? 'モニターとの接続が途切れています' : onPreviewScroll ? '別端末のモニターにもスクロール位置を送ります' : displayPath ? '同じPCの外部モニターを待っています' : 'モニターの接続を待っています'}</p>
   <p className="mt-1 text-xl font-bold">{report ? `${connected ? '表示中' : '最後の表示'}：${report.competition}` : displayPath ? '出番表のプレビュー' : 'モニター画面を開いたままにしてください。'}</p>
   {report && <p className="mt-1">{report.ready ? report.pending ? '確認中・未確定の順番' : '正式な出番順' : 'データの読み込み中・更新状態を確認してください'} ／ {report.fullscreen ? '全画面表示' : '通常表示'}{report.hidden ? ' ／ モニターのタブが非表示です' : ''} ／ 最終受信 {new Date(report.receivedAt).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>}
-  {previewAvailable && <details className="mt-3" open><summary className="cursor-pointer text-lg font-bold">モニタープレビュー・操作</summary><p className="my-2 text-sm">{connected ? '小窓内をスクロールすると、外部モニターも同じ位置に移ります。' : '外部画面の表示位置は未確認です。'}</p><div className="relative overflow-hidden rounded border-2 border-blue-700 bg-white" style={{width:previewWidth,maxWidth:'100%',height:previewWidth*height/width}}><iframe title="選手側モニターのプレビューと操作" src={previewUrl} style={{width,height,border:0,transform:`scale(${previewWidth/width})`,transformOrigin:'top left'}}/></div></details>}
+  {previewAvailable && <details className="mt-3" open><summary className="cursor-pointer text-lg font-bold">モニタープレビュー・操作</summary><p className="my-2 text-sm">{connected||onPreviewScroll ? '枠内の出番表を上下にスクロールすると、モニターも連動します。' : '外部画面の表示位置は未確認です。'}</p><div className="relative overflow-clip rounded border-2 border-blue-700 bg-white" style={{width:previewWidth,maxWidth:'100%',height:previewWidth*height/width}}><iframe ref={previewFrame} title="選手側モニターのプレビューと操作" src={previewUrl} style={{position:'absolute',top:0,left:0,width,height,border:0,transform:`scale(${previewWidth/width})`,transformOrigin:'top left'}}/></div></details>}
   </div>
  </aside>
 }

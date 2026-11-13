@@ -3,7 +3,7 @@ import {loadWinterRosterIdentities,type WinterRosterIdentity} from '@/lib/winter
 import {compareWinterOrganizations,winterCompetitionLabel} from "@/lib/winter-display-order"
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
-import {WINTER_MONITOR_CHANNEL,publishWinterMonitor,validateWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderSnapshot,type WinterMonitorState,type WinterMonitorCompetition} from '@/lib/winter-monitor'
+import {winterMonitorViewId,WINTER_MONITOR_CHANNEL,publishWinterMonitor,validateWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderSnapshot,type WinterMonitorState,type WinterMonitorCompetition} from '@/lib/winter-monitor'
 import {MasterStartSelectors,MasterStartLegend,MasterOrderStatus,MasterFloatingOrderSave} from './master/start-list-controls'
 import {masterStartViewClass} from '@/lib/master/start-list'
 import {MasterStartRows} from './master/start-list-rows'
@@ -15,6 +15,7 @@ import type {ReadingList} from '@/lib/master/reading-list'
 import {MasterReadingList} from './master/reading-list'
 import {usePrintDocument} from './master/use-print-document'
 import {exportWinterCsv} from '@/lib/winter-export'
+import {useWinterPreviewScroll} from './use-winter-preview-scroll'
 import {MonitorStatus} from './master/monitor-status'
 import {WinterTimetableEditor} from './winter-timetable-editor'
 import {MasterCompetitionTime} from './master/timetable'
@@ -125,6 +126,8 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  const groups = visible.map(monitorCompetition)
  const monitor:WinterMonitorState|null = groups.length ? {...groups[0],version:1,eventId:data.eventId,updatedAt:new Date().toISOString(),
   ...(dailyMonitor ? {followingCompetitions:groups.slice(1)} : {})} : null
+ const scrolling=useWinterPreviewScroll(active,monitor?winterMonitorViewId(monitor):'')
+ if(monitor&&scrolling.key)monitor.scrollController=scrolling.key
  // Publishing only on display changes avoids sending data on an idle timer.
  const displayKey=monitor?JSON.stringify({...monitor,updatedAt:''}):''
  useEffect(()=>{if(!monitor)return;try{publishWinterMonitor(monitor)}catch(reason){setError(reason instanceof Error?reason.message:'モニター送信に失敗しました')}},[displayKey])
@@ -155,9 +158,10 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  }
  return <div className={`${masterStartViewClass(wideView)}${printScope==='readings'?' reading-list-print-root':''}`}>
  {error&&<p role="alert" className="print-hide text-destructive">{error}</p>}
+ {scrolling.error&&<p role="status">{scrolling.error}</p>}
  {dayPrinter.error&&<p className="print-hide text-destructive" role="alert">{dayPrinter.error}</p>}
  <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" className={button} disabled={readingBusy} onClick={()=>void prepareReadings()}>{readingBusy?'フリガナを読み込み中…':'人馬のフリガナ一覧'}</button><button type="button" className={button} disabled={busy||excelBusy} onClick={()=>void exportExcel()}>{excelBusy?'Excelを作成中…':'この日の出番表・成績表をExcelに保存'}</button><button className={button} onClick={exportCsv}>出番表を出力（CSV）</button><a className={button} href="/winter/monitor" onClick={()=>{if(!competition)setDailyMonitor(true)}} target="fhs-winter-startlist-monitor">モニター表示</a><button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary" disabled={busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts()}>この日の出番表を印刷</button>{competition&&<button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50" disabled={dirty||busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts(competition.id)}>この競技だけを印刷</button>}</div>
- {active&&<MonitorStatus token={WINTER_MONITOR_CHANNEL} displayPath="/winter/monitor"/>}
+ {active&&<MonitorStatus token={WINTER_MONITOR_CHANNEL} displayPath="/winter/monitor" onPreviewScroll={monitor&&scrolling.key?scrolling.scroll:undefined}/>}
  {readingOpen&&<section className="print-hide rounded-xl border-2 border-primary bg-card p-4" aria-label="人馬のフリガナ一覧">
   <div className="mb-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={readingBusy||!readingList} onClick={printReadings}>フリガナ一覧を印刷（A4）</button><button type="button" className="min-h-12 rounded-lg border-2 px-4 font-bold" onClick={()=>setReadingOpen(false)}>一覧を閉じる</button></div>
   {readingBusy?<p role="status">登録済みのフリガナを読み込んでいます…</p>:readingError?<div role="alert"><p className="font-bold text-destructive">{readingError}</p><button type="button" className={button} onClick={()=>void prepareReadings()}>再読み込み</button></div>:readingList?<MasterReadingList compareClubs={compareWinterOrganizations} list={readingList} eventName={WINTER_EVENT_NAME}/>:<p>出番表が更新されました。上の「人馬のフリガナ一覧」を押して再読み込みしてください。</p>}
