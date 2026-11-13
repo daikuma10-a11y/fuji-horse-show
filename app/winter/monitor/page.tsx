@@ -1,5 +1,6 @@
 "use client"
 import { useEffect,useRef,useState } from 'react'
+import {MonitorFullscreenButton} from '@/components/master/monitor-fullscreen'
 import {WinterMeetingDisplay} from '@/components/winter-meeting-display'
 import {useMonitorLink} from '@/components/monitor-link'
 import { winterMonitorViewId,WINTER_MONITOR_CHANNEL,WINTER_MONITOR_KEY,validateWinterMonitor,reconcileWinterMonitor,type WinterMonitorState } from '@/lib/winter-monitor'
@@ -60,5 +61,5 @@ function OfficialMonitor(){
   void update(true);return()=>{active=false;controller.abort();stop();stopData()}
  },[])
  useEffect(()=>{const update=()=>{try{const raw=window.localStorage.getItem(WINTER_MONITOR_KEY);setState(raw?validateWinterMonitor(JSON.parse(raw)):null);setError('')}catch{setError('本部のモニター情報を読み込めません')}};const onFullscreen=()=>setFullscreen(!!document.fullscreenElement);update();const onStorage=(event:StorageEvent)=>{if(event.key===WINTER_MONITOR_KEY)update()};window.addEventListener('storage',onStorage);window.addEventListener('winter-monitor-changed',update);document.addEventListener('fullscreenchange',onFullscreen);return()=>{window.removeEventListener('storage',onStorage);window.removeEventListener('winter-monitor-changed',update);document.removeEventListener('fullscreenchange',onFullscreen)}},[])
- return <main className="min-h-dvh bg-white text-slate-950">{!(replica?audienceFullscreen:fullscreen)&&<button disabled={replica} className="m-3 min-h-14 rounded-xl border-2 p-3 text-xl" onClick={()=>document.documentElement.requestFullscreen().catch(()=>setError('このブラウザーでは全画面にできません'))}>全画面表示</button>}<p role="status" className="px-3 text-sm">{liveStatus}</p>{error&&<p role="alert">{error}</p>}{state?<WinterMonitorView state={state}/>:<div className="p-8 text-2xl">Winter大会本部で表示する日付または競技を選択してください。別端末でも同じモニター画面を表示できます。</div>}</main>
+ return <main className="min-h-dvh bg-white text-slate-950"><MonitorFullscreenButton channel={WINTER_MONITOR_CHANNEL} preview={replica} fullscreen={replica?audienceFullscreen:fullscreen}/><p role="status" className="px-3 text-sm">{liveStatus}</p>{error&&<p role="alert">{error}</p>}{state?<WinterMonitorView state={state}/>:<div className="p-8 text-2xl">Winter大会本部で表示する日付または競技を選択してください。別端末でも同じモニター画面を表示できます。</div>}</main>
 }

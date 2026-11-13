@@ -114,7 +114,7 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
   <section className="space-y-4 rounded-xl border-2 p-5" aria-labelledby="meeting-startlist-title">
    <h2 id="meeting-startlist-title" className="text-2xl font-bold">打ち合わせ会の出番表</h2>
    <div className="flex flex-wrap gap-2">
-    <button className={button} disabled={!channel} onClick={()=>window.open(monitorUrl,'fhs-winter-meeting-display')}>打ち合わせ会のモニター表示</button>
+    <button className={button} disabled={!channel} onClick={()=>window.open(monitorUrl,'fhs-winter-meeting-display','popup')}>打ち合わせ会のモニター表示</button>
     <button className={button} onClick={()=>onStartlist(date)}>この日の正式出番表を見る</button>
     <button className={button} onClick={()=>section.current?.focus()}>全競技の確認一覧へ</button>
     <label className="inline-flex min-h-12 items-center gap-2 px-2 font-bold">

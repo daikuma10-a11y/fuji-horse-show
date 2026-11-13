@@ -1,11 +1,19 @@
 "use client"
 
 import { useEffect, useRef, useState } from 'react'
+import { useAudienceFullscreen, previewClick } from './monitor-fullscreen'
 import { isMonitorReport, type MonitorReport } from '@/lib/monitor-link'
 export function MonitorStatus({ token, displayPath, onPreviewScroll }: { token: string | null; displayPath?: string; onPreviewScroll?:(value:unknown)=>void }) {
  const [report, setReport] = useState<(MonitorReport & { receivedAt: number }) | null>(null)
  const [now, setNow] = useState(Date.now())
  const previewFrame=useRef<HTMLIFrameElement>(null)
+ const fullscreen = useAudienceFullscreen(token,displayPath)
+ useEffect(()=>{
+  if(!displayPath)return
+  const click=(event:Event)=>{if(event.target===previewFrame.current)fullscreen.request()}
+  window.addEventListener(previewClick,click)
+  return ()=>window.removeEventListener(previewClick,click)
+ },[displayPath,fullscreen.request])
  const panel = useRef<HTMLElement>(null)
  const drag = useRef<{id:number; x:number; y:number; left:number; top:number} | null>(null)
  const [position, setPosition] = useState<{left:number;top:number} | null>(null)
@@ -80,6 +88,10 @@ export function MonitorStatus({ token, displayPath, onPreviewScroll }: { token: 
   <p className="text-lg font-bold">{connected ? 'モニターから表示状況を受信中' : report ? 'モニターとの接続が途切れています' : onPreviewScroll ? '別端末のモニターにもスクロール位置を送ります' : displayPath ? '同じPCの外部モニターを待っています' : 'モニターの接続を待っています'}</p>
   <p className="mt-1 text-xl font-bold">{report ? `${connected ? '表示中' : '最後の表示'}：${report.competition}` : displayPath ? '出番表のプレビュー' : 'モニター画面を開いたままにしてください。'}</p>
   {report && <p className="mt-1">{report.ready ? report.pending ? '確認中・未確定の順番' : '正式な出番順' : 'データの読み込み中・更新状態を確認してください'} ／ {report.fullscreen ? '全画面表示' : '通常表示'}{report.hidden ? ' ／ モニターのタブが非表示です' : ''} ／ 最終受信 {new Date(report.receivedAt).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>}
+  {displayPath&&<div className="mt-2">
+   <button type="button" className="min-h-11 rounded-lg border-2 border-primary bg-white px-3 font-bold text-primary" onClick={fullscreen.request}>外部モニターを全画面表示</button>
+   {fullscreen.hint&&<p role="status" className="mt-1 font-semibold">{fullscreen.hint}</p>}
+  </div>}
   {previewAvailable && <details className="mt-3" open><summary className="cursor-pointer text-lg font-bold">モニタープレビュー・操作</summary><p className="my-2 text-sm">{connected||onPreviewScroll ? '枠内の出番表を上下にスクロールすると、モニターも連動します。' : '外部画面の表示位置は未確認です。'}</p><div className="relative overflow-clip rounded border-2 border-blue-700 bg-white" style={{width:previewWidth,maxWidth:'100%',height:previewWidth*height/width}}><iframe ref={previewFrame} title="選手側モニターのプレビューと操作" src={previewUrl} style={{position:'absolute',top:0,left:0,width,height,border:0,transform:`scale(${previewWidth/width})`,transformOrigin:'top left'}}/></div></details>}
   </div>
  </aside>

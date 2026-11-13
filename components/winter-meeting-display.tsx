@@ -1,5 +1,6 @@
 "use client"
 import {useEffect,useState,type CSSProperties} from 'react'
+import {MonitorFullscreenButton} from './master/monitor-fullscreen'
 import {useMonitorLink} from './monitor-link'
 import {WinterMonitorView} from './winter-monitor-view'
 import {validateWinterMonitor,type WinterMonitorState} from '@/lib/winter-monitor'
@@ -36,7 +37,7 @@ export function WinterMeetingDisplay({channel}:{channel:string}){
 
  useMonitorLink({channelName:channel,competition:state?.date??'打ち合わせ会',ready:!!state,pending:!!state&&(state.draft||!!state.followingCompetitions?.some(c=>c.draft)),onAudienceReport:r=>setFull(r.fullscreen)})
  return <main className="meeting-audience min-h-dvh bg-white text-slate-950" style={{'--meeting-row-size':nameSize+'px'} as CSSProperties}>
-  {!full&&<button disabled={replica} className="m-3 min-h-14 rounded-xl border-2 p-3 text-xl" onClick={()=>void document.documentElement.requestFullscreen()}>全画面表示</button>}
+  <MonitorFullscreenButton channel={channel} preview={replica} fullscreen={full}/>
   {state ? <WinterMonitorView state={state} nameSize={nameSize}/> : <p>本部で打ち合わせ中の日付を選択してください。</p>}
  </main>
 }
