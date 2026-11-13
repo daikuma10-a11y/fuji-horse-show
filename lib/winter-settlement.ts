@@ -13,7 +13,8 @@ export type WinterAdvance={event_id:string;organization_key:string;paid_amount:n
 export type WinterPaymentInstruction={event_id:string;organization_key:string;payment_method:'bank_transfer'|'cash_at_venue';bank_details:string;updated_at:string;updated_by:string}
 export type WinterSettlementData={initial:WinterInitialCharge[];requests:WinterRequestRow[];advances:WinterAdvance[];instructions?:WinterPaymentInstruction[];payments?:WinterExtraPayment[];adjustments?:WinterChargeAdjustment[];onsite?:WinterSettlementOnlyRow[]}
 export type WinterExtraPayment={id:string;event_id:string;organization_key:string;amount:number;payment_method:'bank_transfer'|'cash_at_venue';note:string;reverses_id:string|null;created_at:string;created_by:string}
-export type WinterChargeAdjustment={id:string;sequence:number;event_id:string;organization_key:string;delta:number;reason:string;previous_id:string|null;before_total:number;after_total:number;created_at:string;created_by:string}
+export type WinterStatementItem={lineId:string;delta:number;note:string}
+export type WinterChargeAdjustment={statement_items?:WinterStatementItem[]|null;id:string;sequence:number;event_id:string;organization_key:string;delta:number;reason:string;previous_id:string|null;before_total:number;after_total:number;created_at:string;created_by:string}
 const amount=(value:number)=>{if(!Number.isSafeInteger(value)||value<0)throw new Error('精算金額の形式を確認してください');return value}
 async function read<T extends {event_id:string}>(table:string,select:string,token:string):Promise<T[]>{
  const all:T[]=[]
