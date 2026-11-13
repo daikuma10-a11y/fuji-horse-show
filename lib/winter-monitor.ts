@@ -1,6 +1,7 @@
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from './winter-event'
 import type { WinterEntryRow,loadWinterData } from './winter-data'
 import { winterRpc } from './winter-reception'
+import {isMeetingWithdrawal,winterOfficialStarts} from './winter-confirmed-withdrawals'
 import {isScrollKey,type ScrollKey} from './winter-monitor-scroll'
 export type WinterMonitorRow={id:string;number:number;rider:string;horse:string;organization:string;isOp:boolean;mark:string}
 export type WinterMonitorCompetition={competitionId:string;competitionNo:string;competitionName:string;date:string;inspectionTime?:string|null;startTime?:string|null;timePhase?:'provisional'|'final';rows:WinterMonitorRow[];page:number;draft:boolean}
@@ -48,11 +49,12 @@ export function reconcileWinterMonitor(state:WinterMonitorState,data:Awaited<Ret
   const old = previous.get(comp.id)
   if (old?.draft) return old
   const marks = new Map(old?.rows.map(row => [row.id,row.mark]))
-  const entries = data.entries.filter(e => e.competition_id === comp.id && !['wd','withdrawn'].includes(e.status.toLowerCase()))
-  const rows = entries.sort((a,b) => a.start_order-b.start_order || a.entry_id.localeCompare(b.entry_id)).map((e,i) => {
-   const rider=data.riders.find(r=>r.id===e.rider_id),horse=data.horses.find(h=>h.id===e.horse_id)
+  // The public monitor receives confirmed withdrawal IDs in the admin-published snapshot.
+  const entries = winterOfficialStarts(data.entries.map(e=>marks.get(e.entry_id)==='棄権'?{...e,meetingWithdrawal:true}:e),comp.id)
+  const rows = entries.map((e,i) => {
+   const rider=data.riders.find(r=>r.id===e.rider_id),horse=data.horses.find(h=>h.id===e.horse_id) ?? (isMeetingWithdrawal(e)?data.historicalHorses?.find(h=>h.id===e.horse_id):undefined)
    if (!rider || !horse) throw new Error('モニターの人馬を確認できません')
-   return {id:e.entry_id,number:i+1,rider:rider.name,horse:horse.name,organization:e.organization_name,isOp:!!e.is_op,mark:marks.get(e.entry_id)??'更新'}
+   return {id:e.entry_id,number:i+1,rider:rider.name,horse:horse.name,organization:e.organization_name,isOp:!!e.is_op,mark:isMeetingWithdrawal(e)?'棄権':marks.get(e.entry_id)==='棄権'?'更新':marks.get(e.entry_id)??'更新'}
   })
   const t = data.timetable.find(t=>t.competition_id===comp.id)
   return {competitionId:comp.id,competitionNo:comp.competition_no,competitionName:comp.name,date:comp.competition_date,inspectionTime:t?.inspection_time,startTime:t?.start_time,timePhase:t?.phase,

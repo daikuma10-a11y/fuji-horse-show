@@ -11,8 +11,8 @@ export function WinterExportPanel({session,onSession}:{session:AdminSession;onSe
   lock.current=true;setBusy(true);setMessage('')
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000)
   try{
-   onSession(await verifyAdminSession(session))
-   const data=await loadWinterData(controller.signal),csv=exportWinterCsv(data,kind)
+   const verified=await verifyAdminSession(session);onSession(verified)
+   const data=await loadWinterData(controller.signal,kind==='entries'?verified.accessToken:undefined),csv=exportWinterCsv(data,kind)
    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a')
    const stamp=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(new Date())
    a.href=url;a.download=`Winter_${kind}_${stamp}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000)

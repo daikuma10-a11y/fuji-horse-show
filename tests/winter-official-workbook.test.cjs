@@ -117,6 +117,10 @@ test('出番番号が外れた棄権は日別Excelから除き、番号のある
  for (const invalid of [{...entry,start_order:null},{...entry,start_order:0},{...entry,horse_id:former.id},{...entry,organization_name:''}]) {
    assert.throws(()=>exportWinterWorkbook(layouts,{...data,entries:[invalid]},date),/第①競技の出番番号・人馬・所属/)
  }
+ const meeting = unzipSync(exportWinterWorkbook(layouts,{...data,entries:[{...removed,meetingWithdrawal:true},...data.entries]},date))
+ const score = strFromU8(meeting['xl/worksheets/sheet2.xml'])
+ assert.equal((score.match(/>以前の馬</g)||[]).length,2)
+ assert.match(score,/<c[^>]*r="B16"[^>]*><v>3<\/v>/)
  const foreign = {...former,event_id:'other'}
  assert.throws(()=>exportWinterWorkbook(layouts,{...data,historicalHorses:[foreign]},date))
 })

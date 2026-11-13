@@ -11,6 +11,7 @@ import type { StartEntry } from "@/lib/types"
 import { StartList } from "@/components/start-list"
 import { monitorRows, type MeetingMonitorSnapshot } from "@/lib/meeting-monitor"
 import { OnSiteReception } from "./on-site-reception"
+import { meetingOrderAfterEdit, meetingOrderAfterMove } from "@/lib/master/meeting-preview"
 import { MonitorStatus } from "@/components/master/monitor-status"
 
 const RECOVERY_KEY = "fhs-autumn-meeting-work-v1"
@@ -96,46 +97,27 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
   function stage(item: StagedRegistration) {
     if (!content || busy) return
     const next = { ...content, staged: [...content.staged, item], orders: { ...content.orders } }
-    const change = item.request.change
-    const originalId = change?.entryId ?? item.request.withdraw?.entryId
-    const affected = new Set([item.record.competition_key, change?.fromCompetitionId ?? item.request.withdraw?.competitionId ?? item.record.competition_key])
-    const nextRows = meetingEntries({ ...next, orders: {} }, competitions)
-    for (const id of affected) {
-      const available = new Set(nextRows.filter(row => row.competitionId === id && !row.withdrawn).map(row => row.id))
-      const current = preview.filter(row => row.competitionId === id && !row.withdrawn).map(row => row.id)
-      const ids = current.filter(key => available.has(key))
-      const token = `request:${item.request.id}`
-      if (available.has(token)) {
-        const index = change && !change.treatedAsWithdrawAdd && change.fromCompetitionId === id
-          ? Math.max(0, current.indexOf(originalId!))
-          : competitions.find(comp => comp.id === id)?.official ? 0 : ids.length
-        ids.splice(Math.min(index, ids.length), 0, token)
-      }
-      next.orders[id] = ids
-    }
+    updateOrders(next, item, true)
     edit(next); setSelectedEntry(undefined)
   }
   function remove(item: StagedRegistration) {
     if (!content || busy) return
     const next = { ...content, staged: content.staged.filter(row => row.request.id !== item.request.id), orders: { ...content.orders } }
-    const originalId = item.request.change?.entryId ?? item.request.withdraw?.entryId
-    const original = content.baseEntries.find(row => row.id === originalId)
-    if (original && !original.withdrawn) {
-      const current = preview.filter(row => row.competitionId === original.competitionId && !row.withdrawn).map(row => row.id)
-      const tokenIndex = current.indexOf(`request:${item.request.id}`)
-      const ids = current.filter(key => key !== `request:${item.request.id}` && key !== original.id)
-      ids.splice(Math.min(tokenIndex >= 0 ? tokenIndex : Math.max(0, original.order - 1), ids.length), 0, original.id)
-      next.orders[original.competitionId] = ids
-    }
+    updateOrders(next, item, false)
     edit(next); setSelectedEntry(undefined)
+  }
+  function updateOrders(next: MeetingContent, item: StagedRegistration, inserted: boolean) {
+    const {change, withdraw} = item.request
+    const target = item.record.competition_key
+    const affected = new Set([target, change?.fromCompetitionId ?? withdraw?.competitionId ?? target])
+    const natural = meetingEntries({...next, orders:{}}, competitions)
+    for (const id of affected) {
+      next.orders[id] = meetingOrderAfterEdit(preview.filter(row => row.competitionId === id), natural.filter(row => row.competitionId === id), item.request, inserted)
+    }
   }
   function move(source: string, target: string) {
     if (!content || busy || source === target) return
-    const ids = rows.filter(row => !row.withdrawn).map(row => row.id)
-    const from = ids.indexOf(source), to = ids.indexOf(target)
-    if (from < 0 || to < 0) return
-    ids.splice(from, 1); ids.splice(to, 0, source)
-    edit({ ...content, orders: { ...content.orders, [competitionId]: ids } })
+    edit({ ...content, orders: { ...content.orders, [competitionId]: meetingOrderAfterMove(rows,source,target) } })
   }
   async function save() {
     if (!content || busy) return

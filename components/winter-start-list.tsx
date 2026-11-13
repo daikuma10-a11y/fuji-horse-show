@@ -20,6 +20,7 @@ import {MonitorStatus} from './master/monitor-status'
 import {WinterTimetableEditor} from './winter-timetable-editor'
 import {MasterCompetitionTime} from './master/timetable'
 import {loadWinterRequests,winterRpc,type WinterRequestRow} from '@/lib/winter-reception'
+import {isMeetingWithdrawal,winterOfficialStarts} from '@/lib/winter-confirmed-withdrawals'
 import {loadWinterData} from '@/lib/winter-data'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
 const button='min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50'
@@ -56,10 +57,8 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  const comps=useMemo(()=>data.competitions.filter(c=>c.competition_date===date),[data.competitions,date])
  const day=useMemo(()=>new Map(comps.map(c=>{
    const entries=data.entries.filter(e=>e.competition_id===c.id&&!['wd','withdrawn'].includes(e.status.toLowerCase())).sort((a,b)=>a.start_order-b.start_order)
-   return [c.id,{entries,order:entries.map(e=>e.entry_id),baseline:JSON.stringify(winterOrderSnapshot(entries)),model:winterStartListModel(data,c.id,requests)}]
+   return [c.id,{entries,order:entries.map(e=>e.entry_id),baseline:JSON.stringify(winterOrderSnapshot(entries)),model:winterStartListModel(data,c.id,requests,true)}]
  })),[data,comps,requests])
- const selected=day.get(compId)
- const ids=drafts[compId]?.ids??selected?.order??[]
  const dirty=!!drafts[compId]
  useEffect(()=>{let active=true;loadWinterRequests(session.accessToken).then(rows=>{if(active)setRequests(rows)}).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'変更表示を取得できません')});return()=>{active=false}},[session.accessToken,data])
  function selectCompetition(id:string){
@@ -79,9 +78,9 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  async function dayWorkbook(competitionId?:string){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000)
   try{
-   onSession(await verifyAdminSession(session))
+   const verified=await verifyAdminSession(session);onSession(verified)
    const {WINTER_LAYOUT_URL,exportWinterWorkbook,winterWorkbookName}=await import('@/lib/winter-official-workbook')
-   const [current,layout]=await Promise.all([loadWinterData(controller.signal),fetch(WINTER_LAYOUT_URL,{signal:controller.signal})])
+   const [current,layout]=await Promise.all([loadWinterData(controller.signal,verified.accessToken),fetch(WINTER_LAYOUT_URL,{signal:controller.signal})])
    if(!layout.ok)throw new Error('出番表・成績表の様式を取得できません')
    return {bytes:exportWinterWorkbook(new Uint8Array(await layout.arrayBuffer()),current,date,competitionId),name:winterWorkbookName(date)}
   }finally{clearTimeout(timeout)}
@@ -109,14 +108,15 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  function monitorCompetition(c:Data['competitions'][number]): WinterMonitorCompetition {
   const current = day.get(c.id)!
   const order = drafts[c.id]?.ids ?? current.order
-  const lookup = new Map(current.entries.map(entry => [entry.entry_id,entry]))
+  const official = winterOfficialStarts(data.entries,c.id)
+  const lookup = new Map(official.map(entry => [entry.entry_id,entry]))
   const model = current.model
   const marks = new Map(model.entriesByCompetition(c.id).map(entry => [entry.id,entry.adminChangeMark]))
   const time = data.timetable.find(row => row.competition_id === c.id)
-  const rows = order.map((id,index) => {
+  const rows = [...order,...official.filter(isMeetingWithdrawal).map(e=>e.entry_id)].map((id,index) => {
    const e = lookup.get(id), mark = marks.get(id)
    return {id,number:index+1,rider:e && model.getPlayer(e.rider_id)?.name || '要確認',horse:e && model.getHorse(e.horse_id)?.name || '要確認',
-    organization:e?.organization_name ?? '要確認',isOp:!!e?.is_op,mark:mark==='added'?'追加':mark==='changed'?'変更':''}
+    organization:e?.organization_name ?? '要確認',isOp:!!e?.is_op,mark:e&&isMeetingWithdrawal(e)?'棄権':mark==='added'?'追加':mark==='changed'?'変更':''}
   })
   return {competitionId:c.id,competitionNo:c.competition_no,competitionName:c.name,date:c.competition_date,rows,
    inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:time?.phase,draft:!!drafts[c.id],
@@ -175,7 +175,7 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
   <span>{dailyMonitor ? `モニター表示：${dateLabel(date)}の全競技` : competition ? `モニター表示：${winterCompetitionLabel(competition)}` : '日付を押すと、その日の全競技をモニターに表示します。'}</span>
   {monitor&&<><span>{remoteStatus}</span><button type="button" className="rounded border px-3 py-1" onClick={()=>setResend(v=>v+1)}>モニターに再送</button></>}
-  {!dailyMonitor&&competition&&ids.length>30&&<><button className={button} disabled={page===0} onClick={()=>setPage(v=>v-1)}>前のページ</button><button className={button} disabled={(page+1)*30>=ids.length} onClick={()=>setPage(v=>v+1)}>次のページ</button></>}
+  {!dailyMonitor&&competition&&monitor&&monitor.rows.length>30&&<><button className={button} disabled={page===0} onClick={()=>setPage(v=>v-1)}>前のページ</button><button className={button} disabled={(page+1)*30>=monitor.rows.length} onClick={()=>setPage(v=>v+1)}>次のページ</button></>}
  </div>
  <MasterStartLegend/>
  {identityStatus&&<p role="status" className="mb-2 text-sm">{identityStatus}</p>}
@@ -199,7 +199,7 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  </div>
  <div className="print-only hidden">{printScope==='readings'?(readingList?<MasterReadingList compareClubs={compareWinterOrganizations} list={readingList} eventName={WINTER_EVENT_NAME}/>:null):<><h1 className="mb-2 text-xl font-bold">Fuji Horse Show Winter 出番表</h1><p className="mb-4 font-bold">{dateLabel(date)}</p>{comps.map(c=>{
  const section=winterTimetableSection(c.competition_no)
- return <section key={c.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">{winterCompetitionLabel(c)}{c.official?'（公認）':''}</h2>{section?.startListVenue&&<p>会場：{section.startListVenue}</p>}<MasterCompetitionTime inspection={data.timetable.find(t=>t.competition_id===c.id)?.inspection_time} start={data.timetable.find(t=>t.competition_id===c.id)?.start_time} phase={data.timetable.find(t=>t.competition_id===c.id)?.phase} showInspection={section?.showInspection}/><table className="w-full border-collapse text-sm"><thead><tr>{['出番','選手','馬','所属','備考'].map(h=><th key={h} className="border p-1 text-left">{h}</th>)}</tr></thead><tbody>{data.entries.filter(e=>e.competition_id===c.id).sort((a,b)=>a.start_order-b.start_order).map(e=><tr key={e.entry_id}><td className="border p-1">{e.start_order}</td><td className="border p-1">{data.riders.find(r=>r.id===e.rider_id)?.name}</td><td className="border p-1">{data.horses.find(h=>h.id===e.horse_id)?.name}</td><td className="border p-1">{e.organization_name}</td><td className="border p-1">{e.is_op?'OP ':''}{['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権':''}</td></tr>)}</tbody></table></section>
+ return <section key={c.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">{winterCompetitionLabel(c)}{c.official?'（公認）':''}</h2>{section?.startListVenue&&<p>会場：{section.startListVenue}</p>}<MasterCompetitionTime inspection={data.timetable.find(t=>t.competition_id===c.id)?.inspection_time} start={data.timetable.find(t=>t.competition_id===c.id)?.start_time} phase={data.timetable.find(t=>t.competition_id===c.id)?.phase} showInspection={section?.showInspection}/><table className="w-full border-collapse text-sm"><thead><tr>{['出番','選手','馬','所属','備考'].map(h=><th key={h} className="border p-1 text-left">{h}</th>)}</tr></thead><tbody>{winterOfficialStarts(data.entries,c.id).map(e=><tr key={e.entry_id}><td className="border p-1">{e.start_order}</td><td className="border p-1">{data.riders.find(r=>r.id===e.rider_id)?.name}</td><td className="border p-1">{day.get(c.id)?.model.getHorse(e.horse_id)?.name}</td><td className="border p-1">{e.organization_name}</td><td className="border p-1">{e.is_op?'OP ':''}{['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権':''}</td></tr>)}</tbody></table></section>
  })}</>}</div>
  </div>
 }

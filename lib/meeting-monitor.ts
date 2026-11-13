@@ -10,8 +10,8 @@ export function monitorRows(entries: StartEntry[], playerName: (id: string) => s
     const active = entries.map((entry, index) => ({ entry, index })).filter(({ entry }) => !entry.withdrawn)
     active.forEach(({ entry, index }, position) => {
       const prior = previous.get(entry[key])
-      if (prior !== undefined && entry.order - active[prior].entry.order <= (key === 'playerId' ? 2 : 5)) {
-        const gap = Math.max(0, entry.order - active[prior].entry.order - 1), field = key === 'playerId' ? 'riderGap' : 'horseGap'
+      if (prior !== undefined && position - prior <= (key === 'playerId' ? 2 : 5)) {
+        const gap = Math.max(0, position - prior - 1), field = key === 'playerId' ? 'riderGap' : 'horseGap'
         for (const rowIndex of [active[prior].index, index]) rows[rowIndex][field] = Math.min(rows[rowIndex][field] ?? Infinity, gap)
       }
       previous.set(entry[key], position)

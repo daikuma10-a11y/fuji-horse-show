@@ -16,19 +16,19 @@ export type WinterCompetitionRow = EventRow & {
   fee: number; op_fee: number | null; member_fee: number | null; nonmember_fee: number | null
 }
 export type WinterEntryRow = EventRow & {
-  entry_id: string; source?: string | null; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
+  entry_id: string; meetingWithdrawal?:boolean; source?: string | null; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
   rider_id: string; horse_id: string; organization_id?: string; organization_name: string; is_op: boolean | null
 }
 export type WinterTimetableRow = EventRow & { competition_id:string; inspection_time:string|null; start_time:string|null; phase:'provisional'|'final'; updated_at:string }
 
 /** 各ページで大会IDを検証。通信失敗時にAutumnの原本へフォールバックしない。 */
-async function rows<T extends EventRow>(table: string, select: string, order: string, signal?: AbortSignal): Promise<T[]> {
+async function rows<T extends EventRow>(table: string, select: string, order: string, signal?: AbortSignal, token=KEY, filters:Record<string,string>={}): Promise<T[]> {
   const result: T[] = []
   const pageSize = 500
   for (let offset = 0; ; offset += pageSize) {
-    const query = new URLSearchParams({ event_id: `eq.${WINTER_EVENT_ID}`, select, order, limit: String(pageSize), offset: String(offset) })
+    const query = new URLSearchParams({ event_id: `eq.${WINTER_EVENT_ID}`, select, order, ...filters, limit: String(pageSize), offset: String(offset) })
     const response = await fetch(`${URL}/rest/v1/${table}?${query}`, {
-      headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }, cache: "no-store", signal,
+      headers: { apikey: KEY, Authorization: `Bearer ${token}` }, cache: "no-store", signal,
     })
     if (!response.ok) throw new Error(`Winterデータの取得に失敗しました (${table}: ${response.status})`)
     const page: unknown = await response.json()
@@ -42,15 +42,20 @@ async function rows<T extends EventRow>(table: string, select: string, order: st
   }
 }
 
-export async function loadWinterData(signal?: AbortSignal) {
-  const [organizations, allRiders, allHorses, competitions, allEntries, affiliations] = await Promise.all([
+export async function loadWinterData(signal?: AbortSignal, meetingToken?:string) {
+  const [organizations, allRiders, allHorses, competitions, allEntries, affiliations, confirmed] = await Promise.all([
     rows<WinterOrganizationRow>("organizations", "event_id,id,name", "id.asc", signal),
     rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterCompetitionRow>("competitions", "event_id,id,competition_no,competition_date,name,official,fee,op_fee,member_fee,nonmember_fee,notes", "id.asc", signal),
     rows<WinterEntryRow>("reception_entries", "event_id,entry_id,source,competition_id,competition_no,start_order,status,rider_id,horse_id,organization_id,organization_name,is_op", "entry_id.asc", signal),
     rows<EventRow & {organization_id:string; official_name:string}>("fhs_winter_event_affiliations", "event_id,organization_id,official_name", "organization_id.asc", signal),
+    meetingToken ? rows<EventRow & {reception_requests:{original_entry_id:string;from_competition_id:string;entry_id:string;request_type:string}}>(
+      'fhs_winter_meeting_requests','event_id,reception_requests!inner(original_entry_id,from_competition_id,entry_id,request_type)','request_id.asc',signal,meetingToken,
+      {'reception_requests.event_id':`eq.${WINTER_EVENT_ID}`,'reception_requests.status':'eq.reflected','reception_requests.request_type':'in.(withdraw,change)'},
+    ) : [],
   ])
+  const withdrawnSources=new Set(confirmed.filter(({reception_requests:q})=>q.request_type==='withdraw'||q.original_entry_id!==q.entry_id).map(({reception_requests:q})=>q.from_competition_id+'/'+q.original_entry_id))
   const affiliationNames: Record<string, string> = {}
   for (const affiliation of affiliations) {
     if (!organizations.some(org => org.id === affiliation.organization_id) || !affiliation.official_name?.trim() || Object.hasOwn(affiliationNames, affiliation.organization_id)) {
@@ -60,7 +65,8 @@ export async function loadWinterData(signal?: AbortSignal) {
   }
   const entries = allEntries.filter(row => row.source !== "winter-initial-cancelled").map(row => {
     const name = row.organization_id && affiliationNames[row.organization_id]
-    return name ? {...row, organization_name: name} : row
+    const meetingWithdrawal=/^(wd|withdrawn)$/i.test(row.status) && withdrawnSources.has(row.competition_id+'/'+row.entry_id)
+    return {...row,...(name ? {organization_name:name} : {}),...(meetingWithdrawal ? {meetingWithdrawal:true} : {})}
   })
   organizations.sort(compareWinterOrganizations)
   for (const row of competitions) row.name=row.name.normalize("NFKC").replace(/\s+/g," ").trim()
