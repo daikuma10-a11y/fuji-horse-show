@@ -5,7 +5,7 @@ import {winterCompetitionLabel} from "@/lib/winter-display-order"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { loadWinterData } from "@/lib/winter-data"
-import { WINTER_EVENT_NAME, winterCompetition, winterEntryPrice, type WinterFeeSelection } from "@/lib/winter-event"
+import {winterAllowsOp, WINTER_EVENT_NAME, winterCompetition, winterEntryPrice, type WinterFeeSelection } from "@/lib/winter-event"
 import { WinterAddSavePanel } from "@/components/winter-add-save-panel"
 import { WinterQueueLink } from '@/components/winter-queue-link'
 
@@ -42,7 +42,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
     } catch (reason) { feeMessage = reason instanceof Error ? reason.message : "料金を確認してください" }
   }
   const instructorRequired = competition ? winterCompetition(competition.competition_no).instructorRequired : false
-  const canUseOp = !!competition && !competition.official && competition.op_fee !== null
+  const canUseOp = !!competition && winterAllowsOp(competition.competition_no,competition.official,competition.op_fee)
   const riders = data?.riders.filter(row => row.organization_id === orgId) ?? []
   const horses = data?.horses.filter(row => row.organization_id === orgId) ?? []
 

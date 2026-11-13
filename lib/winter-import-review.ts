@@ -1,5 +1,5 @@
 import type {ApplicationIssueField} from './master/application-guide'
-import { WINTER_EVENT_ID, winterCompetition, winterEntryPrice } from './winter-event'
+import {winterAllowsOp, WINTER_EVENT_ID, winterCompetition, winterEntryPrice } from './winter-event'
 
 export type ImportSource = { roster: string; entries: string; accounts: string }
 export type ImportIssue = { section: string; row: number; severity: 'error' | 'warning'; message: string; fields?:ApplicationIssueField[]; related?:{personId:string;field:ApplicationIssueField;message:string}[] }
@@ -116,7 +116,7 @@ export function reviewWinterImport(source: ImportSource) {
       }
       const member = ['5','25'].includes(competition) ? r?.sportsMember : ['8','32'].includes(competition) ? r?.instructorMember : ''
       feeFields=['fee']
-      if(op&&(c.official||c.opFee==null))feeFields=['op']
+      if(op&&!winterAllowsOp(c.number,c.official,c.opFee))feeFields=['op']
       else if(c.instructorRequired&&!r?.qualified){feeFields=['rider'];if(r)feeRelated=[{personId:r.id,field:'qualified',message:'この競技は地域乗馬指導者資格の確認が必要です。'}]}
       else if((c.memberFee!=null||c.nonmemberFee!=null)&&!['会員','非会員'].includes(member??'')){
         feeFields=['rider'];if(r)feeRelated=[{personId:r.id,field:['5','25'].includes(competition)?'sportsMember':'instructorMember',message:'会員・非会員の料金区分を選択してください。'}]

@@ -4,7 +4,7 @@ import {GroupEntryFields,type EntryFields} from './master/group-entry-fields'
 import {groupActionClass} from './master/group-registration-tools'
 import {loadHorseOptions} from '@/lib/winter-horse-substitution'
 import type {SubstitutionEntry} from '@/lib/master/horse-substitution'
-import {winterCompetition,winterStorageKey} from '@/lib/winter-event'
+import {winterAllowsOp,winterCompetition,winterStorageKey} from '@/lib/winter-event'
 import type {loadWinterData} from '@/lib/winter-data'
 import {winterCompetitionLabel} from '@/lib/winter-display-order'
 import {reviewWinterChange,type WinterChangeInput} from '@/lib/winter-change'
@@ -120,7 +120,7 @@ export function WinterGroupEntryEdit({entryId,group,data,session,onSession,onSav
       <label className="block"><input type="radio" name="group-entry-mode" checked={mode==='request'} onChange={()=>setMode('request')}/> 団体からの締切後の変更依頼（大会の変更規定を適用）</label>
       <GroupEntryFields value={fields} change={v=>{setFields(v);setError('')}} competitions={data.competitions.map(c=>({id:c.id,label:c.competition_date+'　'+winterCompetitionLabel(c)}))}
         riders={data.riders.map(p=>person(p,p.jef_member_no))} horses={data.horses.map(p=>person(p,p.jef_registration_no))}
-        allowOp={!competition.official&&competition.op_fee!=null} membership={competition.member_fee!=null||competition.nonmember_fee!=null} instructor={winterCompetition(competition.competition_no).instructorRequired}/>
+        allowOp={winterAllowsOp(competition.competition_no,competition.official,competition.op_fee)} membership={competition.member_fee!=null||competition.nonmember_fee!=null} instructor={winterCompetition(competition.competition_no).instructorRequired}/>
       <button type="button" className={groupActionClass} disabled={busy||!mode} onClick={()=>void preview()}>修正内容と料金を確認</button></fieldset>:!error&&<p>登録時の出番と料金を読み込んでいます…</p>}
     {error&&<p role="alert" className="rounded-lg bg-red-100 p-3">{error}</p>}
     {error&&!fields&&!review&&<button type="button" className={groupActionClass} onClick={()=>setReload(n=>n+1)}>読み直す</button>}

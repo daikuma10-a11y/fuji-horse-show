@@ -43,6 +43,7 @@ export function winterFreeFriendshipChange(from: string | number | undefined, to
 export type WinterCompetition = {
   number: string; name: string; date: string; arena: string; official: boolean
   fee: number; opFee: number | null; memberFee: number | null; nonmemberFee: number | null
+  membershipOpDiscount?: number
   instructorRequired: boolean
 }
 export type WinterFeeSelection = {
@@ -63,9 +64,14 @@ export function winterCompetition(number: string): WinterCompetition {
   return competition
 }
 
+const membershipOpNumbers = new Set(preparation.competitions.filter(row=>row.membershipOpDiscount!=null).map(row=>row.number))
+export function winterAllowsOp(number: string, official: boolean, opFee: number | null) {
+  return !official && (opFee != null || membershipOpNumbers.has(number))
+}
+
 /** 未選択の会員区分や未確認の指導者資格を0円として扱わない。 */
 export function winterEntryPrice(competition: WinterCompetition, selection: WinterFeeSelection): number {
-  if (selection.isOp && (competition.official || competition.opFee == null)) {
+  if (selection.isOp && (competition.official || (competition.opFee == null && competition.membershipOpDiscount == null))) {
     throw new Error("この競技のOP料金は設定されていません。本部に確認してください")
   }
   if (competition.instructorRequired && selection.instructorConfirmed !== true) {
@@ -80,7 +86,10 @@ export function winterEntryPrice(competition: WinterCompetition, selection: Wint
     if (selected == null) throw new Error("選択された料金区分が未設定です")
     price = selected
   }
-  if (selection.isOp) price = competition.opFee!
+  if (selection.isOp) {
+    const discount = competition.membershipOpDiscount
+    price = discount == null ? competition.opFee! : price - discount
+  }
   if (!Number.isSafeInteger(price) || price <= 0) throw new Error("競技料金を確認してください")
   return price
 }
