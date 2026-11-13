@@ -94,3 +94,29 @@ test('大会通算の認定競技番号と開催日が成績表から出番表�
   }
  }
 })
+
+test('出番番号が外れた棄権は日別Excelから除き、番号のあるWDと有効な出番を保持する', () => {
+ const event_id = WINTER_EVENT_ID, date = '2026-11-13'
+ const competition = {id:'c',event_id,competition_date:date,competition_no:'①',name:'フレンドシップ80',official:false}
+ const rider = {id:'r',event_id,name:'選手',jef_member_no:'123'}
+ const horse = {id:'h',event_id,name:'出場馬',jef_registration_no:'456'}
+ const entry = {event_id,entry_id:'active',competition_id:'c',status:'active',rider_id:rider.id,horse_id:horse.id,organization_name:'団体',start_order:1,is_op:true}
+ const former = {...horse,id:'old',name:'以前の馬'}
+ const numbered = {...entry,entry_id:'numbered',status:'WD',horse_id:former.id,start_order:2}
+ const data = {eventId:event_id,competitions:[competition],riders:[rider],horses:[horse],historicalHorses:[former],entries:[numbered,entry]}
+ const recorded = unzipSync(exportWinterWorkbook(layouts,data,date))
+ const removed = {...numbered,entry_id:'removed',status:'withdrawn',start_order:null}
+ const rows = [removed, ...data.entries, {...removed,entry_id:'also-removed',status:'wD'}]
+ const exported = unzipSync(exportWinterWorkbook(layouts,{...data,entries:rows},date))
+ for (const i of [1,2]) {
+   const file = 'xl/worksheets/sheet'+i+'.xml'
+   assert.deepEqual(exported[file],recorded[file])
+   const sheet = strFromU8(exported[file])
+   for (const text of ['>OP<','>WD<','>出場馬<','>以前の馬<']) assert.ok(sheet.includes(text),text)
+ }
+ for (const invalid of [{...entry,start_order:null},{...entry,start_order:0},{...entry,horse_id:former.id},{...entry,organization_name:''}]) {
+   assert.throws(()=>exportWinterWorkbook(layouts,{...data,entries:[invalid]},date),/第①競技の出番番号・人馬・所属/)
+ }
+ const foreign = {...former,event_id:'other'}
+ assert.throws(()=>exportWinterWorkbook(layouts,{...data,historicalHorses:[foreign]},date))
+})
