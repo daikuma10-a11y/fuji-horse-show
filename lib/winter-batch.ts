@@ -46,7 +46,7 @@ export function validateWinterQueue(queue: WinterQueue,scope:WinterQueueScope='r
   const ids = new Set<string>(), originals = new Set<string>(), organizations = new Set<string>()
   for (const item of queue.items) {
     const summary = winterDraftSummary(item)
-    if ((scope==='meeting'||queue.attempted)&&!summary.visitorName.trim()) throw new Error('受付に来た方のお名前を入力してください')
+    if ((scope==='reception'&&queue.attempted)&&!summary.visitorName.trim()) throw new Error('受付に来た方のお名前を入力してください')
     if (!uuid.test(summary.id) || !uuid.test(summary.organizationId) || ids.has(summary.id)) throw new Error('受付番号を確認してください')
     if (summary.originalId && originals.has(summary.originalId)) throw new Error('同じ出番の変更・棄権は一度に1件ずつ確定してください')
     ids.add(summary.id); organizations.add(summary.organizationId)
@@ -79,17 +79,20 @@ export function stageWinterDraft(draft: WinterDraft,scope:WinterQueueScope='rece
 export function winterBatchPayload(queue: WinterQueue,scope:WinterQueueScope='reception') {
   validateWinterQueue(queue,scope)
   if (!queue.items.length) throw new Error('未確定の申請はありません')
-  if(queue.items.some(item=>!winterDraftSummary(item).visitorName.trim())) throw new Error('受付に来た方のお名前を入力してください')
+  if(scope==='reception'&&queue.items.some(item=>!winterDraftSummary(item).visitorName.trim())) throw new Error('受付に来た方のお名前を入力してください')
+  // Existing reception RPCs require a non-empty origin label; meeting attendance is not collected.
+  const visitorLabel=(name:string)=>name.trim()||(scope==='meeting'?'打ち合わせ会':'')
+  const feeOptions={requireVisitor:scope==='reception'}
   return { p_items: queue.items.map(draft => {
     if (draft.type === 'add') {
       const i = draft.input
-      return { type: 'add', args: { p_id: i.id, p_organization_id: i.organization.id, p_competition_id: i.competition.id, p_rider_id: i.rider.id, p_horse_id: i.horse.id, p_visitor_name: i.visitorName.trim(), p_membership: i.selection.membership ?? null, p_is_op: !!i.selection.isOp, p_instructor_confirmed: !!i.selection.instructorConfirmed,...(i.masterForm?{p_master_form:true,p_note:(i.note??'').trim(),p_expected_total:reviewWinterAdd(i).total}:{}) } }
+      return { type: 'add', args: { p_id: i.id, p_organization_id: i.organization.id, p_competition_id: i.competition.id, p_rider_id: i.rider.id, p_horse_id: i.horse.id, p_visitor_name: visitorLabel(i.visitorName), p_membership: i.selection.membership ?? null, p_is_op: !!i.selection.isOp, p_instructor_confirmed: !!i.selection.instructorConfirmed,...(i.masterForm?{p_master_form:true,p_note:(i.note??'').trim(),p_expected_total:reviewWinterAdd(i,feeOptions).total}:{}) } }
     }
     if (draft.type === 'change') {
       const i = draft.input, t = i.target
-      return { type: 'change', args: { p_id: t.id, p_entry_id: i.original.entry_id, p_before: { competitionId: i.original.competition_id, riderId: i.original.rider_id, horseId: i.original.horse_id, isOp: !!i.original.is_op }, p_competition_id: t.competition.id, p_rider_id: t.rider.id, p_horse_id: t.horse.id, p_visitor_name: t.visitorName.trim(), p_from_membership: i.fromSelection.membership ?? null, p_membership: t.selection.membership ?? null, p_is_op: !!t.selection.isOp, p_from_instructor: !!i.fromSelection.instructorConfirmed, p_instructor: !!t.selection.instructorConfirmed, p_expected_total: reviewWinterChange(i).fee.total,...(t.masterForm?{p_master_form:true,p_organization_id:t.organization.id,p_before_organization_id:i.original.organization_id??null}:{}) } }
+      return { type: 'change', args: { p_id: t.id, p_entry_id: i.original.entry_id, p_before: { competitionId: i.original.competition_id, riderId: i.original.rider_id, horseId: i.original.horse_id, isOp: !!i.original.is_op }, p_competition_id: t.competition.id, p_rider_id: t.rider.id, p_horse_id: t.horse.id, p_visitor_name: visitorLabel(t.visitorName), p_from_membership: i.fromSelection.membership ?? null, p_membership: t.selection.membership ?? null, p_is_op: !!t.selection.isOp, p_from_instructor: !!i.fromSelection.instructorConfirmed, p_instructor: !!t.selection.instructorConfirmed, p_expected_total: reviewWinterChange(i,feeOptions).fee.total,...(t.masterForm?{p_master_form:true,p_organization_id:t.organization.id,p_before_organization_id:i.original.organization_id??null}:{}) } }
     }
-    return { type: 'withdraw', args: { p_id: draft.id, p_entry_id: draft.entry.entry_id, p_visitor_name: draft.visitorName.trim() } }
+    return { type: 'withdraw', args: { p_id: draft.id, p_entry_id: draft.entry.entry_id, p_visitor_name: visitorLabel(draft.visitorName) } }
   }).map((item,index)=>scope==='meeting'?{...item,expected_total:winterDraftSummary(queue.items[index]).total}:item), p_expected_total: queue.items.reduce((sum, item) => sum + winterDraftSummary(item).total, 0) }
 }
 

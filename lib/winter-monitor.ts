@@ -1,10 +1,12 @@
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from './winter-event'
 import type { WinterEntryRow,loadWinterData } from './winter-data'
 import { winterRpc } from './winter-reception'
+import {isScrollKey,type ScrollKey} from './winter-monitor-scroll'
 export type WinterMonitorRow={id:string;number:number;rider:string;horse:string;organization:string;isOp:boolean;mark:string}
 export type WinterMonitorCompetition={competitionId:string;competitionNo:string;competitionName:string;date:string;inspectionTime?:string|null;startTime?:string|null;timePhase?:'provisional'|'final';rows:WinterMonitorRow[];page:number;draft:boolean}
 // The first competition stays at the top level for existing monitor clients and the publishing RPC.
-export type WinterMonitorState = WinterMonitorCompetition & {version:1;eventId:string;updatedAt:string;followingCompetitions?:WinterMonitorCompetition[]}
+export type WinterMonitorState = WinterMonitorCompetition & {version:1;eventId:string;updatedAt:string;scrollController?:ScrollKey;followingCompetitions?:WinterMonitorCompetition[]}
+export function winterMonitorViewId(state:WinterMonitorState){return [state.date,state.followingCompetitions?'day':state.competitionId,state.followingCompetitions?0:state.page].join('/')}
 export const WINTER_MONITOR_CHANNEL = `fhs-winter-display-${WINTER_EVENT_ID}`
 export const WINTER_MONITOR_KEY=`fhs:winter:${WINTER_EVENT_ID}:monitor:v1`
 export function winterOrderSnapshot(entries:WinterEntryRow[]){return [...entries].sort((a,b)=>a.entry_id.localeCompare(b.entry_id)).map(row=>({entryId:row.entry_id,startOrder:row.start_order,riderId:row.rider_id,horseId:row.horse_id,isOp:!!row.is_op}))}
@@ -12,7 +14,7 @@ export function moveWinterEntry(ids:string[],from:string,to:string){const a=ids.
 export function validateWinterMonitor(value:WinterMonitorState) {
  assertWinterEvent(value.eventId)
  const invalid = () => new Error('モニター情報を確認できません')
- if (value.version !== 1) throw invalid()
+ if (value.version !== 1 || (value.scrollController!==undefined&&!isScrollKey(value.scrollController))) throw invalid()
  const following = value.followingCompetitions
  if (following !== undefined && (!Array.isArray(following) || !WINTER_DATES.some(date => date === value.date))) throw invalid()
  const groups = [value, ...(following ?? [])]
@@ -36,7 +38,7 @@ export function winterOrderAfterRefresh(ids:string[],baseline:string,latest:stri
 /** A saved display follows DB changes even when the admin editor is closed. */
 export function reconcileWinterMonitor(state:WinterMonitorState,data:Awaited<ReturnType<typeof loadWinterData>>){
  validateWinterMonitor(state);assertWinterEvent(data.eventId)
- const {version,eventId,updatedAt,followingCompetitions,...first} = state
+ const {version,eventId,updatedAt,scrollController,followingCompetitions,...first} = state
  const groups = [first, ...(followingCompetitions ?? [])]
  const previous = new Map(groups.map(group => [group.competitionId,group]))
  const daily = state.followingCompetitions !== undefined
@@ -56,5 +58,5 @@ export function reconcileWinterMonitor(state:WinterMonitorState,data:Awaited<Ret
   return {competitionId:comp.id,competitionNo:comp.competition_no,competitionName:comp.name,date:comp.competition_date,inspectionTime:t?.inspection_time,startTime:t?.start_time,timePhase:t?.phase,
    draft:false,rows,page:Math.min(old?.page??0,Math.max(0,Math.ceil(rows.length/30)-1))}
  })
- return {version,eventId,updatedAt,...refreshed[0],...(daily ? {followingCompetitions:refreshed.slice(1)} : {})}
+ return {version,eventId,updatedAt,...(scrollController?{scrollController}:{}),...refreshed[0],...(daily ? {followingCompetitions:refreshed.slice(1)} : {})}
 }

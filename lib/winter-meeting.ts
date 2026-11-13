@@ -18,7 +18,7 @@ function requestFor(item:WinterDraft):MeetingPreviewRequest {
  const target=item.type==='add'?item.input:item.input.target
  const common={id:target.id,orgId:target.organization.id}
  if(item.type==='add')return {...common,add:{competitionId:target.competition.id,playerId:target.rider.id,horseId:target.horse.id,isOp:target.selection.isOp,note:target.note??''}}
- const e=item.input.original, review=reviewWinterChange(item.input)
+ const e=item.input.original, review=reviewWinterChange(item.input,{requireVisitor:false})
  return {...common,change:{entryId:e.entry_id,fromCompetitionId:e.competition_id,fromPlayerId:e.rider_id,fromHorseId:e.horse_id,toCompetitionId:target.competition.id,toPlayerId:target.rider.id,toHorseId:target.horse.id,toIsOp:target.selection.isOp,treatedAsWithdrawAdd:review.treatedAsWithdrawAdd,changedFields:review.changedFields.filter(field=>field!=='membership')}}
 }
 export function meetingBaseline(data:Data,id:string){

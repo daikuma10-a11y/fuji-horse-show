@@ -10,6 +10,20 @@ const body=batch.winterBatchPayload(two,'meeting');assert.equal(body.p_items[0].
 const meeting=require(path.resolve('lib/winter-meeting.ts'))
 const staged=draft(1),baseRow={entry_id:id(77),event_id,competition_id:id(50),competition_no:'1',start_order:1,status:'active',rider_id:staged.input.rider.id,horse_id:staged.input.horse.id,organization_id:staged.input.organization.id,organization_name:'団体',is_op:false}
 const fixture={eventId:event_id,competitions:[{...staged.input.competition,competition_date:'2026-11-14'}],entries:[baseRow],riders:[staged.input.rider],horses:[staged.input.horse],organizations:[staged.input.organization],timetable:[]}
+const blankTarget={...staged.input,visitorName:'',masterForm:true}
+const alternate={...blankTarget.rider,id:id(395)}
+const unnamedItems=[
+ {type:'add',input:blankTarget},
+ {type:'change',input:{original:baseRow,from:staged.input.competition,fromSelection:{},target:{...blankTarget,id:id(396),rider:alternate}}},
+ {type:'withdraw',entry:{...baseRow,entry_id:id(397)},id:id(398),organizationId:blankTarget.organization.id,organizationName:'団体',riderName:'選手',horseName:'馬',visitorName:''}
+]
+const unnamedQueue={...batch.emptyWinterQueue(),items:unnamedItems}
+const noNames=batch.winterBatchPayload({...unnamedQueue,attempted:true},'meeting')
+assert.deepEqual(noNames.p_items.map(x=>x.args.p_visitor_name),Array(3).fill('打ち合わせ会'))
+assert.equal(batch.winterBatchPayload(one,'meeting').p_items[0].args.p_visitor_name,'担当','keep previously recorded names')
+assert.throws(()=>batch.winterBatchPayload(unnamedQueue,'reception'),/名前/)
+const edited=meeting.updateMeetingWork(fixture,batch.emptyWinterQueue(),unnamedQueue)
+assert.equal(meeting.savedMeetingContent(fixture,edited).batch.p_items.length,3)
 const local=meeting.updateMeetingWork(fixture,batch.emptyWinterQueue(),one)
 assert.equal(local.meeting.baselines[id(50)][0].entryId,baseRow.entry_id)
 local.meeting.orders[id(50)]=['request:'+staged.input.id,baseRow.entry_id]
