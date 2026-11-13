@@ -29,6 +29,7 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
  const [date,setDate]=useState<string>(weekend[0].value),[queue,setQueue]=useState<WinterQueue|null>(null)
  const [error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[confirmed,setConfirmed]=useState(false)
  const [available,setAvailable]=useState<boolean|null>(null),[channel,setChannel]=useState(''),[pick,setPick]=useState<StartEntry>(),[editor,setEditor]=useState<Editor>()
+ const [extraLarge,setExtraLarge]=useState(false)
  const lock=useRef(false),dialog=useRef<HTMLDialogElement>(null),section=useRef<HTMLHeadingElement>(null)
  const current=queue??emptyWinterQueue(),work=current.meeting,locked=busy||current.attempted
  const preview=data?meetingRows(data,current):null,display=data&&preview?meetingDisplay(data,date,current,preview):null
@@ -36,7 +37,10 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
  const displayKey=display?JSON.stringify({...display,updatedAt:''}):''
  function store(next:WinterQueue){writeWinterQueue(window.localStorage,next,'meeting');setQueue(next);setConfirmed(false)}
  function load(){if(lock.current)return;try{setQueue(read());setConfirmed(false)}catch(e){setError(String(e))}}
- useEffect(()=>{load();let token=window.sessionStorage.getItem('winter-meeting-display');if(!token||!/^winter-meeting-[a-f0-9-]{36}$/.test(token)){token='winter-meeting-'+crypto.randomUUID();window.sessionStorage.setItem('winter-meeting-display',token)}setChannel(token);window.addEventListener('storage',load);window.addEventListener('winter-queue-changed',load);return()=>{window.removeEventListener('storage',load);window.removeEventListener('winter-queue-changed',load)}},[])
+ useEffect(()=>{
+  load()
+  setExtraLarge(window.sessionStorage.getItem('winter-meeting-extra-large')==='true')
+  let token=window.sessionStorage.getItem('winter-meeting-display');if(!token||!/^winter-meeting-[a-f0-9-]{36}$/.test(token)){token='winter-meeting-'+crypto.randomUUID();window.sessionStorage.setItem('winter-meeting-display',token)}setChannel(token);window.addEventListener('storage',load);window.addEventListener('winter-queue-changed',load);return()=>{window.removeEventListener('storage',load);window.removeEventListener('winter-queue-changed',load)}},[])
  useEffect(()=>{
   if(!active)return
   let live=true
@@ -50,10 +54,10 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
  useEffect(()=>{
   if(!active||!channel||!displayKey||typeof BroadcastChannel==='undefined')return
   const link=new BroadcastChannel(channel)
-  const send=()=>{if(stateRef.current)link.postMessage({kind:'meeting-preview',state:stateRef.current})}
+  const send=()=>{if(stateRef.current)link.postMessage({kind:'meeting-preview',state:stateRef.current,extraLarge})}
   link.onmessage=e=>{if(e.data?.kind==='meeting-query')send()};send()
   return ()=>link.close()
- },[channel,displayKey,active])
+ },[channel,displayKey,active,extraLarge])
  useEffect(()=>{const el=dialog.current;if(!editor||!el)return;if(!el.open)el.showModal();return()=>{if(el.open)el.close()}},[editor])
  function edit(fn:(q:WinterQueue)=>WinterQueue){
   try{if(!queue||locked)return;const local=read();if(!same(local,queue))throw new Error('別画面で変更されています。下書きを開き直してください');store(fn(local));setError('')}
@@ -113,6 +117,13 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
     <button className={button} disabled={!channel} onClick={()=>window.open(monitorUrl,'fhs-winter-meeting-display')}>打ち合わせ会のモニター表示</button>
     <button className={button} onClick={()=>onStartlist(date)}>この日の正式出番表を見る</button>
     <button className={button} onClick={()=>section.current?.focus()}>全競技の確認一覧へ</button>
+    <label className="inline-flex min-h-12 items-center gap-2 px-2 font-bold">
+     <input type="checkbox" className="size-5" checked={extraLarge} onChange={event=>{
+      const checked=event.currentTarget.checked
+      setExtraLarge(checked)
+      window.sessionStorage.setItem('winter-meeting-extra-large',String(checked))
+     }}/>モニターの文字を特大にする
+    </label>
    </div>
    {active&&channel&&<MonitorStatus token={channel} displayPath={monitorUrl}/>}
    <p>選手名・馬名を押すと変更・棄権を選べます。{available&&'移動マークを押したまま上下に動かすと、相談中の出番順を変更できます。'}</p>

@@ -317,3 +317,43 @@
   .winter-receipt-sheet .receipt-paper { break-inside: auto; }
   .winter-receipt-sheet .receipt-bottom, .winter-receipt-sheet .receipt-items p { break-inside: avoid; }
 }
+
+/* Distance viewing for the meeting audience and its scaled control-room preview. */
+.meeting-audience h1 {
+  color: #101828;
+  font-size: calc(var(--meeting-row-size) * .72);
+  font-weight: 800;
+  line-height: 1.25;
+}
+.meeting-audience [data-monitor-competition] {
+  color: #101828;
+  font-size: calc(var(--meeting-row-size) * .7);
+  font-weight: 700;
+  line-height: 1.25;
+}
+.meeting-audience h2 {
+  margin-top: .15em;
+  font-size: calc(var(--meeting-row-size) * 1.12);
+  font-weight: 900;
+  line-height: 1.18;
+}
+.meeting-audience table {
+  font-size: var(--meeting-row-size);
+  font-weight: 800;
+  line-height: 1.2;
+}
+.meeting-audience th, .meeting-audience td {
+  border-color: #8893a0;
+  padding: .08em .16em;
+  vertical-align: middle;
+}
+.meeting-audience th {
+  background: #1e293b;
+  color: white;
+  font-size: .72em;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.meeting-audience th:first-child { width: 8%; }
+.meeting-audience th:last-child { width: 6%; }
+.meeting-audience td:first-child { font-variant-numeric: tabular-nums; }
