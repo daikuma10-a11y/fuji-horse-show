@@ -13,6 +13,7 @@ export function winterMasterSettlementAccount(value:WinterCheckoutAccount,issued
  if(lines.reduce((sum,line)=>sum+line.amount,0)!==account.extraTotal)throw new Error('精算書の明細合計が一致しません')
  // Itemize only explicitly linked corrections; free-text reasons never determine a charge.
  const byId=new Map(lines.map(line=>[line.key,line]))
+ const omitIfZero=new Set<string>()
  const otherCorrections:{label:string;value:string}[]=[]
  if(account.adjustments.reduce((sum,row)=>sum+row.delta,0)!==account.adjustmentTotal)throw new Error('金額訂正の合計が一致しません')
  for(const adjustment of account.adjustments){
@@ -26,6 +27,7 @@ export function winterMasterSettlementAccount(value:WinterCheckoutAccount,issued
     const line=byId.get(item.lineId)
     // A subsequently cancelled request may no longer be part of the current statement.
     if(!line)continue
+    if(item.omitIfZero===true)omitIfZero.add(line.key)
     line.amount+=item.delta
     line.note=[line.note,item.note].filter(Boolean).join(' ／ ')
     remainder-=item.delta
@@ -33,9 +35,10 @@ export function winterMasterSettlementAccount(value:WinterCheckoutAccount,issued
   }
   if(remainder)otherCorrections.push({label:'金額訂正：'+adjustment.reason,value:yen(remainder)})
  }
- const billedExtra=lines.reduce((sum,line)=>sum+line.amount,0)
+ const statementLines=lines.filter(line=>line.amount!==0 || !omitIfZero.has(line.key))
+ const billedExtra=statementLines.reduce((sum,line)=>sum+line.amount,0)
  const payment=method??account.instruction?.payment_method
- return {normalLines:[],warnings:[...account.warnings],document:{organization:account.organization.name,organizationKey:account.organization.id,issuedDate:issuedAt.toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'}),normalTotal:account.normalTotal,advancePaid:account.advancePaid,advanceRecorded:!!account.advance,extraTotal:billedExtra,extraPaid:account.extraPaid+(account.refundTotal??0),due:account.remaining,method:payment==='bank_transfer'?'後日振込':payment==='cash_at_venue'?'当日現金':payment==='no_payment_due'?'お支払い不要':'未設定',bankDetails:payment==='bank_transfer'?winterCheckoutBankDetails(account):'',lines,summaryRows:[...(account.refundTotal?[{label:'返金済み',value:yen(account.refundTotal)}]:[]),{label:`馬匹登録料（${account.horseRegistration.count}頭）`,value:`${account.horseRegistration.count}頭 × ${yen(account.horseRegistration.unitFee)} ＝ ${yen(account.horseRegistration.total)}`},...otherCorrections,{label:'請求総額',value:yen(account.total)}]}}
+ return {normalLines:[],warnings:[...account.warnings],document:{organization:account.organization.name,organizationKey:account.organization.id,issuedDate:issuedAt.toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'}),normalTotal:account.normalTotal,advancePaid:account.advancePaid,advanceRecorded:!!account.advance,extraTotal:billedExtra,extraPaid:account.extraPaid+(account.refundTotal??0),due:account.remaining,method:payment==='bank_transfer'?'後日振込':payment==='cash_at_venue'?'当日現金':payment==='no_payment_due'?'お支払い不要':'未設定',bankDetails:payment==='bank_transfer'?winterCheckoutBankDetails(account):'',lines:statementLines,summaryRows:[...(account.refundTotal?[{label:'返金済み',value:yen(account.refundTotal)}]:[]),{label:`馬匹登録料（${account.horseRegistration.count}頭）`,value:`${account.horseRegistration.count}頭 × ${yen(account.horseRegistration.unitFee)} ＝ ${yen(account.horseRegistration.total)}`},...otherCorrections,{label:'請求総額',value:yen(account.total)}]}}
 }
 export function winterMasterSavedSettlement(value:WinterSettlementRecord,orgId:string):MasterSavedSettlement{
  const record=validateWinterSettlementRecord(value,orgId)
