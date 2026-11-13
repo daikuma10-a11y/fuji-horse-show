@@ -5,6 +5,7 @@ import {UncertainSubstitution,type HorseOptions,type HorseEdit,type HorseQuote,t
 type Props={
   data:{organizations:{id:string;name:string}[];riders:{id:string;name:string}[];horses:{id:string;name:string;organization_id:string;jef_registration_no:string|null}[];
     competitions:{id:string;competition_no:string;competition_date:string;name:string;official:boolean;op_fee:number|null;member_fee:number|null;nonmember_fee:number|null}[]}
+  allowsOp?:(c:Props['data']['competitions'][number])=>boolean
   fixedHorse?:string;storageKey:string;needsInstructor:(id:string)=>boolean;feeNote:string;onSaved:()=>void
   loadOptions:(old:string)=>Promise<HorseOptions>
   calculate:(input:SwapInput,id?:string|null,expected?:HorseQuote|null)=>Promise<HorseQuote>
@@ -15,7 +16,7 @@ const button='min-h-12 rounded-xl border-2 border-blue-800 px-4 font-semibold di
 const yen=(n:number)=>n.toLocaleString('ja-JP')+'円'
 const sum=(b:HorseQuote['billing'][number])=>b.difference+b.service+b.registration
 
-export function MasterHorseSubstitution({data,storageKey,fixedHorse,needsInstructor,feeNote,onSaved,loadOptions,calculate}:Props){
+export function MasterHorseSubstitution({data,storageKey,fixedHorse,allowsOp=c=>!c.official&&c.op_fee!=null,needsInstructor,feeNote,onSaved,loadOptions,calculate}:Props){
   const [org,setOrg]=useState(data.horses.find(h=>h.id===fixedHorse)?.organization_id??''),[old,setOld]=useState(fixedHorse??''),[target,setTarget]=useState('')
   const [options,setOptions]=useState<HorseOptions|null>(null),[rows,setRows]=useState<HorseEdit[]>([])
   const [quote,setQuote]=useState<HorseQuote|null>(null),[attempt,setAttempt]=useState<Attempt|null>(null)
@@ -77,9 +78,9 @@ export function MasterHorseSubstitution({data,storageKey,fixedHorse,needsInstruc
         {rows.length===0&&<p>元の馬の出番はありません。参加馬だけを差し替えます。</p>}
         {rows.map((r,i)=>{const start=options.entries[i],c=comp(r.competition);return <div key={r.id} className="space-y-2 rounded-lg border p-3">
           <p className="font-semibold">{compName(start.competition)}・{start.position}番　{rider(start.rider)}</p>
-          <label>変更後の競技<select className={field} value={r.competition} onChange={e=>{const id=e.target.value,d=comp(id);edit(r.id,{competition:id,op:!!(r.op&&d&&!d.official&&d.op_fee!==null),membership:d?.member_fee!=null||d?.nonmember_fee!=null?r.membership:null,instructor:false})}}>{data.competitions.map(c=><option key={c.id} value={c.id}>{c.competition_date.slice(5)}　{compName(c.id)}</option>)}</select></label>
+          <label>変更後の競技<select className={field} value={r.competition} onChange={e=>{const id=e.target.value,d=comp(id);edit(r.id,{competition:id,op:!!(r.op&&d&&allowsOp(d)),membership:d?.member_fee!=null||d?.nonmember_fee!=null?r.membership:null,instructor:false})}}>{data.competitions.map(c=><option key={c.id} value={c.id}>{c.competition_date.slice(5)}　{compName(c.id)}</option>)}</select></label>
           {(c?.member_fee!=null||c?.nonmember_fee!=null)&&<label>料金区分<select className={field} value={r.membership??''} onChange={e=>edit(r.id,{membership:e.target.value||null})}><option value="">選択</option><option value="member">会員</option><option value="nonmember">非会員</option></select></label>}
-          {c&&!c.official&&c.op_fee!=null&&<label className="block"><input type="checkbox" checked={r.op} onChange={e=>edit(r.id,{op:e.target.checked})}/> OP参加</label>}
+          {c&&allowsOp(c)&&<label className="block"><input type="checkbox" checked={r.op} onChange={e=>edit(r.id,{op:e.target.checked})}/> OP参加</label>}
           {c&&needsInstructor(c.id)&&<label className="block"><input type="checkbox" checked={r.instructor} onChange={e=>edit(r.id,{instructor:e.target.checked})}/> 地域乗馬指導者資格を確認済み</label>}
         </div>})}
         <button disabled={!choice} className={button} onClick={preview}>差し替え内容と請求差額を確認</button>

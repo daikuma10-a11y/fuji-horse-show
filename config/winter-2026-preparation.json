@@ -166,6 +166,7 @@
       "official": false,
       "fee": 0,
       "opFee": null,
+      "membershipOpDiscount": 1000,
       "memberFee": 5000,
       "nonmemberFee": 10000,
       "instructorRequired": false
@@ -202,6 +203,7 @@
       "official": false,
       "fee": 0,
       "opFee": null,
+      "membershipOpDiscount": 1000,
       "memberFee": 12000,
       "nonmemberFee": 15000,
       "instructorRequired": true
@@ -406,6 +408,7 @@
       "official": false,
       "fee": 0,
       "opFee": null,
+      "membershipOpDiscount": 1000,
       "memberFee": 5000,
       "nonmemberFee": 10000,
       "instructorRequired": false
@@ -490,6 +493,7 @@
       "official": false,
       "fee": 0,
       "opFee": null,
+      "membershipOpDiscount": 1000,
       "memberFee": 12000,
       "nonmemberFee": 15000,
       "instructorRequired": true

@@ -27,7 +27,7 @@ global.fetch=async(url,options={})=>{
   if(mode.startsWith('lost'))throw Error('network lost')
   return {ok:true,json:async()=>({receiptId:r.id,ids:[body.p_item.args.p_id],total:body.p_expected_total})}
  }
- const table=new URL(url).pathname.split('/').at(-1),rows={organizations,riders,horses,competitions,reception_entries:entries}[table];assert.ok(rows,table);return {ok:true,json:async()=>structuredClone(rows)}
+ const table=new URL(url).pathname.split('/').at(-1),rows={organizations,riders,horses,competitions,reception_entries:entries,fhs_winter_event_affiliations:[]}[table];assert.ok(rows,table);return {ok:true,json:async()=>structuredClone(rows)}
 }
 ;(async()=>{
  offline.assertSnapshot(prep);await store.writeDeviceRecord(prep,null)
