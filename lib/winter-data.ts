@@ -1,4 +1,4 @@
-import {isMasterTimetableTime} from './master/timetable'
+import {isMasterTimetableTime,type ScheduledPhase} from './master/timetable'
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from "./winter-event"
 
 import { compareWinterCompetitions, compareWinterOrganizations, winterAffiliatedOrganizations, winterPickerOrder } from "./winter-display-order"
@@ -19,7 +19,7 @@ export type WinterEntryRow = EventRow & {
   entry_id: string; meetingWithdrawal?:boolean; source?: string | null; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
   rider_id: string; horse_id: string; organization_id?: string; organization_name: string; is_op: boolean | null
 }
-export type WinterTimetableRow = EventRow & { competition_id:string; inspection_time:string|null; start_time:string|null; phase:'provisional'|'final'; updated_at:string }
+export type WinterTimetableRow = EventRow & { competition_id:string; inspection_time:string|null; start_time:string|null; phase:ScheduledPhase; cancelled?:boolean; updated_at:string }
 
 /** 各ページで大会IDを検証。通信失敗時にAutumnの原本へフォールバックしない。 */
 async function rows<T extends EventRow>(table: string, select: string, order: string, signal?: AbortSignal, token=KEY, filters:Record<string,string>={}): Promise<T[]> {
@@ -92,7 +92,7 @@ export async function loadWinterData(signal?: AbortSignal, meetingToken?:string)
     try{metadata=JSON.parse(row.notes??'null')}catch{return []}
     if(!metadata||typeof metadata!=='object'||!('winterTimetable' in metadata))return []
     const t=metadata.winterTimetable as WinterTimetableRow
-    if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||!['provisional','final'].includes(t.phase)||!isMasterTimetableTime(t.inspection_time,'inspection')||!isMasterTimetableTime(t.start_time,'start'))throw new Error('Winterの時間設定を確認できません')
+    if(!t||t.event_id!==WINTER_EVENT_ID||t.competition_id!==row.id||(t.cancelled!==undefined&&typeof t.cancelled!=='boolean')||!['provisional','final'].includes(t.phase)||!isMasterTimetableTime(t.inspection_time,'inspection')||!isMasterTimetableTime(t.start_time,'start'))throw new Error('Winterの時間設定を確認できません')
     return [t]
   })
   return { eventId: WINTER_EVENT_ID, organizations, riders, horses, competitions, entries, timetable, ...(affiliations.length ? {affiliationNames} : {}), ...(historicalHorses.length ? {historicalHorses} : {}) }

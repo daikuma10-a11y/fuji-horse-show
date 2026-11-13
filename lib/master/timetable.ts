@@ -1,5 +1,13 @@
 export type TimetableSection = {id: string; label: string; venue?: string; showInspection: boolean}
-export type MasterTimetableItem={timingSection?:TimetableSection;id:string;date:string;competition:string;official:boolean;count:number;inspection:string|null;start:string|null;phase?:'provisional'|'final'}
+export type ScheduledPhase = 'provisional' | 'final'
+export type TimetablePhase = ScheduledPhase | 'cancelled'
+
+/** Keep the scheduled phase and times available when a cancellation is reversed. */
+export function timetablePhase(row?: {phase: ScheduledPhase; cancelled?: boolean} | null): TimetablePhase | undefined {
+ return row?.cancelled ? 'cancelled' : row?.phase
+}
+
+export type MasterTimetableItem={timingSection?:TimetableSection;id:string;date:string;competition:string;official:boolean;count:number;inspection:string|null;start:string|null;phase?:TimetablePhase}
 
 export const masterTimetableChoices = {
  inspection: ['オープン', '組み換え時間', '前競技と同時'],

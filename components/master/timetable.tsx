@@ -4,11 +4,12 @@ import {useState,type ReactNode} from 'react'
 import {PdfDownload} from './pdf-download'
 import {usePrintDocument} from './use-print-document'
 import {fitTimetablePrint} from '@/lib/master/timetable-print'
-import type {MasterTimetableItem} from '@/lib/master/timetable'
-export function MasterCompetitionTime({inspection,start,phase,showInspection=true}:{showInspection?:boolean;inspection?:string|null;start?:string|null;phase?:'provisional'|'final'}){
+import type {MasterTimetableItem,TimetablePhase} from '@/lib/master/timetable'
+export function MasterCompetitionTime({inspection,start,phase,showInspection=true}:{showInspection?:boolean;inspection?:string|null;start?:string|null;phase?:TimetablePhase}){
+ if (phase==='cancelled') return <p className="my-2 font-bold">中止</p>
  return <p className="my-2 flex flex-wrap gap-x-5 gap-y-1 text-base font-semibold">{showInspection && <span>下見開始：{inspection||'未定'}</span>}<span>競技開始：{start||'未定'} {phase==='final'?'（確定）':'（予定）'}</span></p>
 }
-export function MasterTimetable({title,dates,items,renderEditor,loadPrint,renderDayExtra}:{renderDayExtra?:(date:string)=>ReactNode;loadPrint?:(dates:readonly string[],sectionId?:string)=>Promise<string>;title:string;dates:readonly {value:string;label:string}[];items:MasterTimetableItem[];renderEditor:(id:string, showInspection:boolean)=>ReactNode}){
+export function MasterTimetable({title,dates,items,renderEditor,loadPrint,renderDayExtra}:{renderDayExtra?:(date:string)=>ReactNode;loadPrint?:(dates:readonly string[],sectionId?:string)=>Promise<string>;title:string;dates:readonly {value:string;label:string}[];items:MasterTimetableItem[];renderEditor:(id:string, showInspection:boolean, count:number)=>ReactNode}){
  const printer=usePrintDocument()
  const[editing,setEditing]=useState<string[]>([])
  const[selectedDates,setSelectedDates]=useState<string[]>(()=>dates.map(d=>d.value))
@@ -41,7 +42,7 @@ export function MasterTimetable({title,dates,items,renderEditor,loadPrint,render
              <TimetableRow key={item.id} item={item} showInspection={showInspection}
                editing={editing.includes(item.id)}
                onEdit={() => setEditing(ids => ids.includes(item.id) ? ids.filter(id => id !== item.id) : [...ids, item.id])}
-               editor={renderEditor(item.id, showInspection)}/>
+               editor={renderEditor(item.id, showInspection, item.count)}/>
            )}</tbody>
          </table>
        </div>
@@ -53,5 +54,7 @@ export function MasterTimetable({title,dates,items,renderEditor,loadPrint,render
  <p className="text-sm font-semibold">競技の進行により開始時間を変更する場合があります。最新のタイムテーブルをご確認ください。</p></div>
 }
 function TimetableRow({item,showInspection,editing,onEdit,editor}:{showInspection:boolean;item:MasterTimetableItem;editing:boolean;onEdit:()=>void;editor:ReactNode}){
- return <><tr><th scope="row" className="whitespace-nowrap border p-2 text-left">{item.competition}{item.official&&<span className="ml-2 text-sm">★公認</span>}</th>{showInspection && <td className="whitespace-nowrap border p-2">{item.inspection||'未定'}</td>}<td className="whitespace-nowrap border p-2">{item.start||'未定'}<span className="block text-sm">{item.phase==='final'?'確定':'予定'}</span></td><td className="border p-2 text-right">{item.count}</td><td className="print-hide border p-2"><button type="button" aria-expanded={editing} aria-controls={`timetable-editor-${item.id}`} className="min-h-12 whitespace-nowrap rounded-lg border-2 px-3 font-bold" onClick={onEdit}>{editing?'編集欄を閉じる':'時間を編集'}</button></td></tr><tr hidden={!editing} className="print-hide"><td colSpan={showInspection ? 5 : 4} id={`timetable-editor-${item.id}`} className="border p-3">{editor}</td></tr></>
+ return <><tr><th scope="row" className="whitespace-nowrap border p-2 text-left">{item.competition}{item.official&&<span className="ml-2 text-sm">★公認</span>}</th>{item.phase==='cancelled'
+  ? <td colSpan={showInspection?2:1} className="border p-2 text-center font-bold">中止</td>
+  : <>{showInspection && <td className="whitespace-nowrap border p-2">{item.inspection||'未定'}</td>}<td className="whitespace-nowrap border p-2">{item.start||'未定'}<span className="block text-sm">{item.phase==='final'?'確定':'予定'}</span></td></>}<td className="border p-2 text-right">{item.count}</td><td className="print-hide border p-2"><button type="button" aria-expanded={editing} aria-controls={`timetable-editor-${item.id}`} className="min-h-12 whitespace-nowrap rounded-lg border-2 px-3 font-bold" onClick={onEdit}>{editing?'編集欄を閉じる':'時間を編集'}</button></td></tr><tr hidden={!editing} className="print-hide"><td colSpan={showInspection ? 5 : 4} id={`timetable-editor-${item.id}`} className="border p-3">{editor}</td></tr></>
 }

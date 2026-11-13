@@ -1,3 +1,4 @@
+import {timetablePhase} from './master/timetable'
 import {meetingEntries, meetingOrderAfterEdit, type MeetingPreviewRequest} from './master/meeting-preview'
 import {WINTER_EVENT_ID} from './winter-event'
 import {emptyWinterQueue, validateWinterQueue, winterBatchPayload, type WinterQueue, type WinterDraft} from './winter-batch'
@@ -64,7 +65,7 @@ export function meetingDisplay(data:Data,date:string,queue:WinterQueue,preview:R
  const affected=new Set(meetingAffected(queue))
  const groups=data.competitions.filter(c=>c.competition_date===date).map(c=>{
   const model=preview.models.get(c.id)!,time=data.timetable.find(t=>t.competition_id===c.id)
-  return {competitionId:c.id,competitionNo:c.competition_no,competitionName:c.name,date,inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:time?.phase,page:0,draft:affected.has(c.id),
+  return {competitionId:c.id,competitionNo:c.competition_no,competitionName:c.name,date,inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:timetablePhase(time),page:0,draft:affected.has(c.id),
    rows:preview.rows.filter(e=>e.competitionId===c.id).map((e,i)=>({id:e.id,number:i+1,rider:model.getPlayer(e.playerId)?.name??'要確認',horse:model.getHorse(e.horseId)?.name??'要確認',organization:model.getOrg(e.organizationId??'')?.name??'要確認',isOp:!!e.isOp,mark:e.withdrawn?'棄権':e.adminChangeMark==='added'?'追加':e.adminChangeMark==='changed'?'変更':''}))}
  })
  return groups.length?{...groups[0],version:1,eventId:WINTER_EVENT_ID,updatedAt:new Date().toISOString(),followingCompetitions:groups.slice(1)}:null
