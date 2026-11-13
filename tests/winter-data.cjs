@@ -11,7 +11,7 @@ const event = load('lib/winter-event.ts')
 const { loadWinterData } = load('lib/winter-data.ts', { './winter-event': event, './winter-display-order': load('lib/winter-display-order.ts') })
 const event_id = event.WINTER_EVENT_ID
 let mode = 'valid', calls = []
-global.fetch = async url => {
+global.fetch = async (url, options) => {
   const u = new URL(url); calls.push(u)
   assert.equal(u.searchParams.get('event_id'), `eq.${event_id}`)
   const table = u.pathname.split('/').at(-1)
@@ -22,6 +22,14 @@ global.fetch = async url => {
   if (table === 'horses') data = [{ id: 'horse', organization_id: 'org', event_id }]
   if (table === 'competitions') data = ['10','2','④','①','1','36'].map(no=>({id:no==='10'?'competition':no,competition_no:no,name:'Ｌ－Ｂ級　障害飛越競技',competition_date:'2026-11-14',event_id}))
   if (table === 'reception_entries') data = [{ entry_id: 'entry', organization_id:'org', organization_name:'申込時の団体', competition_id: 'competition', rider_id: mode === 'bad-link' ? 'autumn-rider' : 'rider', horse_id: 'horse', event_id }]
+  if (mode === 'meeting') {
+    if (table === 'reception_entries') data = ['entry','reversed','pre-cancel'].map((id,i)=>({...data[0],entry_id:id,status:'withdrawn',source:i===2?'winter-initial-cancelled':'winter-reception'}))
+    if (table === 'fhs_winter_meeting_requests') {
+      assert.equal(options.headers.Authorization,'Bearer test-admin')
+      assert.equal(u.searchParams.get('reception_requests.status'),'eq.reflected')
+      data=[{event_id,reception_requests:{entry_id:'entry',original_entry_id:'entry',from_competition_id:'competition',request_type:'withdraw'}}]
+    }
+  }
   if (mode === 'wrong-event') data = data.map(row => ({ ...row, event_id: 'autumn' }))
   if (mode === 'network-error') return { ok: false, status: 503 }
   return { ok: true, json: async () => data }
@@ -36,6 +44,9 @@ global.fetch = async url => {
   assert.equal(winterAffiliatedOrganizations(updated).find(o => o.id === 'org').name, '大会用クラブ名')
   assert.equal(updated.organizations.find(o => o.id === 'org').name, 'ライディングクラブフジファーム')
   assert.deepEqual(updated.riders, data.riders)
+  mode = 'meeting'
+  const confirmed=await loadWinterData(undefined,'test-admin')
+  assert.deepEqual(confirmed.entries.map(e=>[e.entry_id,!!e.meetingWithdrawal]),[['entry',true],['reversed',false]])
   mode = 'wrong-event'; await assert.rejects(loadWinterData(), /Winter以外/)
   mode = 'bad-link'; await assert.rejects(loadWinterData(), /所属大会/)
   mode = 'network-error'; await assert.rejects(loadWinterData(), /取得に失敗/)

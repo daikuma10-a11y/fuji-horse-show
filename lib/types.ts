@@ -44,6 +44,7 @@ export interface StartEntry {
   organizationId?: string
   /** 異なる登録団体の人馬で、エントリー所属の選択履歴が未確認 */
   needsAffiliationReview?: boolean
+  meetingConfirmedWithdrawal?: boolean
   withdrawn?: boolean
   /** OP: 先乗りとして出場し、正式成績から除外する */
   isOp?: boolean

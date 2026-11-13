@@ -1,4 +1,4 @@
-import {meetingEntries, type MeetingPreviewRequest} from './master/meeting-preview'
+import {meetingEntries, meetingOrderAfterEdit, type MeetingPreviewRequest} from './master/meeting-preview'
 import {WINTER_EVENT_ID} from './winter-event'
 import {emptyWinterQueue, validateWinterQueue, winterBatchPayload, type WinterQueue, type WinterDraft} from './winter-batch'
 import {reviewWinterChange} from './winter-change'
@@ -34,7 +34,7 @@ export function meetingAffected(queue:WinterQueue){
  return [...ids].sort()
 }
 export function meetingRows(data:Data,queue:WinterQueue){
- const models=new Map(data.competitions.map(c=>[c.id,winterStartListModel(data,c.id,[])]))
+ const models=new Map(data.competitions.map(c=>[c.id,winterStartListModel(data,c.id,[],true)]))
  const baseEntries=data.competitions.flatMap(c=>models.get(c.id)!.entriesByCompetition(c.id))
  const rows=meetingEntries({baseEntries,staged:queue.items.map(item=>({request:requestFor(item)})),orders:queue.meeting?.orders??{}},data.competitions)
  return {models,rows}
@@ -48,22 +48,15 @@ export function updateMeetingWork(data:Data,before:WinterQueue,after:WinterQueue
  const idsBefore=new Set(before.items.map(item=>requestFor(item).id)),idsAfter=new Set(after.items.map(item=>requestFor(item).id))
  const item=inserted?after.items.find(item=>!idsBefore.has(requestFor(item).id)):before.items.find(item=>!idsAfter.has(requestFor(item).id))
  if(!item)return {...after,meeting:{...work,saved:false}}
- const req=requestFor(item),source=req.change?.entryId??req.withdraw?.entryId
+ const req=requestFor(item)
  const previousRows=meetingRows(data,before).rows
  const natural=meetingRows(data,{...after,meeting:{...work,orders:{}}}).rows
- const token='request:'+req.id
  for(const group of meetingAffected({...emptyWinterQueue(),items:[item]})){
   baselines[group]??=meetingBaseline(data,group)
-  if(!orders[group])continue
-  const previous=previousRows.filter(e=>e.competitionId===group&&!e.withdrawn).map(e=>e.id)
-  const defaults=natural.filter(e=>e.competitionId===group&&!e.withdrawn).map(e=>e.id)
-  const sequence=previous.filter(id=>defaults.includes(id))
-  for(const id of defaults.filter(id=>!sequence.includes(id))){
-   const inPlace=inserted&&id===token&&req.change&&!req.change.treatedAsWithdrawAdd&&req.change.fromCompetitionId===group?previous.indexOf(source!):
-     !inserted&&id===source?previous.indexOf(token):-1
-   sequence.splice(inPlace<0?defaults.indexOf(id):Math.min(inPlace,sequence.length),0,id)
-  }
-  orders[group]=sequence
+  const previous=previousRows.filter(row=>row.competitionId===group)
+  const defaults=natural.filter(row=>row.competitionId===group)
+  const sequence=meetingOrderAfterEdit(previous,defaults,req,inserted)
+  if(orders[group]||sequence.some((id,index)=>id!==defaults[index].id))orders[group]=sequence
  }
  return {...after,meeting:{...work,saved:false,orders,baselines}}
 }

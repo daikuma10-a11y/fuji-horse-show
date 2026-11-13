@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from 'react'
 import {emptyWinterQueue,readWinterQueue,writeWinterQueue,validateWinterQueue,winterDraftSummary,submitWinterBatch,WinterBatchRejected,type WinterQueue} from '@/lib/winter-batch'
 import {meetingRows,meetingBaseline,updateMeetingWork,meetingDisplay,newMeetingWork,savedMeetingContent,restoreMeeting,meetingTransaction} from '@/lib/winter-meeting'
-import {moveWinterEntry} from '@/lib/winter-monitor'
+import {meetingOrderAfterMove} from '@/lib/master/meeting-preview'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import {MasterStartSelectors} from './master/start-list-controls'
 import {MasterStartDaySection,jumpToStartCompetition} from './master/start-list-day'
@@ -65,8 +65,8 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
  }
  function move(id:string,source:string,target:string){
   if(!data||!preview||available!==true)return
-  const ids=preview.rows.filter(e=>e.competitionId===id&&!e.withdrawn).map(e=>e.id)
-  edit(q=>{const m=q.meeting??newMeetingWork();return {...q,meeting:{...m,saved:false,baselines:{...m.baselines,[id]:m.baselines[id]??meetingBaseline(data,id)},orders:{...m.orders,[id]:moveWinterEntry(ids,source,target)}}}})
+  const rows=preview.rows.filter(e=>e.competitionId===id)
+  edit(q=>{const m=q.meeting??newMeetingWork();return {...q,meeting:{...m,saved:false,baselines:{...m.baselines,[id]:m.baselines[id]??meetingBaseline(data,id)},orders:{...m.orders,[id]:meetingOrderAfterMove(rows,source,target)}}}})
  }
  function remove(id:string){if(data)edit(q=>updateMeetingWork(data,q,{...q,items:q.items.filter(i=>winterDraftSummary(i).id!==id)}))}
  function begin(mode:Editor['mode'],comp:Editor['comp'],entry?:StartEntry){

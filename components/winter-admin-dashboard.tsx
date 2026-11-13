@@ -40,7 +40,7 @@ export function WinterAdminDashboard(){
  const [meetingStartDay,setMeetingStartDay]=useState<{date:string}|null>(null)
  const[registrationSection,setRegistrationSection]=useState<PreRegistrationSection>('roster')
  const[data,setData]=useState<Data|null>(null),[dataError,setDataError]=useState(''),[revision,setRevision]=useState(0),[loading,setLoading]=useState(false)
- const pickerToken=useRef(session?.accessToken);pickerToken.current=session?.accessToken
+ const currentSession=useRef(session);currentSession.current=session
  const signedIn=!!session
  const[liveStatus,setLiveStatus]=useState('')
  const updateSession=useCallback((next:AdminSession)=>{sessionStorage.setItem(sessionKey,JSON.stringify(next));setSession(next)},[])
@@ -77,14 +77,20 @@ export function WinterAdminDashboard(){
  useEffect(()=>{
   if(!signedIn)return
   const controller=new AbortController();setLoading(true);setDataError('')
-  Promise.all([loadWinterData(controller.signal),loadWinterPickerReadings(pickerToken.current!).catch(()=>new Map<string,string>())]).then(([value,readings])=>{
+  const login=currentSession.current!
+  const verified=login.expiresAt>Date.now()+60000?Promise.resolve(login):verifyAdminSession(login)
+  verified.then(next=>{
+   controller.signal.throwIfAborted()
+   if(next.accessToken!==login.accessToken)updateSession(next)
+   return Promise.all([loadWinterData(controller.signal,next.accessToken),loadWinterPickerReadings(next.accessToken).catch(()=>new Map<string,string>())])
+  }).then(([value,readings])=>{
    if(controller.signal.aborted)return
    const order=winterPickerOrder(winterAffiliatedOrganizations(value),readings)
    const withReading=<T extends {id:string},>(rows:T[])=>rows.map(row=>readings.has(row.id)?{...row,reading:readings.get(row.id)}:row)
    setData({...value,riders:withReading(value.riders.sort(order)),horses:withReading(value.horses.sort(order))})
   }).catch(e=>{if(!controller.signal.aborted)setDataError(e instanceof Error?e.message:'Winterのデータを読み込めません')}).finally(()=>{if(!controller.signal.aborted)setLoading(false)})
   return()=>controller.abort()
- },[signedIn,revision])
+ },[signedIn,revision,updateSession])
  async function login(e:FormEvent){e.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setLoginError('');try{updateSession(await signInAdmin(email.trim(),password));setPassword('')}catch(e){setLoginError(e instanceof Error?e.message:'ログインできません')}finally{lock.current=false;setBusy(false)}}
  function logout(){if(!window.confirm('未保存の入力がある場合は失われます。本部からログアウトしますか？'))return;sessionStorage.removeItem(sessionKey);setSession(null);setData(null);setPassword('');setVisited([tab])}
  return <div className="flex min-h-dvh flex-col bg-background">
