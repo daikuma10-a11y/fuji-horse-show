@@ -1,5 +1,6 @@
 "use client"
 
+import {MonitorFontControl} from '@/components/master/monitor-font-control'
 import { useEffect, useRef, useState } from 'react'
 import type { MeetingMonitorRow, MeetingMonitorSnapshot } from '@/lib/meeting-monitor'
 import { monitorRows } from '@/lib/meeting-monitor'
@@ -64,7 +65,7 @@ function OfficialStartListMonitor() {
   return <main className="min-h-screen bg-white px-3 py-2 text-slate-900">
     <header className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-700 pb-1">
       <h1 className="text-xl font-bold text-blue-800">Fuji Horse Show ／ 出番表{hasDrafts ? "（確認中・未確定）" : "（正式）"}</h1>
-      <div className="flex items-center gap-3 text-sm"><span role="status" className={syncError || !liveConnected ? 'font-bold text-red-700' : 'font-bold text-blue-800'}>{syncError ? '更新停止・通信を確認' : !liveConnected ? '再接続中' : lastSyncedAt ? '変更時に自動更新' : '読み込み中'}{lastSyncedAt > 0 && ` ／ ${new Date(lastSyncedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => changeFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
+      <div className="flex items-center gap-3 text-sm"><span role="status" className={syncError || !liveConnected ? 'font-bold text-red-700' : 'font-bold text-blue-800'}>{syncError ? '更新停止・通信を確認' : !liveConnected ? '再接続中' : lastSyncedAt ? '変更時に自動更新' : '読み込み中'}{lastSyncedAt > 0 && ` ／ ${new Date(lastSyncedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><MonitorFontControl value={fontSize} onChange={changeFontSize}/><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
     </header>
     {hasDrafts && <p role="status" className="mb-3 rounded border-2 border-amber-500 bg-amber-100 p-3 text-lg font-bold text-amber-950">確認中・未確定の並び順です。本部の「出番順を保存」で確定します。</p>}
     {previewLost && <p role="status" className="mb-3 rounded bg-amber-50 p-3 font-bold text-amber-900">本部との確認表示の連携が終了しました。正式な出番順を表示しています。</p>}
@@ -133,7 +134,7 @@ function MeetingStartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 
   return <main className="min-h-screen bg-white px-3 py-2 text-slate-900">
     <header className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-700 pb-1">
       <div><p className="text-sm font-bold text-blue-800">Fuji Horse Show ／ {source === 'startlist' ? '正式出番表' : '打ち合わせ会用・正式反映前'}</p><h1 className="text-2xl font-bold">{snapshot?.competition ?? '出番表を待っています'}</h1></div>
-      <div className="flex items-center gap-3 text-sm"><span role="status" className={connected ? 'font-bold text-blue-800' : 'font-bold text-red-700'}>{connected ? 'リアルタイム表示中' : '接続待ち・更新停止'}{snapshot && ` ／ ${new Date(snapshot.sentAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><label className="flex items-center gap-1">文字<input aria-label="文字サイズ" type="range" min={12} max={24} value={fontSize} onChange={event => changeFontSize(Number(event.target.value))} /></label><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
+      <div className="flex items-center gap-3 text-sm"><span role="status" className={connected ? 'font-bold text-blue-800' : 'font-bold text-red-700'}>{connected ? 'リアルタイム表示中' : '接続待ち・更新停止'}{snapshot && ` ／ ${new Date(snapshot.sentAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}`}</span><MonitorFontControl value={fontSize} onChange={changeFontSize}/><button type="button" onClick={() => void fullscreen()} className="rounded-lg border px-3 py-2 font-bold">全画面</button></div>
     </header>
     {error && <p role="alert" className="mb-3 rounded bg-red-50 p-3 text-red-700">{error}</p>}
     {!connected && <p className="mb-3 rounded bg-amber-50 p-2 font-bold text-amber-900">本部の{source === 'startlist' ? '出番表' : '打ち合わせ会'}画面を開いたままにしてください。表示は最後に受け取った内容です。</p>}

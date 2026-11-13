@@ -23,7 +23,13 @@ global.fetch = async (url, options) => {
   if (table === 'competitions') data = ['10','2','④','①','1','36'].map(no=>({id:no==='10'?'competition':no,competition_no:no,name:'Ｌ－Ｂ級　障害飛越競技',competition_date:'2026-11-14',event_id}))
   if (table === 'reception_entries') data = [{ entry_id: 'entry', organization_id:'org', organization_name:'申込時の団体', competition_id: 'competition', rider_id: mode === 'bad-link' ? 'autumn-rider' : 'rider', horse_id: 'horse', event_id }]
   if (mode === 'meeting') {
-    if (table === 'reception_entries') data = ['entry','reversed','pre-cancel'].map((id,i)=>({...data[0],entry_id:id,status:'withdrawn',source:i===2?'winter-initial-cancelled':'winter-reception'}))
+    if (table === 'reception_entries') data = ['entry','reversed','pre-cancel','ordinary'].map((id,i)=>({...data[0],entry_id:id,status:'withdrawn',source:i===2?'winter-initial-cancelled':'winter-reception'}))
+    if (table === 'reception_requests'){
+      assert.equal(options.headers.Authorization,'Bearer test-admin')
+      assert.equal(u.searchParams.get('request_type'),'eq.withdraw')
+      assert.equal(u.searchParams.get('status'),'eq.reflected')
+      data=[{event_id,original_entry_id:'ordinary',from_competition_id:'competition'}]
+    }
     if (table === 'fhs_winter_meeting_requests') {
       assert.equal(options.headers.Authorization,'Bearer test-admin')
       assert.equal(u.searchParams.get('reception_requests.status'),'eq.reflected')
@@ -46,7 +52,8 @@ global.fetch = async (url, options) => {
   assert.deepEqual(updated.riders, data.riders)
   mode = 'meeting'
   const confirmed=await loadWinterData(undefined,'test-admin')
-  assert.deepEqual(confirmed.entries.map(e=>[e.entry_id,!!e.meetingWithdrawal]),[['entry',true],['reversed',false]])
+  assert.deepEqual(confirmed.entries.map(e=>[e.entry_id,!!e.meetingWithdrawal]),[['entry',true],['reversed',false],['ordinary',false]])
+  assert.deepEqual(confirmed.entries.filter(e=>e.receptionWithdrawal).map(e=>e.entry_id),['ordinary'])
   mode = 'wrong-event'; await assert.rejects(loadWinterData(), /Winter以外/)
   mode = 'bad-link'; await assert.rejects(loadWinterData(), /所属大会/)
   mode = 'network-error'; await assert.rejects(loadWinterData(), /取得に失敗/)

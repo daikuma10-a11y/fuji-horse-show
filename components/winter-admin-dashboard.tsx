@@ -37,6 +37,7 @@ type Data=Awaited<ReturnType<typeof loadWinterData>>
 export function WinterAdminDashboard(){
  const[session,setSession]=useState<AdminSession|null>(null),[checking,setChecking]=useState(true),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[loginError,setLoginError]=useState(''),[busy,setBusy]=useState(false),lock=useRef(false)
  const[tab,setTab]=useState<WinterAdminTab>('requests'),[visited,setVisited]=useState<WinterAdminTab[]>(['requests'])
+ const [pendingCount,setPendingCount]=useState(0)
  const [meetingStartDay,setMeetingStartDay]=useState<{date:string}|null>(null)
  const[registrationSection,setRegistrationSection]=useState<PreRegistrationSection>('roster')
  const[data,setData]=useState<Data|null>(null),[dataError,setDataError]=useState(''),[revision,setRevision]=useState(0),[loading,setLoading]=useState(false)
@@ -92,7 +93,7 @@ export function WinterAdminDashboard(){
   return()=>controller.abort()
  },[signedIn,revision,updateSession])
  async function login(e:FormEvent){e.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setLoginError('');try{updateSession(await signInAdmin(email.trim(),password));setPassword('')}catch(e){setLoginError(e instanceof Error?e.message:'ログインできません')}finally{lock.current=false;setBusy(false)}}
- function logout(){if(!window.confirm('未保存の入力がある場合は失われます。本部からログアウトしますか？'))return;sessionStorage.removeItem(sessionKey);setSession(null);setData(null);setPassword('');setVisited([tab])}
+ function logout(){if(!window.confirm('未保存の入力がある場合は失われます。本部からログアウトしますか？'))return;sessionStorage.removeItem(sessionKey);setSession(null);setPendingCount(0);setData(null);setPassword('');setVisited([tab])}
  return <div className="flex min-h-dvh flex-col bg-background">
  <div className="print-hide"><AppHeader subtitle="Winter 大会本部 管理画面" homeHref="/winter"/></div>
  <main className={`mx-auto w-full flex-1 px-5 py-6 ${session?'max-w-5xl print:max-w-none print:p-0':'max-w-xl'}`}>
@@ -106,8 +107,8 @@ export function WinterAdminDashboard(){
  </form>:<>
  <h1 className="sr-only">Winter 大会本部 管理画面</h1>
  <WinterOfflinePreparation session={session} onSession={updateSession} revision={revision}/>
- <WinterReceptionNotice session={session} onSession={updateSession} revision={revision} onOpen={()=>{select('requests');refresh()}}/>
- <WinterAdminNavigation tab={tab} onSelect={select}/>
+ <WinterReceptionNotice onPendingCount={setPendingCount} session={session} onSession={updateSession} revision={revision} onOpen={()=>{select('requests');refresh()}}/>
+ <WinterAdminNavigation pendingCount={pendingCount} tab={tab} onSelect={select}/>
  <p role="status" className="print-hide mb-3">{liveStatus}</p>
  {tab!=='startlist'&&<> <div className="print-hide mb-5 flex flex-wrap items-center gap-3"><button className={button} disabled={loading} type="button" onClick={refresh}>{loading?'読み込み中…':'最新の情報を確認'}</button>{data&&<p>競技 {data.competitions.length}件 ／ 参加選手 {data.riders.length}名 ／ 参加馬 {data.horses.length}頭</p>}</div></>}
  {dataError&&<p role="alert" className="print-hide mb-4 rounded-xl bg-red-100 p-4 text-xl">{dataError}</p>}
@@ -122,7 +123,7 @@ export function WinterAdminDashboard(){
  overview={<WinterRegistrationOverview data={data} session={session} onSession={updateSession} onChanged={refresh} revision={revision} active={tab==='roster'&&registrationSection==='overview'} loading={loading} error={dataError}/>}
  ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">CSV・TSVからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVは、これまでの取込準備画面を使えます。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
- t.id==='meeting'?<><WinterMeetingPanel active={tab==='meeting'} data={data} dataError={dataError} session={session} onSession={updateSession} onChanged={refresh} onStartlist={date=>{setMeetingStartDay({date});select('startlist')}}/></>:
+ t.id==='meeting'?<><WinterMeetingPanel disconnected={liveStatus.includes('切断')} active={tab==='meeting'} data={data} dataError={dataError} session={session} onSession={updateSession} onChanged={refresh} onStartlist={date=>{setMeetingStartDay({date});select('startlist')}}/></>:
  t.id==='stable'?<WinterStableInformation data={data} loading={loading} error={dataError} session={session} onSession={updateSession} active={tab==='stable'} revision={revision}/>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='timetable'?<WinterTimetable data={data} session={session} onSession={updateSession} onChanged={refresh}/>:

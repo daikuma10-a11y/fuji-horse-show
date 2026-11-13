@@ -1,12 +1,13 @@
 "use client"
 import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
-import {useEffect,useRef,useState} from 'react'
+import {useEffect,useId,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import {archiveRosterEntity,clubEntities,loadSharedRoster,refreshRosterEntity,refreshRosterParticipants,saveRosterEntity,saveWinterParticipants,type SharedRoster,type RosterClub,type RosterEntity} from '@/lib/shared-roster'
 import {compareWinterOrganizations} from '@/lib/winter-display-order'
 const field='min-h-14 w-full rounded-xl border-2 p-3 text-xl'
 const button='min-h-14 rounded-xl bg-blue-800 p-3 text-xl font-bold text-white disabled:opacity-50'
 export function SharedRosterManager({session,onParticipantsSaved}:{session:AdminSession;onParticipantsSaved:()=>void}){
+ const clubListId=useId()
  const [data,setData]=useState<SharedRoster|null>(null),[club,setClub]=useState(''),[selected,setSelected]=useState<string[]>([]),[expected,setExpected]=useState<string[]>([])
  const [clubs,setClubs]=useState<RosterClub[]>([]),[loading,setLoading]=useState(true),clubRef=useRef('')
  const [message,setMessage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),lock=useRef(false)
@@ -60,7 +61,7 @@ export function SharedRosterManager({session,onParticipantsSaved}:{session:Admin
     <label className="block">正式フリガナ・放送用読み<input className={field} value={reading} maxLength={200} onChange={e=>setReading(e.target.value)}/></label>
     <label className="block">確認済みの日馬連番号（未登録は空欄）<input className={field} inputMode="numeric" value={number} onChange={e=>setNumber(e.target.value)}/></label>
     {edit&&<p>登録中の所属：{data?.affiliations.filter(x=>x.entity_id===edit.id&&x.ended_at===null).map(x=>data.clubs.find(c=>c.id===x.club_id)?.name).join(' ／ ')}</p>}
-    <label className="block">保存する所属クラブ<input className={field} list="roster-clubs" value={clubName} maxLength={150} onChange={e=>setClubName(e.target.value)}/><datalist id="roster-clubs">{data?.clubs.map(x=><option key={x.id} value={x.name}/>)}</datalist></label>
+    <label className="block">保存する所属クラブ<input className={field} list={clubListId} value={clubName} maxLength={150} onChange={e=>setClubName(e.target.value)}/><datalist id={clubListId}>{data?.clubs.map(x=><option key={x.id} value={x.name}/>)}</datalist></label>
     {edit&&<label className="flex items-center gap-3 text-xl"><input type="checkbox" className="size-7" checked={replaceAffiliations} onChange={e=>setReplaceAffiliations(e.target.checked)}/>他の所属を終了して、このクラブだけにする</label>}
     {error&&edit&&<p role="alert" className="rounded-xl bg-red-100 p-3 text-xl">{error}</p>}<p>通常の保存は他の所属も残します。保存済みの大会参加時の所属は変更しません。</p>
     {existingNumber&&<div className="space-y-3 rounded-xl bg-blue-50 p-3"><p className="text-xl">日馬連番号が一致する登録済みの{kind==='rider'?'選手':'馬'}：{existingNumber.name}。同じ人馬の別所属は、既存の登録に所属を追加してください。</p><button type="button" className={button} onClick={()=>void addToClub(existingNumber,clubName)}>この人馬に入力した所属を追加</button><p>登録済みの氏名・読み・番号と、他の所属は保持します。</p></div>}

@@ -1,4 +1,5 @@
 "use client"
+import {SharedRosterManager} from './shared-roster-manager'
 import {timetablePhase} from '@/lib/master/timetable'
 import {useEffect,useRef,useState} from 'react'
 import {emptyWinterQueue,readWinterQueue,writeWinterQueue,validateWinterQueue,winterDraftSummary,submitWinterBatch,WinterBatchRejected,type WinterQueue} from '@/lib/winter-batch'
@@ -26,9 +27,10 @@ const weekend=winterMasterDates.filter(d=>[0,6].includes(new Date(d.value+'T00:0
 const button='inline-flex min-h-12 items-center rounded-xl border-2 px-4 py-2 font-bold disabled:opacity-50'
 const read=()=>readWinterQueue(window.localStorage,'meeting')
 const same=(a:WinterQueue,b:WinterQueue)=>JSON.stringify(a)===JSON.stringify(b)
-export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,onStartlist,active=true}:{data:Data|null;dataError:string;session:AdminSession;onSession:(s:AdminSession)=>void;onChanged:()=>void;onStartlist:(date:string)=>void;active?:boolean}){
+export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,onStartlist,active=true,disconnected=false}:{disconnected?:boolean;data:Data|null;dataError:string;session:AdminSession;onSession:(s:AdminSession)=>void;onChanged:()=>void;onStartlist:(date:string)=>void;active?:boolean}){
  const [date,setDate]=useState<string>(weekend[0].value),[queue,setQueue]=useState<WinterQueue|null>(null)
  const [error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[confirmed,setConfirmed]=useState(false)
+ const [showRoster,setShowRoster]=useState(false)
  const [available,setAvailable]=useState<boolean|null>(null),[channel,setChannel]=useState(''),[pick,setPick]=useState<StartEntry>(),[editor,setEditor]=useState<Editor>()
  const [extraLarge,setExtraLarge]=useState(false)
  const lock=useRef(false),dialog=useRef<HTMLDialogElement>(null),section=useRef<HTMLHeadingElement>(null)
@@ -53,12 +55,13 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
   return ()=>{live=false}
  },[active,session.accessToken])
  useEffect(()=>{
-  if(!active||!channel||!displayKey||typeof BroadcastChannel==='undefined')return
+  if(!active||!channel||!displayKey||dataError||disconnected||typeof BroadcastChannel==='undefined')return
   const link=new BroadcastChannel(channel)
   const send=()=>{if(stateRef.current)link.postMessage({kind:'meeting-preview',state:stateRef.current,extraLarge})}
   link.onmessage=e=>{if(e.data?.kind==='meeting-query')send()};send()
-  return ()=>link.close()
- },[channel,displayKey,active,extraLarge])
+  const timer=window.setInterval(()=>link.postMessage({kind:'meeting-alive'}),2000)
+  return ()=>{clearInterval(timer);link.postMessage({kind:'meeting-closed'});link.close()}
+ },[channel,displayKey,active,extraLarge,dataError,disconnected])
  useEffect(()=>{const el=dialog.current;if(!editor||!el)return;if(!el.open)el.showModal();return()=>{if(el.open)el.close()}},[editor])
  function edit(fn:(q:WinterQueue)=>WinterQueue){
   try{if(!queue||locked)return;const local=read();if(!same(local,queue))throw new Error('別画面で変更されています。下書きを開き直してください');store(fn(local));setError('')}
@@ -72,7 +75,7 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
  function remove(id:string){if(data)edit(q=>updateMeetingWork(data,q,{...q,items:q.items.filter(i=>winterDraftSummary(i).id!==id)}))}
  function begin(mode:Editor['mode'],comp:Editor['comp'],entry?:StartEntry){
   if(locked)return
-  setError('');setPick(undefined);setEditor({mode,comp,entry})
+  setError('');setShowRoster(false);setPick(undefined);setEditor({mode,comp,entry})
  }
  async function operate(action:'save'|'apply'|'load'|'archive'){
   if(!queue||!data||lock.current)return
@@ -106,7 +109,8 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
  function exportDraft(){if(!queue)return;const url=URL.createObjectURL(new Blob([JSON.stringify({kind:'winter-meeting-draft',queue},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='Winter-meeting-draft.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
  async function importDraft(file:File){try{if(file.size>4_000_000||locked)throw new Error('この下書きは取り込めません');const obj=JSON.parse(await file.text());if(obj.kind!=='winter-meeting-draft')throw new Error('打ち合わせ会の保留ファイルを選択してください');const next=validateWinterQueue(obj.queue,'meeting');if(window.confirm('現在の端末の保留一覧をこの下書きで置き換えますか？'))edit(()=>next)}catch(e){setError(String(e))}}
  const competitions=data?.competitions.filter(c=>c.competition_date===date)??[]
- const summaries=current.items.map(winterDraftSummary)
+ const programOrder=new Map(data?.competitions.map((competition,index)=>[competition.id,index]))
+ const summaries=current.items.map(winterDraftSummary).sort((a,b)=>(programOrder.get(a.competitionId)??Infinity)-(programOrder.get(b.competitionId)??Infinity))
  const groups=Array.from(new Map(summaries.map(s=>[s.organizationId,{id:s.organizationId,name:s.organizationName}])).values()).sort(compareWinterOrganizations)
  const monitorUrl='/winter/monitor#'+channel
  const selectedModel=pick&&preview?.models.get(pick.competitionId)
@@ -140,12 +144,12 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
    })}
    <MeetingActionDialog entry={pick} rider={pick&&selectedModel?.getPlayer(pick.playerId)?.name} horse={pick&&selectedModel?.getHorse(pick.horseId)?.name} onClose={()=>setPick(undefined)} onChoose={mode=>{const comp=competitions.find(c=>c.id===pick?.competitionId);if(comp&&pick)begin(mode,comp,pick)}}/>
    <dialog ref={dialog} onCancel={()=>setEditor(undefined)} aria-label="打ち合わせ会の保留入力" className="m-auto max-h-[95dvh] w-[96vw] max-w-5xl overflow-y-auto rounded-xl bg-white p-4 backdrop:bg-black/40">
-    {editor&&data&&<><button className={button} onClick={()=>setEditor(undefined)}>入力を閉じる</button><WinterReceptionData data={data}>{editor.mode==='withdraw'?<LoadedWinterWithdraw data={data} scope="meeting" initialCompetition={winterMasterCompetition(editor.comp)} initialEntry={editor.entry} onClose={()=>setEditor(undefined)}/>:<LoadedWinterReception data={data} scope="meeting" mode={editor.mode} initialCompetition={winterMasterCompetition(editor.comp)} initialEntry={editor.entry} onClose={()=>setEditor(undefined)}/>}</WinterReceptionData></>}
+    {editor&&data&&<><button className={button} onClick={()=>setEditor(undefined)}>入力を閉じる</button> {editor.mode!=='withdraw'&&<section className="my-3"><button type="button" className={button} aria-expanded={showRoster} onClick={()=>setShowRoster(v=>!v)}>{showRoster?'人馬名簿を閉じる':'新しい選手・馬を登録'}</button>{showRoster&&<><p>名簿に登録した後、所属団体で参加チェックを保存すると、この入力欄で選べます。</p><SharedRosterManager session={session} onParticipantsSaved={onChanged}/></>}</section>}<WinterReceptionData data={data}>{editor.mode==='withdraw'?<LoadedWinterWithdraw data={data} scope="meeting" initialCompetition={winterMasterCompetition(editor.comp)} initialEntry={editor.entry} onClose={()=>setEditor(undefined)}/>:<LoadedWinterReception data={data} scope="meeting" mode={editor.mode} initialCompetition={winterMasterCompetition(editor.comp)} initialEntry={editor.entry} onClose={()=>setEditor(undefined)}/>}</WinterReceptionData></>}
    </dialog>
   </section>
   <section className="space-y-4 rounded-xl border-2 p-5"><h2 ref={section} tabIndex={-1} className="text-2xl font-bold">全競技の確認一覧</h2>
    <p>{summaries.length}件 ／ 出番順の変更 {Object.keys(work?.orders??{}).length}競技 ／ 料金合計 {summaries.reduce((n,s)=>n+s.total,0).toLocaleString('ja-JP')}円</p>
-   {groups.map(org=><details open key={org.id} className="rounded-lg border p-3"><summary className="font-bold">{org.name}</summary>{summaries.filter(s=>s.organizationId===org.id).map(s=><article key={s.id} className="border-t py-2"><p>{s.type}　{s.label}</p><p>{s.category} ／ {s.total.toLocaleString('ja-JP')}円{s.visitorName&&' ／ 担当：'+s.visitorName}</p><button className={button} disabled={locked} onClick={()=>remove(s.id)}>保留一覧から外す</button></article>)}</details>)}
+   {groups.map(org=><details open key={org.id} className="rounded-lg border p-3"><summary className="font-bold">{org.name}（{summaries.filter(s=>s.organizationId===org.id).length}件）</summary>{summaries.filter(s=>s.organizationId===org.id).map(s=><article key={s.id} className="border-t py-2"><p>{s.type}　{s.label}</p><p>{s.category} ／ {s.total.toLocaleString('ja-JP')}円{s.visitorName&&' ／ 担当：'+s.visitorName}</p><button className={button} disabled={locked} onClick={()=>remove(s.id)}>保留一覧から外す</button></article>)}</details>)}
    {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
    {current.attempted&&<p>確定結果の確認待ちです。同じ登録番号で再確認してください。</p>}
    {available===true&&<div className="flex flex-wrap gap-2"><button className={button} disabled={locked||!hasWork||work?.saved} onClick={()=>void operate('save')}>{work?.saved?'本部に下書き保存済み':'全競技をまとめて下書き保存'}</button><button className={button} disabled={locked} onClick={()=>void operate('load')}>本部の保存済み下書きを開く</button></div>}

@@ -29,6 +29,17 @@ for(const page of [draft.winterSettlementPrintHtml(linked),print.winterCheckoutP
  for(const value of ['OP競技料4,000円＋追加料3,000円','¥9,000','¥9,500','別途追加料金','¥500'])assert(page.includes(value))
  assert(!page.includes('内部記録')&&!page.includes('金額訂正合計'))
 }
+const {masterStatementWorkbook}=load('lib/settlement-document.ts')
+const {unzipSync,strFromU8}=require('fflate')
+for(const paper of [draft.winterSettlementDraft(linked),model.winterMasterSavedSettlement({...record,account:linked},'org')]){
+ const bytes=masterStatementWorkbook(paper)
+ const sheet=strFromU8(unzipSync(bytes)['xl/worksheets/sheet1.xml'])
+ for(const amount of [7000,2000,33500,9500])assert.ok(sheet.includes('<v>'+amount+'</v>'))
+ for(const hidden of ['OP後付け','変更料免除','内部記録','<script>'])assert.ok(!sheet.includes(hidden))
+ assert.ok(sheet.includes('OP競技料4,000円＋追加料3,000円'))
+ assert.match(sheet,/<f>SUM\(F\d+:F\d+\)<\/f><v>9000<\/v>/)
+ if(process.env.FHS_STATEMENT_QA)fs.writeFileSync(path.join(process.env.FHS_STATEMENT_QA,paper.draft?'draft.xlsx':'saved.xlsx'),bytes)
+}
 assert.equal(JSON.stringify(linked),original)
 const partial={...linked,adjustmentTotal:-2000,total:34000,remaining:10000,adjustments:[
  {...corrections[0],delta:-1500,statement_items:[{...corrections[0].statement_items[0],delta:-1500}]},...corrections.slice(1)]}

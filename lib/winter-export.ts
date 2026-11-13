@@ -1,6 +1,6 @@
 import {timetablePhase} from './master/timetable'
 import type { loadWinterData } from './winter-data'
-import {isMeetingWithdrawal,winterOfficialStarts} from './winter-confirmed-withdrawals'
+import {isConfirmedWithdrawal,winterOfficialStarts} from './winter-confirmed-withdrawals'
 import { assertWinterEvent, winterTimetableSection } from './winter-event'
 import { winterAffiliatedOrganizations, winterCompetitionLabel } from './winter-display-order'
 
@@ -30,8 +30,8 @@ export function exportWinterCsv(data: Data, kind: WinterExportKind) {
   const cancelled = timetablePhase(time)==='cancelled'
   const inspection = cancelled || winterTimetableSection(competition.competition_no)?.showInspection === false ? '' : time?.inspection_time ?? ''
   const date=new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',weekday:'short'}).format(new Date(competition.competition_date+'T00:00:00+09:00'))
-  const originals=data.entries.filter(e=>e.competition_id===competition.id&&!isMeetingWithdrawal(e)).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id))
-  const withdrawn=winterOfficialStarts(data.entries,competition.id).filter(isMeetingWithdrawal)
+  const originals=data.entries.filter(e=>e.competition_id===competition.id&&!isConfirmedWithdrawal(e)).sort((a,b)=>a.start_order-b.start_order||a.entry_id.localeCompare(b.entry_id))
+  const withdrawn=winterOfficialStarts(data.entries,competition.id).filter(isConfirmedWithdrawal)
   for(const entry of [...originals,...withdrawn]){
    const rider=riders.get(entry.rider_id),horse=horses.get(entry.horse_id)
    if(!rider||!horse)throw new Error('出番表の人馬を確認できません')

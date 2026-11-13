@@ -12,7 +12,7 @@ const queue={...batch.emptyWinterQueue(),items:[{type:'add',input:add},{type:'ch
 module.exports={queue,org,rider,horse,competition,entry,data:{eventId:ev.WINTER_EVENT_ID,organizations:[org],riders:[rider,change.target.rider],horses:[horse],competitions:[competition],entries:[entry,withdraw.entry]}}
 if(require.main===module)(async()=>{
  assert.equal(batch.validateWinterQueue(queue),queue)
- assert.throws(()=>batch.validateWinterQueue(queue,'meeting'),/お名前/)
+ assert.equal(batch.validateWinterQueue(queue,'meeting'),queue)
  assert.throws(()=>batch.winterBatchPayload(queue),/お名前/)
  assert.throws(()=>api.reviewWinterAdd(add),/担当者/)
  assert.throws(()=>batch.freezeWinterReception(queue,'  '),/お名前/)
@@ -45,5 +45,5 @@ if(require.main===module)(async()=>{
  const legacy={...frozen};delete legacy.visitorName
  assert.equal(batch.freezeWinterReception(legacy,'新しい名前'),legacy)
  mode='ok';await batch.submitWinterPublicReception(legacy);assert.equal(JSON.parse(bodies.at(-1)).visitorName,null)
- console.log('PASS: name deferred for all three types, final name binding, strict meeting/direct writes, old queues, immutable retries, public endpoint, uncertainty and receipt validation')
+ console.log('PASS: name deferred for all three types, final name binding, meeting input without attendant, direct write validation, old queues, immutable retries, public endpoint, uncertainty and receipt validation')
 })().catch(e=>{console.error(e);process.exitCode=1})

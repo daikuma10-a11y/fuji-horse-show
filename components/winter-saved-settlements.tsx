@@ -4,6 +4,7 @@ import type {AdminSession} from '@/lib/supabase-rest'
 import {loadWinterSavedSettlements} from '@/lib/winter-saved-settlements'
 import type {WinterSettlementRecord} from '@/lib/winter-checkout'
 import {winterMasterSavedSettlement} from '@/lib/winter-master-settlement'
+import {downloadMasterStatement} from '@/lib/settlement-document'
 import {MasterSettlementHistory} from '@/components/master/settlement-history'
 import type {MasterSavedSettlement} from '@/lib/master/self-settlement'
 import {masterCheckoutPrintHtml} from '@/lib/master/settlement-print'
@@ -27,5 +28,5 @@ export function WinterSavedSettlements({session,orgId,revision,onSession}:{sessi
   finally{lock.current=false;if(mounted.current)setPrinting(false)}
  }
  const rows=records.map(record=>winterMasterSavedSettlement(record,orgId))
- return <MasterSettlementHistory rows={rows} selected={selected} busy={loading} printing={printing} error={error} limitNotice={rows.length===20?'新しい順に20件を表示しています。':undefined} onReload={()=>{if(!lock.current)setRetry(x=>x+1)}} onSelect={row=>{if(!lock.current)setSelected(row)}} onClose={()=>{if(!lock.current)setSelected(null)}} onPrint={()=>void print()}/>
+ return <MasterSettlementHistory onExcel={downloadMasterStatement} rows={rows} selected={selected} busy={loading} printing={printing} error={error} limitNotice={rows.length===20?'新しい順に20件を表示しています。':undefined} onReload={()=>{if(!lock.current)setRetry(x=>x+1)}} onSelect={row=>{if(!lock.current)setSelected(row)}} onClose={()=>{if(!lock.current)setSelected(null)}} onPrint={()=>void print()}/>
 }
