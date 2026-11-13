@@ -6,7 +6,8 @@ export const EXCEL_RANGES: ExcelRange[] = ['1-10', '11-20', '21-30']
 const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 const unescapeXml = (value: string) => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
-export const entryValues = (entry: OfficialExcelEntry): (string | number)[] => [ /^(wd|withdrawn)$/i.test(entry.status) ? 'WD' : entry.is_op ? 'OP' : '', entry.start_order, entry.rider_name, entry.jef_member_no ?? '', entry.horse_name, entry.jef_registration_no ?? '', entry.organization_name ]
+export const isWithdrawn = (status: string) => /^(wd|withdrawn)$/i.test(status)
+export const entryValues = (entry: OfficialExcelEntry): (string | number)[] => [ isWithdrawn(entry.status) ? 'WD' : entry.is_op ? 'OP' : '', entry.start_order, entry.rider_name, entry.jef_member_no ?? '', entry.horse_name, entry.jef_registration_no ?? '', entry.organization_name ]
 
 function patchCells(xml: string, values: Map<string, string | number>, formulaCache: boolean) {
   const seen = new Set<string>()
