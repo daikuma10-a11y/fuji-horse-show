@@ -33,9 +33,9 @@ function check(date,ids,entryIds){
  const html=renderToStaticMarkup(starts)
  assert.deepEqual([...html.matchAll(/data-start-entry-id="([^"]+)"/g)].map(m=>m[1]),entryIds)
  if(entryIds.length)for(const name of ['選手','馬','所属','OP'])assert.ok(html.includes(name))
- assert.ok(!html.includes('data-start-reorderable'))
- assert.ok(renderToStaticMarkup(queue).includes('追加を保留入力'))
- const open=children(nodes.find(n=>n.type==='div'))[0]
+ assert.ok(html.includes('この競技に追加'));assert.ok(html.includes('変更・棄権'))
+ assert.ok(renderToStaticMarkup(queue).includes('全競技の確認一覧'))
+ const open=children(nodes.find(n=>n.type==='div'))[1]
  open.props.onClick();assert.equal(openDate,date)
  return selectors
 }

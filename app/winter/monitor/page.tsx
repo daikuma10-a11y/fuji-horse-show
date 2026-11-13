@@ -1,11 +1,18 @@
 "use client"
 import { useEffect,useState } from 'react'
+import {WinterMeetingDisplay} from '@/components/winter-meeting-display'
 import {useMonitorLink} from '@/components/monitor-link'
 import { WINTER_MONITOR_CHANNEL,WINTER_MONITOR_KEY,validateWinterMonitor,reconcileWinterMonitor,type WinterMonitorState } from '@/lib/winter-monitor'
 import {loadWinterData} from '@/lib/winter-data'
 import { WinterMonitorView } from '@/components/winter-monitor-view'
 import {subscribeWinterUpdates,loadRemoteWinterMonitor} from '@/lib/winter-live'
 export default function WinterMonitorPage(){
+ const [channel,setChannel]=useState<string|null>(null)
+ useEffect(()=>{const read=()=>setChannel(window.location.hash.slice(1));read();window.addEventListener('hashchange',read);return()=>window.removeEventListener('hashchange',read)},[])
+ if(channel===null)return null
+ return /^winter-meeting-[a-f0-9-]{36}$/.test(channel)?<WinterMeetingDisplay channel={channel}/>:<OfficialMonitor/>
+}
+function OfficialMonitor(){
  const[state,setState]=useState<WinterMonitorState|null>(null),[error,setError]=useState(''),[fullscreen,setFullscreen]=useState(false)
  const[liveStatus,setLiveStatus]=useState('')
  const [audienceFullscreen,setAudienceFullscreen]=useState(false)

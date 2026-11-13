@@ -1,4 +1,5 @@
 import {readDeviceRecord,writeDeviceRecord,listDeviceRecords,type DeviceRecord} from './master/device-reception-store'
+import {updateMeetingWork} from './winter-meeting'
 import {reviewWinterChange} from './winter-change'
 import {WINTER_EVENT_ID,WINTER_EVENT_NAME} from './winter-event'
 import {loadWinterData,type WinterEntryRow} from './winter-data'
@@ -135,5 +136,5 @@ export function matchesOfflineQuote(draft:WinterDraft,item:unknown,total:unknown
 }
 
 export function stageReceptionDraft(draft:WinterDraft,scope:'reception'|'meeting',data:WinterData&{offlinePreparedAt?:string}){
- stageWinterDraft(draft,scope,scope==='reception'?{context:draftContext(draft,data),snapshotAt:data.offlinePreparedAt}:undefined)
+ stageWinterDraft(draft,scope,scope==='reception'?{context:draftContext(draft,data),snapshotAt:data.offlinePreparedAt}:undefined,scope==='meeting'?(before,after)=>updateMeetingWork(data,before,after):undefined)
 }

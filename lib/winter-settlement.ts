@@ -84,10 +84,11 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  const payments=(ledger.payments??[]).filter(x=>x.organization_key===orgId)
  const reversed=new Set<string>()
  for(const row of payments){
-  if(amount(row.amount)===0||!['bank_transfer','cash_at_venue'].includes(row.payment_method)||!row.note.trim())throw new Error('追加分入金の履歴を確認できません')
+  if(!Number.isSafeInteger(row.amount)||row.amount===0||!['bank_transfer','cash_at_venue'].includes(row.payment_method)||!row.note.trim())throw new Error('追加分入金の履歴を確認できません')
   if(row.reverses_id){const original=payments.find(x=>x.id===row.reverses_id);if(!original||original.reverses_id||original.amount!==row.amount||original.payment_method!==row.payment_method||reversed.has(original.id))throw new Error('追加分入金の取消履歴を確認できません');reversed.add(original.id)}
  }
  const extraPaid=payments.reduce((sum,x)=>sum+(x.reverses_id?-x.amount:x.amount),0)
+ const refundTotal=payments.filter(x=>x.amount<0).reduce((sum,x)=>sum+(x.reverses_id?x.amount:-x.amount),0)
  const initialTotal=normalTotal+horseRegistration.total
  const adjustments=(ledger.adjustments??[]).filter(x=>x.organization_key===orgId).sort((a,b)=>a.sequence-b.sequence)
  let previousId:string|null=null,adjustmentTotal=0
@@ -95,16 +96,16 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  const total=initialTotal+extraTotal+adjustmentTotal
  if(total<0||!Number.isSafeInteger(adjustmentTotal))throw new Error('訂正後の請求額を確認できません')
  const remaining=total-advancePaid-extraPaid
- if(!Number.isSafeInteger(extraPaid)||extraPaid<0||!Number.isSafeInteger(total)||!Number.isSafeInteger(remaining))throw new Error('追加分入金の合計を確認できません')
+ if(!Number.isSafeInteger(extraPaid)||refundTotal<0||!Number.isSafeInteger(total)||!Number.isSafeInteger(remaining))throw new Error('追加分入金の合計を確認できません')
  const warnings:string[]=[]
  if(remaining<0)warnings.push('入金が登録済み料金合計を超えています。返金・充当を本部で確認してください。')
  if(requests.some(x=>x.status==='pending'))warnings.push('未反映の申請があります。反映後に再確認してください。')
  if(!advance&&initialTotal>0)warnings.push('事前入金は未確認です。')
- if(advancePaid>initialTotal)warnings.push('事前料金合計（競技料・馬匹登録料）を超える入金があります。返金・充当を確認してください。')
+ if(advancePaid-refundTotal>initialTotal&&remaining<0)warnings.push('事前料金合計（競技料・馬匹登録料）を超える入金があります。返金・充当を確認してください。')
  const covered=new Set([...ledger.initial.map(x=>x.id),...ledger.requests.filter(x=>x.status==='reflected').map(x=>x.entry_id).filter(Boolean)])
  const cancelledAdditions=new Set(ledger.requests.filter(x=>x.status==='cancelled'&&(x.request_type==='add'||x.request_type==='change'&&x.payload?.treatedAsWithdrawAdd)).map(x=>x.entry_id).filter(Boolean))
  if(data.entries.some(x=>data.riders.find(r=>r.id===x.rider_id)?.organization_id===orgId&&!covered.has(x.entry_id)&&!(['wd','withdrawn'].includes((x.status??'').toLowerCase())&&cancelledAdditions.has(x.entry_id))))warnings.push('料金履歴を確認できない出番があります。請求総額として使用しないでください。')
- return {organization:org,bankDetails:instruction?.bank_details?.trim()||WINTER_BANK_DETAILS,instruction,onsite,onsiteReversed,adjustments,adjustmentTotal,latestAdjustmentId:previousId,horseRegistration,initialTotal,total,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
+ return {organization:org,bankDetails:instruction?.bank_details?.trim()||WINTER_BANK_DETAILS,instruction,onsite,onsiteReversed,adjustments,adjustmentTotal,latestAdjustmentId:previousId,horseRegistration,initialTotal,total,normalTotal,extraTotal,advancePaid,advance,remaining,extraPaid,refundTotal,payments,reversed,lines,warnings,pending:requests.filter(x=>x.status==='pending').length}
 }
 /** Absolute advance amount, with optimistic locking and read-back. This is not a receipt. */
 export async function saveWinterAdvance(session:AdminSession,orgId:string,paid:number,note:string,expected:WinterAdvance|null){

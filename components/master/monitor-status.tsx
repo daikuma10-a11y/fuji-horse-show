@@ -41,7 +41,7 @@ export function MonitorStatus({ token, displayPath }: { token: string | null; di
  }, [token])
  if (!token) return null
  const connected = !!report && now - report.receivedAt < 8000
- const previewUrl=displayPath ? displayPath+'?control=1' : `/${token.startsWith('fhs-startlist-')?'startlist-display':'meeting-display'}?control=1#${token}`
+ const previewUrl=displayPath ? displayPath.split('#')[0]+'?control=1'+(displayPath.includes('#')?'#'+displayPath.split('#')[1]:'') : `/${token.startsWith('fhs-startlist-')?'startlist-display':'meeting-display'}?control=1#${token}`
  const width=report?.width ?? 1280, height=report?.height ?? 720
  const previewAvailable=displayPath ? !collapsed : connected && report?.ready
  return <aside ref={panel} className={`print-hide fixed z-40 overflow-auto rounded-xl border-2 p-4 shadow-xl ${connected && report.ready && !report.hidden ? 'border-blue-500 bg-blue-50 text-blue-950' : 'border-amber-500 bg-amber-50 text-amber-950'}`} style={{width:436,maxWidth:'calc(100vw - 24px)',maxHeight:'calc(100dvh - 24px)',...(position?{left:position.left,top:position.top}:{right:12,bottom:12})}} aria-label="モニターの表示状況">
