@@ -10,8 +10,8 @@ import {loadWinterPickerReadings} from '@/lib/shared-roster'
 import {winterAffiliatedOrganizations,winterPickerOrder} from '@/lib/winter-display-order'
 import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
-import {MonitorStatus} from '@/components/master/monitor-status'
-import {WINTER_MONITOR_CHANNEL} from '@/lib/winter-monitor'
+
+
 import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
 import {WinterExportPanel} from '@/components/winter-export-panel'
 import {subscribeWinterUpdates} from '@/lib/winter-live'
@@ -115,7 +115,7 @@ export function WinterAdminDashboard(){
  overview={<WinterRegistrationOverview data={data} session={session} onSession={updateSession} onChanged={refresh} revision={revision} active={tab==='roster'&&registrationSection==='overview'} loading={loading} error={dataError}/>}
  ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">CSV・TSVからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVは、これまでの取込準備画面を使えます。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
- t.id==='meeting'?<>{tab==='meeting'&&<MonitorStatus token={WINTER_MONITOR_CHANNEL} displayPath="/winter/monitor"/>}<WinterMeetingPanel data={data} dataError={dataError} session={session} onSession={updateSession} onChanged={refresh} onStartlist={date=>{setMeetingStartDay({date});select('startlist')}}/></>:
+ t.id==='meeting'?<><WinterMeetingPanel active={tab==='meeting'} data={data} dataError={dataError} session={session} onSession={updateSession} onChanged={refresh} onStartlist={date=>{setMeetingStartDay({date});select('startlist')}}/></>:
  t.id==='stable'?<WinterStableInformation data={data} loading={loading} error={dataError} session={session} onSession={updateSession} active={tab==='stable'} revision={revision}/>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='timetable'?<WinterTimetable data={data} session={session} onSession={updateSession} onChanged={refresh}/>:

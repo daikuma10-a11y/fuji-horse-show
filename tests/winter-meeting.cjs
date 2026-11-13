@@ -7,5 +7,18 @@ const storage={data:new Map(),getItem(k){return this.data.get(k)??null},setItem(
 batch.writeWinterQueue(storage,one);batch.writeWinterQueue(storage,two,'meeting');assert.deepEqual(batch.readWinterQueue(storage),one);assert.deepEqual(batch.readWinterQueue(storage,'meeting'),two);assert.throws(()=>batch.validateWinterQueue(two),/団体/)
 assert.deepEqual(monitor.winterOrderAfterRefresh(['a'],JSON.stringify(['a']),['a','b']),['a','b']);assert.equal(monitor.winterOrderAfterRefresh(['b','a'],JSON.stringify(['a','b']),['a','b','c']),null,'New entries must not overwrite an unsaved reorder');
 const body=batch.winterBatchPayload(two,'meeting');assert.equal(body.p_items[0].expected_total,c.fee+3000);assert.equal(body.p_expected_total,2*(c.fee+3000));assert(!('expected_total' in batch.winterBatchPayload(one).p_items[0]))
+const meeting=require(path.resolve('lib/winter-meeting.ts'))
+const staged=draft(1),baseRow={entry_id:id(77),event_id,competition_id:id(50),competition_no:'1',start_order:1,status:'active',rider_id:staged.input.rider.id,horse_id:staged.input.horse.id,organization_id:staged.input.organization.id,organization_name:'団体',is_op:false}
+const fixture={eventId:event_id,competitions:[{...staged.input.competition,competition_date:'2026-11-14'}],entries:[baseRow],riders:[staged.input.rider],horses:[staged.input.horse],organizations:[staged.input.organization],timetable:[]}
+const local=meeting.updateMeetingWork(fixture,batch.emptyWinterQueue(),one)
+assert.equal(local.meeting.baselines[id(50)][0].entryId,baseRow.entry_id)
+local.meeting.orders[id(50)]=['request:'+staged.input.id,baseRow.entry_id]
+const content=meeting.savedMeetingContent(fixture,local)
+assert.deepEqual(content.groups[0].order,local.meeting.orders[id(50)])
+const restored=meeting.restoreMeeting({id:local.meeting.id,revision:1,status:'draft',content})
+assert.ok(restored.meeting.saved);assert.deepEqual(restored.items,one.items)
+assert.throws(()=>meeting.savedMeetingContent({...fixture,entries:[{...baseRow,start_order:2}]},restored),/正式出番表/)
+assert.deepEqual(meeting.meetingDisplay(fixture,'2026-11-14',local,meeting.meetingRows(fixture,local)).rows.map(r=>r.id),content.groups[0].order)
+assert.deepEqual(meeting.updateMeetingWork(fixture,local,{...local,items:[]}).meeting.orders[id(50)],[baseRow.entry_id])
 let requests=[],mode='ok';global.fetch=async(url,args)=>{requests.push({url,args});const p=JSON.parse(args.body);if(mode==='lost')throw Error('network');if(mode==='denied')return{ok:false,status:400,json:async()=>({message:'料金が変更'})};return{ok:true,json:async()=>({ids:mode==='wrong'?[id(999)]:two.items.map(x=>x.input.id),total:p.p_expected_total})}}
 ;(async()=>{await batch.submitWinterBatch(two,'dummy','meeting');assert(requests[0].url.endsWith('confirm_winter_meeting_batch'));assert(requests[0].args.signal);mode='lost';await assert.rejects(batch.submitWinterBatch(two,'dummy','meeting'));mode='ok';await batch.submitWinterBatch(two,'dummy','meeting');assert.equal(requests[0].args.body,requests[2].args.body);mode='denied';await assert.rejects(batch.submitWinterBatch(two,'dummy','meeting'),e=>e instanceof batch.WinterBatchRejected);mode='wrong';await assert.rejects(batch.submitWinterBatch(two,'dummy','meeting'),/確定結果/);assert.throws(()=>batch.validateWinterQueue({...two,eventId:'autumn'},'meeting'),/Winter/);console.log('PASS: reception/meeting storage isolation, multi-club review, per-item prices, scoped atomic RPC, stable retry identity, timeout and definitive rejection, receipt validation, other-event rejection')})().catch(e=>{console.error(e);process.exitCode=1})

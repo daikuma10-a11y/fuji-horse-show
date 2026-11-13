@@ -1,6 +1,6 @@
 import type {winterSettlementAccount} from './winter-settlement'
 import {assertWinterEvent} from './winter-event'
-export type WinterCheckoutAccount=Omit<ReturnType<typeof winterSettlementAccount>,'bankDetails'>&{bankDetails?:string}
+export type WinterCheckoutAccount=Omit<ReturnType<typeof winterSettlementAccount>,'bankDetails'|'refundTotal'>&{bankDetails?:string;refundTotal?:number}
 /** Older saved statements retain their original destination, never today's config. */
 export function winterCheckoutBankDetails(account:WinterCheckoutAccount):string{
  return (account.bankDetails??account.instruction?.bank_details??'').trim()
@@ -9,6 +9,7 @@ export type WinterSettlementRecord={id:string;event_id:string;organization_key:s
 export function validateWinterCheckoutAccount(value:unknown):WinterCheckoutAccount{
  if(!value||typeof value!=='object')throw new Error('精算内容を確認できません')
  const a=value as WinterCheckoutAccount
+ if(a.refundTotal!==undefined&&(!Number.isSafeInteger(a.refundTotal)||a.refundTotal<0))throw new Error('返金額を確認できません')
  if(a.bankDetails!==undefined&&typeof a.bankDetails!=='string')throw new Error('振込先の形式を確認できません')
  assertWinterEvent(a.organization?.event_id)
  if(!a.organization?.id||!a.organization.name||!a.horseRegistration||!Array.isArray(a.lines)||!Array.isArray(a.warnings)||!Array.isArray(a.adjustments)||[a.normalTotal,a.horseRegistration.count,a.horseRegistration.unitFee,a.horseRegistration.total,a.initialTotal,a.extraTotal,a.adjustmentTotal,a.total,a.advancePaid,a.extraPaid,a.remaining].some(x=>!Number.isSafeInteger(x)))throw new Error('精算金額の形式を確認できません')

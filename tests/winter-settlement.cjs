@@ -28,6 +28,14 @@ assert.equal(api.winterSettlementAccount(multiData,multiLedger,org).horseRegistr
 assert.throws(()=>api.winterSettlementAccount(multiData,{...multiLedger,initial:[{...initial,inputs:{...initial.inputs,billingOrganizationId:'unknown'}}]},org),/団体/)
 const payment={id:'pay',event_id:ev,organization_key:org,amount:10000,payment_method:'cash_at_venue',note:'確認済み',reverses_id:null}
 account=api.winterSettlementAccount(data,{...ledger,advances:[advance],payments:[payment]},org);assert.equal(account.extraPaid,10000);assert.equal(account.remaining,5000)
+const overpaid={...advance,paid_amount:25000}
+const cashRefund={...payment,id:'refund',amount:-3000}
+let refunded=api.winterSettlementAccount(data,{...ledger,advances:[overpaid],payments:[cashRefund]},org)
+assert.equal(refunded.advancePaid,25000);assert.equal(refunded.refundTotal,3000);assert.equal(refunded.remaining,-2000)
+refunded=api.winterSettlementAccount(data,{...ledger,advances:[overpaid],payments:[cashRefund,{...cashRefund,id:'refund2',amount:-2000}]},org)
+assert.equal(refunded.remaining,0)
+refunded=api.winterSettlementAccount(data,{...ledger,advances:[overpaid],payments:[cashRefund,{...cashRefund,id:'undo-refund',reverses_id:'refund'}]},org)
+assert.equal(refunded.remaining,-5000);assert.equal(refunded.refundTotal,0)
 const reversal={...payment,id:'rev',reverses_id:'pay'}
 account=api.winterSettlementAccount(data,{...ledger,advances:[advance],payments:[payment,reversal]},org);assert.equal(account.extraPaid,0);assert.equal(account.remaining,15000)
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,payments:[reversal]},org),/取消履歴/)

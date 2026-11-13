@@ -11,11 +11,11 @@ import type { MasterFormCompetition } from "@/lib/master/reception-form"
 
 type Step = "date" | "competition" | "entry" | "confirm"
 
-export function MasterWithdrawForm({ adapter }: { adapter: MasterWithdrawAdapter }) {
+export function MasterWithdrawForm({adapter,initialCompetition,initialEntry}: {adapter:MasterWithdrawAdapter;initialCompetition?:MasterFormCompetition;initialEntry?:StartEntry}) {
   const stageLock=useRef(false)
   const [submitting,setSubmitting]=useState(false),[submitError,setSubmitError]=useState("")
   const { getPlayer, getHorse, getOrg, stageWithdraw, DateSelect, CompetitionList, StartList } = adapter
-  const [step,setStep]=useState<Step>("date"); const [date,setDate]=useState<string|null>(null); const [competition,setCompetition]=useState<MasterFormCompetition|null>(null); const [entry,setEntry]=useState<StartEntry|null>(null)
+  const [step,setStep]=useState<Step>(initialCompetition?"entry":"date"); const [date,setDate]=useState<string|null>(initialCompetition?.date??null); const [competition,setCompetition]=useState<MasterFormCompetition|null>(initialCompetition??null); const [entry,setEntry]=useState<StartEntry|null>(initialEntry??null)
   const subtitle="棄権のお申し込み"
   async function confirmWithdraw(){if(stageLock.current||submitting||!entry||!competition)return;stageLock.current=true;setSubmitting(true);setSubmitError("");try{await stageWithdraw({entryId:entry.id,competitionId:competition.id,playerId:entry.playerId,horseId:entry.horseId,organizationId:entry.organizationId});adapter.onStaged()}catch(error){setSubmitError(error instanceof Error?error.message:"受付一覧に追加できませんでした")}finally{stageLock.current=false;setSubmitting(false)}}
   if(step==="date")return <StepShell homeHref={adapter.homeHref} notice={adapter.notice} subtitle={subtitle} title="大会日を選んでください" onBack={adapter.onExit} backLabel="やめる"><DateSelect onSelect={d=>{setDate(d);setCompetition(null);setEntry(null);setStep("competition")}}/></StepShell>

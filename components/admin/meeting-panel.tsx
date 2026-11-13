@@ -1,4 +1,5 @@
 "use client"
+import {MeetingActionDialog} from "@/components/master/meeting-action-dialog"
 
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "@/lib/store"
@@ -25,14 +26,7 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
   const [selectedEntry, setSelectedEntry] = useState<StartEntry>()
   const [selectedAction, setSelectedAction] = useState<"change" | "withdraw">("change")
   const [actionEntry, setActionEntry] = useState<StartEntry>()
-  const actionDialog = useRef<HTMLDialogElement>(null)
   const inputSection = useRef<HTMLFieldSetElement>(null)
-  useEffect(() => {
-    if (!actionEntry) return
-    const dialog = actionDialog.current
-    if (dialog && !dialog.open) dialog.showModal()
-    return () => { if (dialog?.open) dialog.close() }
-  }, [actionEntry])
   function chooseAction(action: "change" | "withdraw") {
     if (!actionEntry) return
     setSelectedEntry({ ...actionEntry }); setSelectedAction(action); setActionEntry(undefined)
@@ -191,13 +185,7 @@ export function MeetingPanel({ session }: { session: AdminSession }) {
         setActionEntry(content.baseEntries.find(original => original.id === row.id))
       }} />
     </section>
-    <dialog ref={actionDialog} onCancel={() => setActionEntry(undefined)} aria-labelledby="meeting-action-title" className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border-2 border-primary bg-card p-5 text-foreground shadow-xl backdrop:bg-black/40">
-      <h3 id="meeting-action-title" className="text-xl font-bold">変更・棄権する人馬</h3>
-      <p className="mt-3 font-bold">{actionEntry?.order}番　{actionEntry && getPlayer(actionEntry.playerId)?.name} ／ {actionEntry && getHorse(actionEntry.horseId)?.name}</p>
-      <p className="mt-2 text-sm">内容は下書きに登録し、最終確認後に反映します。</p>
-      <div className="mt-4 grid grid-cols-2 gap-3"><button type="button" onClick={() => chooseAction("change")} className="min-h-14 rounded-xl bg-violet-700 px-4 font-bold text-white">変更する</button><button type="button" onClick={() => chooseAction("withdraw")} className="min-h-14 rounded-xl bg-destructive px-4 font-bold text-white">棄権する</button></div>
-      <button type="button" onClick={() => setActionEntry(undefined)} className="mt-3 min-h-12 w-full rounded-xl border-2 font-bold">閉じる</button>
-    </dialog>
+    <MeetingActionDialog entry={actionEntry} rider={actionEntry && getPlayer(actionEntry.playerId)?.name} horse={actionEntry && getHorse(actionEntry.horseId)?.name} onClose={()=>setActionEntry(undefined)} onChoose={chooseAction}/>
     <fieldset ref={inputSection} disabled={busy} className="min-w-0 scroll-mt-4"><OnSiteReception session={session} meeting={{ competitionId, selectedEntry, selectedAction, staged: content.staged, onStage: stage, disabled: busy }} /></fieldset>
     <section className="rounded-2xl border-2 border-border bg-card p-4">
       <h3 className="text-xl font-bold">全競技の確認一覧（{content.staged.length}件）</h3>
