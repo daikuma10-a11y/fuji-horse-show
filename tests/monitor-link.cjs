@@ -21,3 +21,15 @@ const report={kind:'monitor-status',competition:'第5競技',pending:false,fulls
 assert.equal(helper.isMonitorReport(report),true);assert.equal(helper.isMonitorReport({...report,width:Infinity}),false)
 assert.equal(helper.isMonitorReport({...report,fontSize:100}),false)
 external.close();replica.close();assert.ok(channels.every(c=>c.closed));console.log('PASS: two-way monitor scroll, font control, status validation, loop prevention and cleanup')
+
+const winterExternal=make(false),winterPreview=make(true)
+winterExternal.window.location.hash='';winterPreview.window.location.hash=''
+const winterLink=(c,extra)=>within(c,()=>load('components/monitor-link.tsx',{'react':c.react,'@/lib/monitor-link':helper}).useMonitorLink({channelName:'winter-fixture',competition:'日別',ready:true,pending:false,...extra}))
+winterLink(winterExternal,{});winterExternal.document.fullscreenElement={}
+let seen
+winterLink(winterPreview,{onAudienceReport:report=>{seen=report}})
+assert.ok(seen.ready && seen.fullscreen,'winter preview immediately requests external status without a hash')
+within(winterPreview,()=>winterPreview.window.scrollTo({left:0,top:360}))
+assert.equal(winterExternal.window.scrollY,360)
+winterExternal.close();winterPreview.close()
+console.log('PASS: Winter daily monitor handshake, fullscreen and manual scroll')

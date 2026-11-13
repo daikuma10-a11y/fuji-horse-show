@@ -10,7 +10,7 @@ import type { StartEntry } from "@/lib/types"
 import { StartList } from "@/components/start-list"
 import { monitorRows, type MeetingMonitorSnapshot } from "@/lib/meeting-monitor"
 import { OnSiteReception } from "./on-site-reception"
-import { MonitorStatus } from "./monitor-status"
+import { MonitorStatus } from "@/components/master/monitor-status"
 
 const RECOVERY_KEY = "fhs-autumn-meeting-work-v1"
 const clean = (content: MeetingContent): MeetingContent => ({ baseEntries: content.baseEntries, baseOfficial: content.baseOfficial, staged: content.staged, orders: content.orders })

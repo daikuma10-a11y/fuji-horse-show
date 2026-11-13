@@ -3,7 +3,7 @@ import {loadWinterRosterIdentities,type WinterRosterIdentity} from '@/lib/winter
 import {compareWinterOrganizations,winterCompetitionLabel} from "@/lib/winter-display-order"
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
-import {publishWinterMonitor,validateWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderSnapshot,type WinterMonitorState,type WinterMonitorCompetition} from '@/lib/winter-monitor'
+import {WINTER_MONITOR_CHANNEL,publishWinterMonitor,validateWinterMonitor,moveWinterEntry,saveWinterOrder,winterOrderSnapshot,type WinterMonitorState,type WinterMonitorCompetition} from '@/lib/winter-monitor'
 import {MasterStartSelectors,MasterStartLegend,MasterOrderStatus,MasterFloatingOrderSave} from './master/start-list-controls'
 import {masterStartViewClass} from '@/lib/master/start-list'
 import {MasterStartRows} from './master/start-list-rows'
@@ -15,16 +15,16 @@ import type {ReadingList} from '@/lib/master/reading-list'
 import {MasterReadingList} from './master/reading-list'
 import {usePrintDocument} from './master/use-print-document'
 import {exportWinterCsv} from '@/lib/winter-export'
-import {WinterMonitorView} from './winter-monitor-view'
+import {MonitorStatus} from './master/monitor-status'
 import {WinterTimetableEditor} from './winter-timetable-editor'
 import {MasterCompetitionTime} from './master/timetable'
 import {loadWinterRequests,winterRpc,type WinterRequestRow} from '@/lib/winter-reception'
 import {loadWinterData} from '@/lib/winter-data'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
 const button='min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50'
-export function WinterStartList({data,session,onSession,onChanged,meetingDay}:{meetingDay?:{date:string}|null;data:Data;session:AdminSession;onSession:(v:AdminSession)=>void;onChanged:()=>void}){
+export function WinterStartList({data,session,onSession,onChanged,meetingDay,active=true}:{active?:boolean;meetingDay?:{date:string}|null;data:Data;session:AdminSession;onSession:(v:AdminSession)=>void;onChanged:()=>void}){
  const[compId,setCompId]=useState(''),[page,setPage]=useState(0),[error,setError]=useState(''),[saved,setSaved]=useState<{id:string;at:string}|null>(null),[busy,setBusy]=useState(false),[requests,setRequests]=useState<WinterRequestRow[]>([])
- const[position,setPosition]=useState<{x:number;y:number}|null>(null),drag=useRef<{x:number;y:number;left:number;top:number}|null>(null),lock=useRef(false)
+ const lock=useRef(false)
  const[remoteStatus,setRemoteStatus]=useState(''),[resend,setResend]=useState(0),remotePending=useRef<WinterMonitorState|null>(null),remoteRunning=useRef(false),alive=useRef(true),latestSession=useRef(session)
  latestSession.current=session
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;remotePending.current=null}},[])
@@ -156,7 +156,8 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay}:{m
  return <div className={`${masterStartViewClass(wideView)}${printScope==='readings'?' reading-list-print-root':''}`}>
  {error&&<p role="alert" className="print-hide text-destructive">{error}</p>}
  {dayPrinter.error&&<p className="print-hide text-destructive" role="alert">{dayPrinter.error}</p>}
- <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" className={button} disabled={readingBusy} onClick={()=>void prepareReadings()}>{readingBusy?'フリガナを読み込み中…':'人馬のフリガナ一覧'}</button><button type="button" className={button} disabled={busy||excelBusy} onClick={()=>void exportExcel()}>{excelBusy?'Excelを作成中…':'この日の出番表・成績表をExcelに保存'}</button><button className={button} onClick={exportCsv}>出番表を出力（CSV）</button><a className={button} href="/winter/monitor" onClick={()=>{if(!competition)setDailyMonitor(true)}} target="_blank" rel="noopener">モニター表示</a><button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary" disabled={busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts()}>この日の出番表を印刷</button>{competition&&<button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50" disabled={dirty||busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts(competition.id)}>この競技だけを印刷</button>}</div>
+ <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" className={button} disabled={readingBusy} onClick={()=>void prepareReadings()}>{readingBusy?'フリガナを読み込み中…':'人馬のフリガナ一覧'}</button><button type="button" className={button} disabled={busy||excelBusy} onClick={()=>void exportExcel()}>{excelBusy?'Excelを作成中…':'この日の出番表・成績表をExcelに保存'}</button><button className={button} onClick={exportCsv}>出番表を出力（CSV）</button><a className={button} href="/winter/monitor" onClick={()=>{if(!competition)setDailyMonitor(true)}} target="fhs-winter-startlist-monitor">モニター表示</a><button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary" disabled={busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts()}>この日の出番表を印刷</button>{competition&&<button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50" disabled={dirty||busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts(competition.id)}>この競技だけを印刷</button>}</div>
+ {active&&<MonitorStatus token={WINTER_MONITOR_CHANNEL} displayPath="/winter/monitor"/>}
  {readingOpen&&<section className="print-hide rounded-xl border-2 border-primary bg-card p-4" aria-label="人馬のフリガナ一覧">
   <div className="mb-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={readingBusy||!readingList} onClick={printReadings}>フリガナ一覧を印刷（A4）</button><button type="button" className="min-h-12 rounded-lg border-2 px-4 font-bold" onClick={()=>setReadingOpen(false)}>一覧を閉じる</button></div>
   {readingBusy?<p role="status">登録済みのフリガナを読み込んでいます…</p>:readingError?<div role="alert"><p className="font-bold text-destructive">{readingError}</p><button type="button" className={button} onClick={()=>void prepareReadings()}>再読み込み</button></div>:readingList?<MasterReadingList compareClubs={compareWinterOrganizations} list={readingList} eventName={WINTER_EVENT_NAME}/>:<p>出番表が更新されました。上の「人馬のフリガナ一覧」を押して再読み込みしてください。</p>}
@@ -166,7 +167,8 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay}:{m
  <MasterStartSelectors dates={WINTER_DATES.map(value=>({value,label:dateLabel(value)}))} date={date} competitions={comps.map(c=>({id:c.id,number:c.competition_no,name:c.name,official:c.official}))} selectedId={compId} wide={wideView} busy={busy} jump onDate={selectDay} onCompetition={selectCompetition}/>
  <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
   <span>{dailyMonitor ? `モニター表示：${dateLabel(date)}の全競技` : competition ? `モニター表示：${winterCompetitionLabel(competition)}` : '日付を押すと、その日の全競技をモニターに表示します。'}</span>
-  {dailyMonitor&&<><span>{remoteStatus}</span><button type="button" className="rounded border px-3 py-1" onClick={()=>setResend(v=>v+1)}>モニターに再送</button></>}
+  {monitor&&<><span>{remoteStatus}</span><button type="button" className="rounded border px-3 py-1" onClick={()=>setResend(v=>v+1)}>モニターに再送</button></>}
+  {!dailyMonitor&&competition&&ids.length>30&&<><button className={button} disabled={page===0} onClick={()=>setPage(v=>v-1)}>前のページ</button><button className={button} disabled={(page+1)*30>=ids.length} onClick={()=>setPage(v=>v+1)}>次のページ</button></>}
  </div>
  <MasterStartLegend/>
  {identityStatus&&<p role="status" className="mb-2 text-sm">{identityStatus}</p>}
@@ -181,8 +183,8 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay}:{m
      {(active||draft)&&<MasterOrderStatus wide={wideView} dirty={!!draft} stale={stale} saving={busy} error="" savedLabel={saved?.id===c.id?new Date(saved.at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):undefined} onDiscard={()=>discard(c.id)} onSave={()=>void save(c.id)}/>}
      <MasterStartRows model={current.model} competitionId={c.id} readOnly showAdminChanges adminReorder={!busy&&!stale} reorderSaving={busy||stale} compact dense orderedIds={draft?.ids} onReorder={(from,to)=>move(c.id,from,to)} riderKeys={riderKeys} horseKeys={horseKeys}/>
      {active&&draft&&<MasterFloatingOrderSave saving={busy} stale={stale} onSave={()=>void save(c.id)}/>}
-     {active&&competition&&<> <details className="print-hide mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-bold">モニター小窓・時間設定</summary>{!dailyMonitor&&<><p role="status" className="my-2 text-sm">{remoteStatus}</p><button className={button} onClick={()=>setResend(v=>v+1)}>モニターに再送</button></>}<WinterTimetableEditor key={competition.id} competitionId={competition.id} showInspection={showInspection} initial={timetable??null} session={session} onSession={onSession} onChanged={onChanged}/>
- {monitor&&<div className={position?'fixed z-40 w-[400px] max-w-[90vw] overflow-hidden rounded-xl border-2 border-blue-800 bg-white shadow-xl':'overflow-hidden rounded-xl border-2 border-blue-800'} style={position?{left:position.x,top:position.y}:undefined}><div className="flex touch-none items-center justify-between bg-blue-800 p-2 text-white" onPointerDown={e=>{if(!position||e.target!==e.currentTarget)return;drag.current={x:e.clientX,y:e.clientY,left:position.x,top:position.y};e.currentTarget.setPointerCapture(e.pointerId)}} onPointerMove={e=>{if(drag.current){const d=drag.current;setPosition({x:Math.max(0,Math.min(window.innerWidth-100,d.left+e.clientX-d.x)),y:Math.max(0,Math.min(window.innerHeight-60,d.top+e.clientY-d.y))})}}} onPointerUp={()=>{drag.current=null}} onPointerCancel={()=>{drag.current=null}}>表示プレビュー（ここを掴んで移動）<button onClick={()=>setPosition(position?null:{x:Math.max(0,window.innerWidth-430),y:100})}>{position?'元に戻す':'移動する'}</button></div><div className="max-h-[45vh] overflow-auto"><WinterMonitorView state={monitor} compact/></div>{!dailyMonitor&&<div className="flex justify-between p-2"><button className={button} disabled={page===0} onClick={()=>setPage(v=>v-1)}>前のページ</button><button className={button} disabled={(page+1)*30>=ids.length} onClick={()=>setPage(v=>v+1)}>次のページ</button></div>}</div>}
+     {active&&competition&&<> <details className="print-hide mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-bold">競技の時間設定</summary><WinterTimetableEditor key={competition.id} competitionId={competition.id} showInspection={showInspection} initial={timetable??null} session={session} onSession={onSession} onChanged={onChanged}/>
+
  </details></>}
    </MasterStartDaySection>
  })}

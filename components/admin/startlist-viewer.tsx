@@ -11,7 +11,7 @@ import { OfficialBadge } from "@/components/official-badge"
 import { ADMIN_SESSION_KEY, refreshAdminSession, reorderEntries, type AdminSession } from "@/lib/supabase-rest"
 import type { StartListPreview } from "@/lib/startlist-preview"
 import type { CompetitionDate } from "@/lib/types"
-import { MonitorStatus } from "./monitor-status"
+import { MonitorStatus } from "@/components/master/monitor-status"
 
 const SAVED_ORDERS_KEY = "fhs-confirmed-start-orders-v1"
 type DraftOrder = { ids: string[]; base: string[] }

@@ -5,6 +5,7 @@ export type WinterMonitorRow={id:string;number:number;rider:string;horse:string;
 export type WinterMonitorCompetition={competitionId:string;competitionNo:string;competitionName:string;date:string;inspectionTime?:string|null;startTime?:string|null;timePhase?:'provisional'|'final';rows:WinterMonitorRow[];page:number;draft:boolean}
 // The first competition stays at the top level for existing monitor clients and the publishing RPC.
 export type WinterMonitorState = WinterMonitorCompetition & {version:1;eventId:string;updatedAt:string;followingCompetitions?:WinterMonitorCompetition[]}
+export const WINTER_MONITOR_CHANNEL = `fhs-winter-display-${WINTER_EVENT_ID}`
 export const WINTER_MONITOR_KEY=`fhs:winter:${WINTER_EVENT_ID}:monitor:v1`
 export function winterOrderSnapshot(entries:WinterEntryRow[]){return [...entries].sort((a,b)=>a.entry_id.localeCompare(b.entry_id)).map(row=>({entryId:row.entry_id,startOrder:row.start_order,riderId:row.rider_id,horseId:row.horse_id,isOp:!!row.is_op}))}
 export function moveWinterEntry(ids:string[],from:string,to:string){const a=ids.indexOf(from),b=ids.indexOf(to);if(a<0||b<0)throw new Error('移動する人馬を確認してください');const next=[...ids];next.splice(a,1);next.splice(b,0,from);return next}
