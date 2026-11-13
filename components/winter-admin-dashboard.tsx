@@ -10,6 +10,8 @@ import {loadWinterPickerReadings} from '@/lib/shared-roster'
 import {winterAffiliatedOrganizations,winterPickerOrder} from '@/lib/winter-display-order'
 import {SharedRosterManager} from '@/components/shared-roster-manager'
 import {WinterMasterRegistration} from '@/components/winter-master-registration'
+import {MonitorStatus} from '@/components/master/monitor-status'
+import {WINTER_MONITOR_CHANNEL} from '@/lib/winter-monitor'
 import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
 import {WinterExportPanel} from '@/components/winter-export-panel'
 import {subscribeWinterUpdates} from '@/lib/winter-live'
@@ -113,11 +115,11 @@ export function WinterAdminDashboard(){
  overview={<WinterRegistrationOverview data={data} session={session} onSession={updateSession} onChanged={refresh} revision={revision} active={tab==='roster'&&registrationSection==='overview'} loading={loading} error={dataError}/>}
  ><div className="space-y-3 rounded-xl border-2 p-4"><h3 className="text-xl font-bold">CSV・TSVからの取込準備</h3><p className="text-lg">指定の見出しに合わせたCSV・TSVは、これまでの取込準備画面を使えます。</p><Link href="/winter/prepare" className={button}>CSV・TSVの取込準備を開く</Link></div></MasterPreRegistration>:
  t.id==='settlement'?(data?<WinterSettlementPanel data={data} session={session} revision={revision} onSession={updateSession} onChanged={refresh}/>:<p role="status">Winterのデータを読み込んでいます…</p>):
- t.id==='meeting'?<WinterMeetingPanel data={data} dataError={dataError} session={session} onSession={updateSession} onChanged={refresh} onStartlist={date=>{setMeetingStartDay({date});select('startlist')}}/>:
+ t.id==='meeting'?<>{tab==='meeting'&&<MonitorStatus token={WINTER_MONITOR_CHANNEL} displayPath="/winter/monitor"/>}<WinterMeetingPanel data={data} dataError={dataError} session={session} onSession={updateSession} onChanged={refresh} onStartlist={date=>{setMeetingStartDay({date});select('startlist')}}/></>:
  t.id==='stable'?<WinterStableInformation data={data} loading={loading} error={dataError} session={session} onSession={updateSession} active={tab==='stable'} revision={revision}/>:
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='timetable'?<WinterTimetable data={data} session={session} onSession={updateSession} onChanged={refresh}/>:
- t.id==='startlist'?<WinterStartList meetingDay={meetingStartDay} data={data} session={session} onSession={updateSession} onChanged={refresh}/>:
+ t.id==='startlist'?<WinterStartList active={tab==='startlist'} meetingDay={meetingStartDay} data={data} session={session} onSession={updateSession} onChanged={refresh}/>:
  <><h2 className="text-2xl font-bold">事後登録</h2><div className="flex flex-wrap gap-3"><Link className={button} href="/winter/add">追加受付</Link><Link className={button} href="/winter/change">変更受付</Link></div><p>追加・変更は受付画面で入力し、未確定一覧からまとめて確定します。現場追加・再走行は下の専用欄で精算だけに登録します。</p><WinterInitialEntryRegistration settlementOnly data={data} session={session} onChanged={refresh} onChooseParticipants={()=>openRegistration('roster')}/><WinterSettlementActions data={data} session={session} onSession={updateSession} onChanged={refresh}/><details className="rounded-xl border-2 p-4"><summary className="cursor-pointer text-xl font-bold">出番表にも反映する棄権受付</summary><WinterRequestPanel mode="withdraw" session={session} onSession={updateSession} data={data} refresh={revision} onChanged={refresh}/></details></>}
  </section>)}
  </>}
