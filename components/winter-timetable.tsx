@@ -1,4 +1,5 @@
 "use client"
+import {timetablePhase} from '@/lib/master/timetable'
 import {MasterTimetable} from './master/timetable'
 import {WinterArenaOpening} from './winter-arena-opening'
 import {loadArenaOpening,openingDate} from '@/lib/winter-arena-opening'
@@ -33,13 +34,13 @@ export function WinterTimetable({data,session,onSession,onChanged}:{data:Awaited
      count: entries.length,
      inspection: time?.inspection_time ?? null,
      start: time?.start_time ?? null,
-     phase: time?.phase,
+     phase: timetablePhase(time),
    }
  })
  return <MasterTimetable title={WINTER_EVENT_NAME} dates={dates} items={items} loadPrint={loadPrint}
    renderDayExtra={date=>date===openingDate?<WinterArenaOpening session={session} onSession={onSession} onChanged={onChanged} revision={data}/>:null}
-   renderEditor={(id, showInspection) =>
-     <WinterTimetableEditor competitionId={id} showInspection={showInspection}
+   renderEditor={(id, showInspection, count) =>
+     <WinterTimetableEditor competitionId={id} count={count} showInspection={showInspection}
        initial={data.timetable.find(time => time.competition_id === id) ?? null}
        session={session} onSession={onSession} onChanged={onChanged}/>
    }/>

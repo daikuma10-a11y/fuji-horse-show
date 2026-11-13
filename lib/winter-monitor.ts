@@ -1,10 +1,11 @@
+import {timetablePhase, type TimetablePhase} from './master/timetable'
 import { WINTER_EVENT_ID, WINTER_DATES, assertWinterEvent } from './winter-event'
 import type { WinterEntryRow,loadWinterData } from './winter-data'
 import { winterRpc } from './winter-reception'
 import {isMeetingWithdrawal,winterOfficialStarts} from './winter-confirmed-withdrawals'
 import {isScrollKey,type ScrollKey} from './winter-monitor-scroll'
 export type WinterMonitorRow={id:string;number:number;rider:string;horse:string;organization:string;isOp:boolean;mark:string}
-export type WinterMonitorCompetition={competitionId:string;competitionNo:string;competitionName:string;date:string;inspectionTime?:string|null;startTime?:string|null;timePhase?:'provisional'|'final';rows:WinterMonitorRow[];page:number;draft:boolean}
+export type WinterMonitorCompetition={competitionId:string;competitionNo:string;competitionName:string;date:string;inspectionTime?:string|null;startTime?:string|null;timePhase?:TimetablePhase;rows:WinterMonitorRow[];page:number;draft:boolean}
 // The first competition stays at the top level for existing monitor clients and the publishing RPC.
 export type WinterMonitorState = WinterMonitorCompetition & {version:1;eventId:string;updatedAt:string;scrollController?:ScrollKey;followingCompetitions?:WinterMonitorCompetition[]}
 export function winterMonitorViewId(state:WinterMonitorState){return [state.date,state.followingCompetitions?'day':state.competitionId,state.followingCompetitions?0:state.page].join('/')}
@@ -47,7 +48,8 @@ export function reconcileWinterMonitor(state:WinterMonitorState,data:Awaited<Ret
  if (!competitions.length) throw new Error('表示中のWinter競技を確認できません')
  const refreshed = competitions.map((comp): WinterMonitorCompetition => {
   const old = previous.get(comp.id)
-  if (old?.draft) return old
+  const t = data.timetable.find(t=>t.competition_id===comp.id)
+  if (old?.draft) return t ? {...old,inspectionTime:t.inspection_time,startTime:t.start_time,timePhase:timetablePhase(t)} : old
   const marks = new Map(old?.rows.map(row => [row.id,row.mark]))
   // The public monitor receives confirmed withdrawal IDs in the admin-published snapshot.
   const entries = winterOfficialStarts(data.entries.map(e=>marks.get(e.entry_id)==='棄権'?{...e,meetingWithdrawal:true}:e),comp.id)
@@ -56,8 +58,7 @@ export function reconcileWinterMonitor(state:WinterMonitorState,data:Awaited<Ret
    if (!rider || !horse) throw new Error('モニターの人馬を確認できません')
    return {id:e.entry_id,number:i+1,rider:rider.name,horse:horse.name,organization:e.organization_name,isOp:!!e.is_op,mark:isMeetingWithdrawal(e)?'棄権':marks.get(e.entry_id)==='棄権'?'更新':marks.get(e.entry_id)??'更新'}
   })
-  const t = data.timetable.find(t=>t.competition_id===comp.id)
-  return {competitionId:comp.id,competitionNo:comp.competition_no,competitionName:comp.name,date:comp.competition_date,inspectionTime:t?.inspection_time,startTime:t?.start_time,timePhase:t?.phase,
+  return {competitionId:comp.id,competitionNo:comp.competition_no,competitionName:comp.name,date:comp.competition_date,inspectionTime:t?.inspection_time,startTime:t?.start_time,timePhase:timetablePhase(t),
    draft:false,rows,page:Math.min(old?.page??0,Math.max(0,Math.ceil(rows.length/30)-1))}
  })
  return {version,eventId,updatedAt,...(scrollController?{scrollController}:{}),...refreshed[0],...(daily ? {followingCompetitions:refreshed.slice(1)} : {})}

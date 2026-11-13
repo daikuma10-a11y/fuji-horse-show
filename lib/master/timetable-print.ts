@@ -24,8 +24,9 @@ export function timetablePrintHtml(data: TimetablePrintData, generatedAt: string
         <td class="center">${esc(item.number)}</td>
         <td data-competition-name><span class="competition-name">${esc(item.name)}${item.official ? '<span class="official"> ★公認</span>' : ''}</span></td>
         <td class="center">${item.count}</td>
+        ${item.phase === 'cancelled' ? `<td class="center" colspan="${showInspection ? 2 : 1}"><strong>中止</strong></td>` : `
         ${showInspection ? `<td>${esc(item.inspection || '未定')}</td>` : ''}
-        <td>${esc(item.start || '未定')}${item.phase === 'final' ? '<small>（確定）</small>' : ''}</td>
+        <td>${esc(item.start || '未定')}${item.phase === 'final' ? '<small>（確定）</small>' : ''}</td>`}
       </tr>`).join('')
       const activities=(data.openings??[]).filter(a=>a.date===date.value&&a.section===section.id)
         .map(a=>`<tr><td colspan="${headers.length}" class="opening">${esc(a.label)}　${esc(a.start)}</td></tr>`).join('')

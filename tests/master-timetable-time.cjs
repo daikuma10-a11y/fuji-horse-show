@@ -27,8 +27,9 @@ assert(fieldHtml.includes('オープン')&&fieldHtml.includes('組み換え時�
 field.props.children[0].props.children.find(n=>n?.type==='select').props.onChange({target:{value:'time'}})
 assert.equal(selected,'')
 assert(renderToStaticMarkup(React.createElement(MasterTimetableTimeField,{kind:'start',label:'開始時間',value:'',disabled:true,onChange(){}})).includes('disabled=""'))
+let cancelled=false
 let inspection='オープン',start='前競技に引き続き'
-const table=()=>({competition_id:'c',event_id:ev,inspection_time:inspection,start_time:start,phase:'final',updated_at:'now'})
+const table=()=>({competition_id:'c',event_id:ev,inspection_time:inspection,start_time:start,phase:'final',...(cancelled?{cancelled:true}:{}),updated_at:'now'})
 const row=x=>({event_id:ev,...x})
 const data={eventId:ev,organizations:[row({id:'o',name:'団体'})],riders:[row({id:'r',name:'選手',organization_id:'o'})],horses:[row({id:'h',name:'馬',organization_id:'o'})],competitions:[row({id:'c',competition_no:'1',competition_date:'2026-11-14',name:'競技',official:false})],entries:[row({entry_id:'e',competition_id:'c',rider_id:'r',horse_id:'h',organization_id:'o',organization_name:'団体',status:'active',start_order:1})],timetable:[]}
 const state={version:1,eventId:ev,competitionId:'c',page:0,draft:false,rows:[]}
@@ -59,6 +60,27 @@ global.fetch=async url=>{const name=new URL(url).pathname.split('/').at(-1);cons
  assert(!monitorHtml.includes('下見') && !monitorHtml.includes('08:15') && monitorHtml.includes(start))
  assert(exportWinterCsv(dressageData,'entries').includes('"","13:42"'))
  assert.equal(dressageData.timetable[0].inspection_time,'08:15')
+ // A saved cancellation survives reload and replaces timing in every public projection.
+ cancelled=true
+ const cancelledData=await loadWinterData()
+ const {timetablePhase}=require('../lib/master/timetable.ts')
+ const {winterTimetablePrintData}=require('../lib/winter-timetable-print.ts')
+ const {timetablePrintHtml}=require('../lib/master/timetable-print.ts')
+ for(const number of ['1','15']){
+  const empty={...cancelledData,entries:[],competitions:cancelledData.competitions.map(c=>({...c,competition_no:number}))}
+  const screen=renderToStaticMarkup(React.createElement(WinterTimetable,{data:empty,session:{},onSession(){},onChanged(){}}))
+  const monitor=renderToStaticMarkup(React.createElement(WinterMonitorView,{state:reconcileWinterMonitor(state,empty)}))
+  const print=timetablePrintHtml(winterTimetablePrintData(empty),'')
+  const heading=renderToStaticMarkup(React.createElement(MasterCompetitionTime,{start,inspection,phase:timetablePhase(empty.timetable[0])}))
+  for(const output of [screen,monitor,print,heading]){
+   assert(output.includes('中止'));assert(!output.includes(start));assert(!output.includes(inspection))
+  }
+  assert(!monitor.includes('登録されると表示'))
+  assert(screen.includes('value="cancelled" selected'))
+  const active=renderToStaticMarkup(React.createElement(WinterTimetable,{data:{...empty,timetable:[],entries:data.entries},session:{},onSession(){},onChanged(){}}))
+  assert(!active.includes('value="cancelled"'))
+ }
+ cancelled=false
  inspection='前競技に引き続き';await assert.rejects(loadWinterData(),/時間設定/)
  inspection='08:15';start='オープン';await assert.rejects(loadWinterData(),/時間設定/)
  console.log('PASS: shared clock/instruction field, strict per-field validation, real loader, daily table/start heading, monitor refresh/render and CSV preserve instructions; wrong-field values rejected')

@@ -1,4 +1,5 @@
 "use client"
+import {timetablePhase} from '@/lib/master/timetable'
 import {useEffect,useRef,useState} from 'react'
 import {emptyWinterQueue,readWinterQueue,writeWinterQueue,validateWinterQueue,winterDraftSummary,submitWinterBatch,WinterBatchRejected,type WinterQueue} from '@/lib/winter-batch'
 import {meetingRows,meetingBaseline,updateMeetingWork,meetingDisplay,newMeetingWork,savedMeetingContent,restoreMeeting,meetingTransaction} from '@/lib/winter-meeting'
@@ -132,7 +133,7 @@ export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,o
     const venue=winterTimetableSection(c.competition_no),time=data.timetable.find(t=>t.competition_id===c.id)
     return <MasterStartDaySection key={c.id} id={'meeting-'+c.id} title={winterCompetitionLabel(c)} official={c.official} wide={false}>
      {venue?.startListVenue&&<p>会場：{venue.startListVenue}</p>}
-     <MasterCompetitionTime inspection={time?.inspection_time} start={time?.start_time} phase={time?.phase} showInspection={venue?.showInspection}/>
+     <MasterCompetitionTime inspection={time?.inspection_time} start={time?.start_time} phase={timetablePhase(time)} showInspection={venue?.showInspection}/>
      <MasterStartRows model={preview!.models.get(c.id)!} competitionId={c.id} compact dense showAdminChanges draftEntries={preview!.rows.filter(e=>e.competitionId===c.id)} adminReorder={available===true&&!locked} onReorder={(a,b)=>move(c.id,a,b)} onNameSelect={row=>{if(locked||row.withdrawn)return;if(row.id.startsWith('request:')){setError('入力済みの人馬は確認一覧から外して入力し直してください');section.current?.focus();return}setPick(row)}}/>
      <button className={button} disabled={locked||!queue} onClick={()=>begin('add',c)}>この競技に追加</button>
     </MasterStartDaySection>

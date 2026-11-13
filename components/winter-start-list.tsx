@@ -1,4 +1,5 @@
 "use client"
+import {timetablePhase} from '@/lib/master/timetable'
 import {loadWinterRosterIdentities,type WinterRosterIdentity} from '@/lib/winter-entry-intervals'
 import {compareWinterOrganizations,winterCompetitionLabel} from "@/lib/winter-display-order"
 import {useEffect,useMemo,useRef,useState} from 'react'
@@ -119,7 +120,7 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
     organization:e?.organization_name ?? '要確認',isOp:!!e?.is_op,mark:e&&isMeetingWithdrawal(e)?'棄権':mark==='added'?'追加':mark==='changed'?'変更':''}
   })
   return {competitionId:c.id,competitionNo:c.competition_no,competitionName:c.name,date:c.competition_date,rows,
-   inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:time?.phase,draft:!!drafts[c.id],
+   inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:timetablePhase(time),draft:!!drafts[c.id],
    page:dailyMonitor?0:Math.min(page,Math.max(0,Math.ceil(rows.length/30)-1))}
  }
  const visible = dailyMonitor ? comps : competition ? [competition] : []
@@ -186,11 +187,11 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
    const section=winterTimetableSection(c.competition_no),showInspection=section?.showInspection
    return <MasterStartDaySection key={c.id} id={c.id} title={winterCompetitionLabel(c)} official={c.official} wide={wideView}>
      {section?.startListVenue&&<p className="mb-1 text-sm">会場：{section.startListVenue}</p>}
-     <MasterCompetitionTime inspection={timetable?.inspection_time} start={timetable?.start_time} phase={timetable?.phase} showInspection={showInspection}/>
+     <MasterCompetitionTime inspection={timetable?.inspection_time} start={timetable?.start_time} phase={timetablePhase(timetable)} showInspection={showInspection}/>
      {(active||draft)&&<MasterOrderStatus wide={wideView} dirty={!!draft} stale={stale} saving={busy} error="" savedLabel={saved?.id===c.id?new Date(saved.at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):undefined} onDiscard={()=>discard(c.id)} onSave={()=>void save(c.id)}/>}
      <MasterStartRows model={current.model} competitionId={c.id} readOnly showAdminChanges adminReorder={!busy&&!stale} reorderSaving={busy||stale} compact dense orderedIds={draft?.ids} onReorder={(from,to)=>move(c.id,from,to)} riderKeys={riderKeys} horseKeys={horseKeys}/>
      {active&&draft&&<MasterFloatingOrderSave saving={busy} stale={stale} onSave={()=>void save(c.id)}/>}
-     {active&&competition&&<> <details className="print-hide mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-bold">競技の時間設定</summary><WinterTimetableEditor key={competition.id} competitionId={competition.id} showInspection={showInspection} initial={timetable??null} session={session} onSession={onSession} onChanged={onChanged}/>
+     {active&&competition&&<> <details className="print-hide mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-bold">競技の時間設定</summary><WinterTimetableEditor key={competition.id} competitionId={competition.id} count={current.entries.length} showInspection={showInspection} initial={timetable??null} session={session} onSession={onSession} onChanged={onChanged}/>
 
  </details></>}
    </MasterStartDaySection>
@@ -199,7 +200,7 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  </div>
  <div className="print-only hidden">{printScope==='readings'?(readingList?<MasterReadingList compareClubs={compareWinterOrganizations} list={readingList} eventName={WINTER_EVENT_NAME}/>:null):<><h1 className="mb-2 text-xl font-bold">Fuji Horse Show Winter 出番表</h1><p className="mb-4 font-bold">{dateLabel(date)}</p>{comps.map(c=>{
  const section=winterTimetableSection(c.competition_no)
- return <section key={c.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">{winterCompetitionLabel(c)}{c.official?'（公認）':''}</h2>{section?.startListVenue&&<p>会場：{section.startListVenue}</p>}<MasterCompetitionTime inspection={data.timetable.find(t=>t.competition_id===c.id)?.inspection_time} start={data.timetable.find(t=>t.competition_id===c.id)?.start_time} phase={data.timetable.find(t=>t.competition_id===c.id)?.phase} showInspection={section?.showInspection}/><table className="w-full border-collapse text-sm"><thead><tr>{['出番','選手','馬','所属','備考'].map(h=><th key={h} className="border p-1 text-left">{h}</th>)}</tr></thead><tbody>{winterOfficialStarts(data.entries,c.id).map(e=><tr key={e.entry_id}><td className="border p-1">{e.start_order}</td><td className="border p-1">{data.riders.find(r=>r.id===e.rider_id)?.name}</td><td className="border p-1">{day.get(c.id)?.model.getHorse(e.horse_id)?.name}</td><td className="border p-1">{e.organization_name}</td><td className="border p-1">{e.is_op?'OP ':''}{['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権':''}</td></tr>)}</tbody></table></section>
+ return <section key={c.id} className="print-competition mb-5"><h2 className="mb-2 border-b border-black pb-1 text-base font-bold">{winterCompetitionLabel(c)}{c.official?'（公認）':''}</h2>{section?.startListVenue&&<p>会場：{section.startListVenue}</p>}<MasterCompetitionTime inspection={data.timetable.find(t=>t.competition_id===c.id)?.inspection_time} start={data.timetable.find(t=>t.competition_id===c.id)?.start_time} phase={timetablePhase(data.timetable.find(t=>t.competition_id===c.id))} showInspection={section?.showInspection}/><table className="w-full border-collapse text-sm"><thead><tr>{['出番','選手','馬','所属','備考'].map(h=><th key={h} className="border p-1 text-left">{h}</th>)}</tr></thead><tbody>{winterOfficialStarts(data.entries,c.id).map(e=><tr key={e.entry_id}><td className="border p-1">{e.start_order}</td><td className="border p-1">{data.riders.find(r=>r.id===e.rider_id)?.name}</td><td className="border p-1">{day.get(c.id)?.model.getHorse(e.horse_id)?.name}</td><td className="border p-1">{e.organization_name}</td><td className="border p-1">{e.is_op?'OP ':''}{['wd','withdrawn'].includes(e.status.toLowerCase())?'棄権':''}</td></tr>)}</tbody></table></section>
  })}</>}</div>
  </div>
 }
