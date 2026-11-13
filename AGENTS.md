@@ -2,6 +2,8 @@
 
 The organizer requires a shared application master based on the validated Autumn test version.
 
+For the next tournament, start from the latest successor of the Winter implementation. Read the [Winter changes and remaining Autumn differences](docs/winter-master-handoff-20261113.md) before selecting a base. Record later system fixes there and check the next event’s actual reception, meeting, monitor, settlement and print entry points when their wiring changes.
+
 - Put shared screen rendering and interaction in `components/master/`, and neutral contracts in `lib/master/`.
 - Both Autumn and Winter must use the same master components. Do not copy a screen into another season, change its spacing or replace its gestures as a routine tournament setup choice.
 - Tournament differences belong in configuration/data: event ID/dates, competitions, fee categories, participant rosters and timetable. Keep event-scoped data adapters and authorized persistence separate from presentation.
