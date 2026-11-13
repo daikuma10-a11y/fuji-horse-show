@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MeetingMonitorRow, MeetingMonitorSnapshot } from '@/lib/meeting-monitor'
 import { monitorRows } from '@/lib/meeting-monitor'
 import { useStore } from '@/lib/store'
 import { isStartListPreview, previewEntryOrder, type StartListPreview } from '@/lib/startlist-preview'
 import { COMPETITION_DATES } from '@/lib/mock-data'
+import { FittedName } from '@/components/master/fitted-name'
 import { useMonitorLink } from '@/components/monitor-link'
 
 export function StartListMonitor({ source = 'meeting' }: { source?: 'meeting' | 'startlist' }) {
@@ -78,29 +79,6 @@ function OfficialStartListMonitor() {
       </section>
     })}</div> : <p className="p-5 text-center">{reconciliation.message}</p>}
   </main>
-}
-
-function FittedName({ name, fontSize, scale = 1 }: { name: string; fontSize: number; scale?: number }) {
-  const container = useRef<HTMLDivElement>(null)
-  const text = useRef<HTMLSpanElement>(null)
-  useLayoutEffect(() => {
-    const box = container.current, label = text.current
-    if (!box || !label) return
-    let active = true
-    const fit = () => {
-      if (!active) return
-      const base = fontSize * scale
-      label.style.fontSize = `${base}px`
-      const width = label.getBoundingClientRect().width
-      if (width > box.clientWidth && box.clientWidth > 0) label.style.fontSize = `${base * Math.max(0, box.clientWidth - 1) / width}px`
-    }
-    fit()
-    const observer = new ResizeObserver(fit)
-    observer.observe(box)
-    void document.fonts.ready.then(fit)
-    return () => { active = false; observer.disconnect() }
-  }, [name, fontSize, scale])
-  return <div ref={container} className="w-full overflow-hidden"><span ref={text} className="inline-block whitespace-nowrap" style={{ fontSize: fontSize * scale }}>{name}</span></div>
 }
 
 function AudienceCells({ row, fontSize }: { row?: MeetingMonitorRow; fontSize: number }) {
