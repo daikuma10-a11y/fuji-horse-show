@@ -1,5 +1,5 @@
 import type {loadWinterData} from './winter-data'
-import {winterCompetitionLabel,winterAffiliatedOrganizations} from './winter-display-order'
+import {winterCompetitionLabel,winterPickerOrder,winterAffiliatedOrganizations} from './winter-display-order'
 import type {winterSettlementAccount,WinterSettlementData} from './winter-settlement'
 import type {ReceiptSourceItem} from './rider-receipt'
 import type {ReceiptInput,SettlementReceipt} from './settlement-receipts'
@@ -38,11 +38,12 @@ export function winterReceiptModel(data:Data,ledger:WinterSettlementData,account
     add('manual:'+row.id,row.fee_amount,(row.action_type==='change'?'現場変更':'現場追加')+' '+winterCompetitionLabel(comp),row.inputs.riderId,row.inputs.horseId)
   }
   for(const row of account.adjustments)add('adjustment:'+row.id,row.delta,'金額訂正 ／ '+row.reason)
-  const orgNames=new Map(winterAffiliatedOrganizations(data).map(o=>[o.id,o.name]))
+  const groups=winterAffiliatedOrganizations(data), order=winterPickerOrder(groups)
+  const orgNames=new Map(groups.map(o=>[o.id,o.name]))
   const scopeOptions=(['rider','horse'] as const).flatMap(kind=>{
     const ids=new Set(sources.map(s=>kind==='rider'?s.riderId:s.horseId))
     const rows=kind==='rider'?[...riders.values()]:[...horses.values()]
-    return rows.filter(p=>ids.has(p.id)).map(p=>({kind,id:p.id,name:p.name,group:orgNames.get(p.organization_id)??''}))
+    return rows.filter(p=>ids.has(p.id)).sort(order).map(p=>({kind,id:p.id,name:p.name,group:orgNames.get(p.organization_id)??''}))
   })
   const issued=receipts.reduce((sum,r)=>sum+r.amount,0)
   const availableAmount=Math.max(0,Math.min(account.total,account.advancePaid+account.extraPaid)-issued)

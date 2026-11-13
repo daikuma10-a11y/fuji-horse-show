@@ -4,11 +4,8 @@ import { useState } from "react"
 import { Check } from "lucide-react"
 import { MasterOrganizationPicker } from "@/components/master/organization-picker"
 import type { MasterPickerProps, MasterRosterSource } from "@/lib/master/reception-form"
-import type { Horse, Player } from "@/lib/types"
+import { compareRosterMembers } from "@/lib/master/roster-order"
 
-const compare = <T extends { name: string; reading?: string }>(a: T, b: T) =>
-  (a.reading?.trim() || a.name).localeCompare(b.reading?.trim() || b.name, "ja", { sensitivity: "base", numeric: true }) ||
-  a.name.localeCompare(b.name, "ja")
 const normalized = (value: string) => value.normalize("NFKC").replace(/[\s　]+/g, "").toLocaleLowerCase("ja-JP")
 
 export function MasterPlayerPicker({ source, selectedId, onSelect, registeredOnly = false, onNavigate }: MasterPickerProps & {source:MasterRosterSource}) {
@@ -24,7 +21,7 @@ export function MasterPlayerPicker({ source, selectedId, onSelect, registeredOnl
   const navigate = (id: string | null) => { setOrgId(id); onNavigate?.() }
   if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた選手のみ表示しています。" : ""}</p><MasterOrganizationPicker groups={organizations.filter(org=>canonicalOrgId(org.id)===org.id&&(counts.get(org.id)??0)>0)} counts={counts} onSelect={navigate} description="選手の所属団体を選んでください。" /></>
   const orgName = organizations.find(org => org.id === orgId)?.name
-  const items = selectablePlayers.filter(player => canonicalOrgId(player.orgId) === orgId).sort(compare<Player>)
+  const items = selectablePlayers.filter(player => canonicalOrgId(player.orgId) === orgId).sort(compareRosterMembers)
   return <div className="flex flex-col gap-4">
     <button type="button" onClick={() => navigate(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
     <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{orgName}の選手</h3>
@@ -36,7 +33,7 @@ export function MasterPlayerPicker({ source, selectedId, onSelect, registeredOnl
   </div>
 }
 
-export function MasterHorsePicker({ source, selectedId, onSelect, registeredOnly = false, onNavigate }: MasterPickerProps & {source:MasterRosterSource}) {
+export function MasterHorsePicker({ source, selectedId, preferredOrganizationId, onSelect, registeredOnly = false, onNavigate }: MasterPickerProps & {source:MasterRosterSource}) {
   const { horses, organizations } = source
   const canonicalOrgId=source.canonicalOrganizationId??((id:string)=>id)
   const [orgId, setOrgId] = useState<string | null>(null)
@@ -47,17 +44,25 @@ export function MasterHorsePicker({ source, selectedId, onSelect, registeredOnly
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
   const navigate = (id: string | null) => { setOrgId(id); onNavigate?.() }
-  if (!orgId) return <><p className="mb-3 text-base">{registeredOnly ? "日馬連登録番号を確認できた馬のみ表示しています。" : ""}</p><MasterOrganizationPicker groups={organizations.filter(org=>canonicalOrgId(org.id)===org.id&&(counts.get(org.id)??0)>0)} counts={counts} onSelect={navigate} description="馬の所属団体を選んでください。" /></>
-  const orgName = organizations.find(org => org.id === orgId)?.name
-  const items = selectableHorses.filter(horse => canonicalOrgId(horse.orgId) === orgId).sort(compare<Horse>)
+  const groups = organizations.filter(org => canonicalOrgId(org.id) === org.id && counts.has(org.id))
+  const preferred = preferredOrganizationId && organizations.find(org => org.id === canonicalOrgId(preferredOrganizationId))
+  const visible = orgId ? organizations.find(org => org.id === orgId) : preferred
+  const items = visible ? selectableHorses.filter(h => canonicalOrgId(h.orgId) === visible.id).sort(compareRosterMembers) : []
+  const otherGroups = preferred ? groups.filter(org => org.id !== preferred.id) : groups
   return <div className="flex flex-col gap-4">
-    <button type="button" onClick={() => navigate(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>
-    <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{orgName}の馬</h3>
-    {items.map(horse => {
-      const duplicate = items.filter(item => normalized(item.name) === normalized(horse.name)).length > 1
-      const source = duplicate ? organizations.find(org => org.id === horse.orgId)?.name : undefined
-      return <PickerRow key={horse.id} selected={selectedId === horse.id} title={horse.name} source={source} needsReview={horse.needsReview} manual={horse.manual} onClick={() => onSelect(horse.id)} />
-    })}
+    {registeredOnly && <p>日馬連登録番号を確認できた馬のみ表示しています。</p>}
+    {orgId && <button type="button" onClick={() => navigate(null)} className="w-fit rounded-xl border-2 border-border px-5 py-3 text-lg font-bold">← 団体一覧へ</button>}
+    {visible && <>
+      <h3 className="rounded-xl bg-secondary px-4 py-3 text-xl font-bold">{visible.name}の馬{!orgId && '（選手の所属）'}</h3>
+      {items.length === 0 && <p>この団体に選択できる馬はいません。</p>}
+      {items.map(horse => {
+        const duplicate = items.some(item => item.id !== horse.id && normalized(item.name) === normalized(horse.name))
+        const sourceLabel = duplicate ? organizations.find(org => org.id === horse.orgId)?.name : undefined
+        return <PickerRow key={horse.id} selected={selectedId === horse.id} title={horse.name} source={sourceLabel} needsReview={horse.needsReview} manual={horse.manual} onClick={() => onSelect(horse.id)} />
+      })}
+    </>}
+    {!orgId && otherGroups.length > 0 && <MasterOrganizationPicker groups={otherGroups} counts={counts} onSelect={navigate} description={preferred ? "他の団体の馬を選ぶ" : "馬の所属団体を選んでください。"} />}
+    {!visible && groups.length === 0 && <p>選択できる馬はいません。</p>}
   </div>
 }
 

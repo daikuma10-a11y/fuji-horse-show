@@ -2,7 +2,7 @@ import type { StableGroup } from './master/stable-information'
 import type { loadWinterData } from './winter-data'
 import { isWinterReceptionParticipant } from './winter-data'
 import { assertWinterEvent } from './winter-event'
-import { compareWinterOrganizations } from './winter-display-order'
+import { winterAffiliatedOrganizations,winterPickerOrder } from './winter-display-order'
 
 type Data = Awaited<ReturnType<typeof loadWinterData>>
 
@@ -10,9 +10,10 @@ type Data = Awaited<ReturnType<typeof loadWinterData>>
 export function winterStableGroups(data: Data): StableGroup[] {
   assertWinterEvent(data.eventId)
   for (const row of [...data.organizations, ...data.horses]) assertWinterEvent(row.event_id)
+  const organizations=winterAffiliatedOrganizations(data)
   const groups = new Map(data.organizations.map(org => [org.id, { id: org.id, name: org.name, horses: [] } as StableGroup]))
   const seen = new Set<string>()
-  for (const horse of data.horses) {
+  for (const horse of [...data.horses].sort(winterPickerOrder(organizations))) {
     if (!isWinterReceptionParticipant(horse)) continue
     const group = groups.get(horse.organization_id)
     if (!group || !horse.name.trim()) throw new Error('馬の団体・馬名を確認できません。事前登録の内容を確認してください。')
@@ -20,7 +21,5 @@ export function winterStableGroups(data: Data): StableGroup[] {
     seen.add(horse.id)
     group.horses.push({ id: horse.id, name: horse.name })
   }
-  return [...groups.values()].filter(group => group.horses.length).sort(compareWinterOrganizations).map(group => ({
-    ...group, horses: group.horses.sort((a, b) => a.name.localeCompare(b.name, 'ja') || a.id.localeCompare(b.id)),
-  }))
+  return organizations.map(org=>groups.get(org.id)!).filter(group => group.horses.length)
 }

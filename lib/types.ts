@@ -9,6 +9,7 @@ export interface MasterAuditFields {
   sourceName?: string
   /** 五十音順・検索用の読み。取得不能なら未設定でよい */
   reading?: string
+  pickerRank?: number
   /** 大会当日の手入力・修正で作られたデータ */
   manual?: boolean
   /** 自動判断せず本部確認が必要なデータ */

@@ -1,5 +1,6 @@
 'use client'
 
+import {sortWinterCandidates,compareWinterOrganizations} from '@/lib/winter-display-order'
 import {useEffect,useRef,useState} from 'react'
 import type {ApplicationImportFeedback,ApplicationImportProgress} from '@/lib/master/application-import-status'
 import type {ApplicationRegistrationPanelProps} from './master/application-registration'
@@ -123,11 +124,11 @@ export function useWinterApplicationRegistration(p:{draft:ApplicationDraft|null;
   const correction=correctionSource&&roster&&(previous?.issues.length||selected&&selected!=='new')?{
    person,selected,accepted:!!correctionAccepted[person.key],participantCount:roster.participants.filter(p=>p.entity_id===selected).length,original:review!.original.people.find(r=>r.key===person.key),club:review!.edited.club,
    affiliation:p.draft?.rosterEdits?.[person.key]??{entityId:selected,source:'application' as const,clubId:'',clubName:'',endClubIds:[]},
-   clubs:roster.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')),
-   currentClubs:roster.affiliations.filter(a=>a.entity_id===selected&&!a.ended_at).map(a=>({id:a.club_id,name:roster.clubs.find(c=>c.id===a.club_id)?.name??'所属名不明'})),
-   candidates:roster.entities.filter(e=>ids.has(e.id)&&!e.archived_at&&e.kind===person.kind).map(e=>({id:e.id,name:e.name,reading:e.reading,jef:e.jef_number??'',reason:'照合時の候補',clubs:roster.affiliations.filter(a=>a.entity_id===e.id&&!a.ended_at).map(a=>roster.clubs.find(c=>c.id===a.club_id)?.name??'所属名不明')})),
+   clubs:roster.clubs.slice().sort(compareWinterOrganizations),
+   currentClubs:roster.affiliations.filter(a=>a.entity_id===selected&&!a.ended_at).map(a=>({id:a.club_id,name:roster.clubs.find(c=>c.id===a.club_id)?.name??'所属名不明'})).sort(compareWinterOrganizations),
+   candidates:sortWinterCandidates(roster.entities.filter(e=>ids.has(e.id)&&!e.archived_at&&e.kind===person.kind).map(e=>({id:e.id,name:e.name,reading:e.reading,jef:e.jef_number??'',reason:'照合時の候補',clubs:roster.affiliations.filter(a=>a.entity_id===e.id&&!a.ended_at).map(a=>roster.clubs.find(c=>c.id===a.club_id)?.name??'所属名不明')}))),
   }:undefined
-  return {key:person.key,label:`${person.kind==='rider'?'選手':'馬'} ${person.name}`,id:row?.entityId??recorded?.entityId,state:row?.issues.length?'要確認':plan?.pendingRoster.some(r=>r.key===person.key)?'仮確定・取り込み時に訂正':row?status(row.state):work?`端末記録：${status(recorded?.state??'unregistered')}（未再照合）`:'訂正中・再照合が必要',issues:row?.issues??previous?.issues??[],resolve:!!work&&recorded?.state==='unknown'&&!recorded.entityId,candidates:options,selected:choices[person.key]??'',correction}
+  return {key:person.key,label:`${person.kind==='rider'?'選手':'馬'} ${person.name}`,id:row?.entityId??recorded?.entityId,state:row?.issues.length?'要確認':plan?.pendingRoster.some(r=>r.key===person.key)?'仮確定・取り込み時に訂正':row?status(row.state):work?`端末記録：${status(recorded?.state??'unregistered')}（未再照合）`:'訂正中・再照合が必要',issues:row?.issues??previous?.issues??[],resolve:!!work&&recorded?.state==='unknown'&&!recorded.entityId,candidates:sortWinterCandidates(options),selected:choices[person.key]??'',correction}
  })
  const appReview=review?applicationReview(review.edited,review.paid,review.accountChecked):null
  const savedStates=Object.values(work?.entries?.states??{}),registered=savedStates.filter(s=>s==='registered').length,unknown=savedStates.filter(s=>s==='unknown').length

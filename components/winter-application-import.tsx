@@ -1,5 +1,6 @@
 'use client'
 
+import {sortWinterCandidates,compareWinterOrganizations} from '@/lib/winter-display-order'
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {prepareApplicationRoster,applicationRosterChanges,retainRosterPreparation} from '@/lib/winter-application-roster-stage'
 import {addApplicationEntry,addApplicationCountEntry,addApplicationPerson,removeApplicationAddition,type ApplicationCountEntryInput} from '@/lib/master/application-additions'
@@ -119,10 +120,10 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   if(draft&&roster)for(const p of draft.edited.people){
    const suggested=rosterCandidates(p,roster,draft.edited.club,{similar:true})
    const searched=candidateSearch[p.key]?.trim()?rosterCandidates(p,roster,draft.edited.club,{similar:true,search:candidateSearch[p.key]}):[]
-   const options=[...new Map([...searched,...suggested].map(c=>[c.entity.id,c])).values()].sort((a,b)=>a.rank-b.rank||Number(b.sameClub)-Number(a.sameClub)||a.entity.name.localeCompare(b.entity.name,'ja')).map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs}))
+   const options=[...new Map([...searched,...suggested].map(c=>[c.entity.id,c])).values()].map(c=>({id:c.entity.id,name:c.entity.name,reading:c.entity.reading,jef:c.entity.jef_number??'',reason:c.reason,clubs:c.clubs}))
    const selected=roster.entities.find(e=>e.id===draft.choices[p.key]&&e.kind===p.kind&&!e.archived_at)
    if(selected&&!options.some(c=>c.id===selected.id))options.unshift({id:selected.id,name:selected.name,reading:selected.reading,jef:selected.jef_number??'',reason:'選択済みの人馬（入力を訂正中）',clubs:roster.affiliations.filter(a=>a.entity_id===selected.id&&!a.ended_at).map(a=>roster.clubs.find(c=>c.id===a.club_id)?.name??'')})
-   result[p.key]=options
+   result[p.key]=sortWinterCandidates(options)
   }
   return result
  },[draft,roster,candidateSearch])
@@ -228,7 +229,7 @@ export function WinterApplicationImport({session,onSession,onStartlist,onSettlem
   />}
   affiliations={Object.fromEntries((draft?.edited.people??[]).flatMap(p=>{
    const id=draft?.choices[p.key],e=roster?.entities.find(e=>e.id===id&&e.kind===p.kind&&!e.archived_at)
-   return e&&roster?[[p.key,{affiliation:draft?.rosterEdits?.[p.key]??{entityId:e.id,source:'application' as const,clubId:'',clubName:'',endClubIds:[]},clubs:roster.clubs,currentClubs:roster.clubs.filter(c=>roster.affiliations.some(a=>a.entity_id===e.id&&a.club_id===c.id&&!a.ended_at))}]]:[]
+   return e&&roster?[[p.key,{affiliation:draft?.rosterEdits?.[p.key]??{entityId:e.id,source:'application' as const,clubId:'',clubName:'',endClubIds:[]},clubs:roster.clubs.slice().sort(compareWinterOrganizations),currentClubs:roster.clubs.filter(c=>roster.affiliations.some(a=>a.entity_id===e.id&&a.club_id===c.id&&!a.ended_at)).sort(compareWinterOrganizations)}]]:[]
   }))} onAffiliation={(key,value)=>edit(d=>({...d,accountChecked:false,rosterEdits:{...d.rosterEdits,[key]:value}}))}
   rosterPrepared={!!draft?.rosterPreparation||registration.frozen} rosterChanges={rosterChanges} onPrepareRoster={prepareRoster}
   todos={todos} clubSummary={clubSummary} intent={intent} onIntent={value=>{if(lock.current||registration.isBusy())return;setIntent(value);registration.invalidate()}}

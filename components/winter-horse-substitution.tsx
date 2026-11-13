@@ -1,4 +1,6 @@
 "use client"
+import {compareRosterMembers} from '@/lib/master/roster-order'
+import {loadHorseChoiceReadings} from '@/lib/shared-roster'
 import {MasterHorseSubstitution} from './master/horse-substitution'
 import type {loadWinterData} from '@/lib/winter-data'
 import type {AdminSession} from '@/lib/supabase-rest'
@@ -11,10 +13,13 @@ export function WinterHorseSubstitution({data,session,onSession,onSaved,horseId}
     needsInstructor={id=>{const c=data.competitions.find(x=>x.id===id);return !!c&&winterCompetition(c.competition_no).instructorRequired===true}}
     feeNote="締切後の変更料は対象種目ごとに2,000円。フレンドシップ同士の変更は無料です。"
     loadOptions={async old=>{
-      const options=await loadHorseOptions(session,onSession,old)
-      const reading=new Map(data.horses.map(h=>[h.id,h.reading||h.name]))
-      const key=(c:typeof options.choices[number])=>c.kind==='event'?reading.get(c.id)||c.name:c.name
-      return {...options,choices:[...options.choices].sort((a,b)=>key(a).localeCompare(key(b),'ja')||a.name.localeCompare(b.name,'ja')||a.id.localeCompare(b.id))}
+      let verified=session
+      const options=await loadHorseOptions(session,s=>{verified=s;onSession(s)},old)
+      const rosterIds=options.choices.filter(c=>c.kind==='roster').map(c=>c.id)
+      const readings=await loadHorseChoiceReadings(rosterIds,verified.accessToken).catch(()=>new Map<string,string>())
+      for(const horse of data.horses)if(horse.reading)readings.set(horse.id,horse.reading)
+      const choices=options.choices.map(c=>({...c,reading:readings.get(c.id)})).sort(compareRosterMembers)
+      return {...options,choices}
     }}
     calculate={(input,id,quote)=>quoteHorseSwap(session,onSession,input,id,quote)}
     onSaved={onSaved}/>

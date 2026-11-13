@@ -5,7 +5,7 @@ import { compareWinterCompetitions, compareWinterOrganizations, winterAffiliated
 
 const URL = "https://mhgyhyxagkkwdiepifdp.supabase.co"
 const KEY = "sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95"
-type ReceptionRosterState = { reading?:string; is_participant?: boolean; roster_source?: string | null }
+type ReceptionRosterState = { pickerRank?:number; reading?:string; is_participant?: boolean; roster_source?: string | null }
 export function isWinterReceptionParticipant(row: ReceptionRosterState) { return row.roster_source !== "winter-substituted" && (row.roster_source !== "shared_roster" || row.is_participant === true) }
 type EventRow = { event_id: string }
 export type WinterOrganizationRow = EventRow & { id: string; name: string }

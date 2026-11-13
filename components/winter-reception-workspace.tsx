@@ -1,4 +1,5 @@
 "use client"
+import {loadWinterPickerData} from '@/lib/winter-picker-data'
 import {WinterExerciseNotice} from '@/components/winter-exercise-notice'
 import {winterCompetitionLabel} from "@/lib/winter-display-order"
 
@@ -27,7 +28,7 @@ export function WinterReceptionWorkspace({ mode = "admin" }: { mode?: "admin" | 
   useEffect(() => {
     const controller = new AbortController()
     setError("")
-    loadWinterData(controller.signal).then(value => { if (!controller.signal.aborted) setData(value) })
+    loadWinterPickerData(controller.signal).then(value => { if (!controller.signal.aborted) setData(value) })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "読み込めませんでした") })
     return () => controller.abort()
   }, [reload])
