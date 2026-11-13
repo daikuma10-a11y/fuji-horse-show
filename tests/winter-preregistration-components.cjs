@@ -25,6 +25,7 @@ Module._load=function(id,...args){
  if(id==='react')return hookApi
  if(id==='next/link')return stub('Link')
  if(id==='@/lib/supabase-rest')return{verifyAdminSession:async session=>session,signInAdmin:async()=>{throw Error('Not part of this test')}}
+ if(id==='@/lib/shared-roster')return{loadWinterPickerReadings:async()=>new Map()}
  if(id==='@/lib/winter-data')return{loadWinterData:async()=>data}
  if(id==='@/lib/winter-live')return{subscribeWinterUpdates:()=>()=>{}}
  if(id.startsWith('@/components/')&&!['@/components/winter-admin-navigation','@/components/master/pre-registration'].includes(id))return new Proxy({}, {get:(_target,name)=>name==='__esModule'?true:stub(String(name))})
@@ -46,7 +47,7 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
  let workspace=find(tree,MasterPreRegistration);assert.ok(workspace);assert.equal(workspace.props.selected,'roster')
  const rosterComponent=find(workspace.props.roster,stub('SharedRosterManager'))
  const entryComponent=find(workspace.props.entries,stub('WinterInitialEntryRegistration'))
- assert.ok(rosterComponent);assert.ok(entryComponent);assert.equal(entryComponent.props.data,data)
+ assert.ok(rosterComponent);assert.ok(entryComponent);assert.deepEqual(entryComponent.props.data,data)
  const panel=()=>nodes(tree).find(n=>n.props?.id==='winter-panel-roster')
  const originalKey=panel().key
  workspace.props.onSelect('entries');tree=render();workspace=find(tree,MasterPreRegistration)
@@ -73,7 +74,7 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
  workspace.props.onSelect('application');tree=render();workspace=find(tree,MasterPreRegistration)
  assert.equal(nodes(MasterPreRegistration(workspace.props)).find(n=>n.props?.id==='pre-registration-application').props.hidden,false)
  assert.ok(text(MasterPreRegistration(workspace.props)).includes('申込書の読み込み'))
- assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.data,data)
+ assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.data,entryComponent.props.data)
  assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.active,false)
  assert.equal(find(workspace.props.overview,stub('WinterRegistrationOverview')).props.session.accessToken,'synthetic')
  workspace.props.onSelect('overview');tree=render();workspace=find(tree,MasterPreRegistration)
@@ -82,6 +83,12 @@ function restart(nextHash='',signedIn=true){h.close();h=hooks();hash=nextHash;sa
  assert.ok(find(workspace.props.application,stub('WinterApplicationImport')),'Excel form remains mounted while viewing saved registration')
  assert.equal(nodes(tree).filter(n=>n.props?.href==='/winter/prepare').length,1,'Only one import link exists')
  assert.equal(nodes(workspace.props.children).filter(n=>n.props?.href==='/winter/prepare').length,1)
+ restart('#winter-meeting');tree=await settle()
+ const meeting=find(tree,stub('WinterMeetingPanel'));assert.deepEqual(meeting.props.data,data)
+ meeting.props.onStartlist('2026-11-15');tree=render()
+ const meetingStart=find(tree,stub('WinterStartList'))
+ assert.equal(meetingStart.props.meetingDay.date,'2026-11-15');assert.equal(meetingStart.props.data,meeting.props.data)
+ assert.equal(nodes(tree).find(n=>n.props?.id==='winter-panel-startlist').props.hidden,false)
  restart('#winter-initial-registration');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'entries')
  restart('#winter-admin-tools');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'roster')
  restart('#winter-application-import');tree=await settle();assert.equal(find(tree,MasterPreRegistration).props.selected,'application')
