@@ -1,7 +1,7 @@
 import type {loadWinterData} from './winter-data'
 import {WINTER_DATES, WINTER_EVENT_NAME, WINTER_STARTS_PER_PAGE, assertWinterEvent, winterRecognitionNumber, winterTimetableSection} from './winter-event'
 import {buildLinkedEventWorkbook} from './master/linked-event-workbook'
-import {isMeetingWithdrawal,winterOfficialStarts} from './winter-confirmed-withdrawals'
+import {isConfirmedWithdrawal,winterOfficialStarts} from './winter-confirmed-withdrawals'
 import {entryValues, isWithdrawn} from './official-excel'
 
 export const WINTER_LAYOUT_URL = '/winter-forms/official-layouts.zip?v=start-headers-2'
@@ -32,10 +32,10 @@ export function exportWinterWorkbook(layouts: Uint8Array, data: Awaited<ReturnTy
     const section=winterTimetableSection(c.competition_no)
     if (!section) throw new Error('競技番号と会場を確認してください：'+c.competition_no)
     const recorded = data.entries
-      .filter(e => e.competition_id === c.id && !isMeetingWithdrawal(e) && !(isWithdrawn(e.status) && e.start_order == null))
+      .filter(e => e.competition_id === c.id && !isConfirmedWithdrawal(e) && !(isWithdrawn(e.status) && e.start_order == null))
       .sort((a, b) => a.start_order - b.start_order || a.entry_id.localeCompare(b.entry_id))
     const last=recorded.reduce((max,e)=>Math.max(max,e.start_order),0)
-    const withdrawn=winterOfficialStarts(data.entries,c.id).filter(isMeetingWithdrawal)
+    const withdrawn=winterOfficialStarts(data.entries,c.id).filter(isConfirmedWithdrawal)
     const entries=[...recorded,...withdrawn.map((e,i)=>({...e,start_order:last+i+1}))].map(e => {
         const rider = riders.get(e.rider_id)
         const horse = horses.get(e.horse_id) ?? (isWithdrawn(e.status) ? pastHorses.get(e.horse_id) : undefined)

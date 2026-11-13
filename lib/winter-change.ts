@@ -4,6 +4,7 @@ import { reviewWinterAdd, winterRpc, type WinterAddInput } from './winter-recept
 import { assertWinterEvent, winterCompetition, winterFreeFriendshipChange, winterEntryPrice, type WinterFeeSelection } from './winter-event'
 
 export type WinterChangeInput = {
+  originalNames?: {rider?:string;horse?:string}
   original: WinterEntryRow
   from: WinterAddInput['competition']
   /** Existing entry fee category must be explicitly supplied, never guessed. */

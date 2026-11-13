@@ -49,5 +49,5 @@ export function winterMasterAddInput(data:Data,state:MasterAddState,visitorName:
 export function winterMasterChangeInput(data:Data,state:MasterChangeState,visitorName:string,fromSelection:WinterFeeSelection,selection:WinterFeeSelection,id:string):WinterChangeInput{
  const original=data.entries.find(row=>row.entry_id===state.entry.id),from=data.competitions.find(row=>row.id===state.entry.competitionId)
  if(!original||!from||!state.toCompetition||original.rider_id!==state.entry.playerId||original.horse_id!==state.entry.horseId||!!original.is_op!==!!state.entry.isOp)throw new Error('変更前の出番が変わりました。選び直してください')
- return {original:{...original},from:{...from},fromSelection:{...fromSelection,isOp:!!original.is_op},target:winterMasterAddInput(data,{competition:state.toCompetition,playerId:state.toPlayerId,horseId:state.toHorseId,organizationId:state.organizationId,isOp:state.toIsOp,note:''},visitorName,selection,id)}
+ return {originalNames:{rider:data.riders.find(r=>r.id===original.rider_id)?.name,horse:data.horses.find(h=>h.id===original.horse_id)?.name},original:{...original},from:{...from},fromSelection:{...fromSelection,isOp:!!original.is_op},target:winterMasterAddInput(data,{competition:state.toCompetition,playerId:state.toPlayerId,horseId:state.toHorseId,organizationId:state.organizationId,isOp:state.toIsOp,note:''},visitorName,selection,id)}
 }

@@ -21,7 +21,7 @@ import {MonitorStatus} from './master/monitor-status'
 import {WinterTimetableEditor} from './winter-timetable-editor'
 import {MasterCompetitionTime} from './master/timetable'
 import {loadWinterRequests,winterRpc,type WinterRequestRow} from '@/lib/winter-reception'
-import {isMeetingWithdrawal,winterOfficialStarts} from '@/lib/winter-confirmed-withdrawals'
+import {isConfirmedWithdrawal,winterOfficialStarts} from '@/lib/winter-confirmed-withdrawals'
 import {loadWinterData} from '@/lib/winter-data'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
 const button='min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50'
@@ -108,26 +108,30 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  }
  function monitorCompetition(c:Data['competitions'][number]): WinterMonitorCompetition {
   const current = day.get(c.id)!
-  const order = drafts[c.id]?.ids ?? current.order
+  const draft = active && drafts[c.id]?.baseline===current.baseline ? drafts[c.id] : undefined
+  const order = draft?.ids ?? current.order
   const official = winterOfficialStarts(data.entries,c.id)
   const lookup = new Map(official.map(entry => [entry.entry_id,entry]))
   const model = current.model
   const marks = new Map(model.entriesByCompetition(c.id).map(entry => [entry.id,entry.adminChangeMark]))
   const time = data.timetable.find(row => row.competition_id === c.id)
-  const rows = [...order,...official.filter(isMeetingWithdrawal).map(e=>e.entry_id)].map((id,index) => {
+  const rows = [...order,...official.filter(isConfirmedWithdrawal).map(e=>e.entry_id)].map((id,index) => {
    const e = lookup.get(id), mark = marks.get(id)
    return {id,number:index+1,rider:e && model.getPlayer(e.rider_id)?.name || '要確認',horse:e && model.getHorse(e.horse_id)?.name || '要確認',
-    organization:e?.organization_name ?? '要確認',isOp:!!e?.is_op,mark:e&&isMeetingWithdrawal(e)?'棄権':mark==='added'?'追加':mark==='changed'?'変更':''}
+    organization:e?.organization_name ?? '要確認',isOp:!!e?.is_op,mark:e&&isConfirmedWithdrawal(e)?'棄権':mark==='added'?'追加':mark==='changed'?'変更':''}
   })
   return {competitionId:c.id,competitionNo:c.competition_no,competitionName:c.name,date:c.competition_date,rows,
-   inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:timetablePhase(time),draft:!!drafts[c.id],
+   inspectionTime:time?.inspection_time,startTime:time?.start_time,timePhase:timetablePhase(time),draft:!!draft,...(draft?{officialOrder:official.map(e=>e.entry_id)}:{}),
    page:dailyMonitor?0:Math.min(page,Math.max(0,Math.ceil(rows.length/30)-1))}
  }
  const visible = dailyMonitor ? comps : competition ? [competition] : []
  const groups = visible.map(monitorCompetition)
  const monitor:WinterMonitorState|null = groups.length ? {...groups[0],version:1,eventId:data.eventId,updatedAt:new Date().toISOString(),
   ...(dailyMonitor ? {followingCompetitions:groups.slice(1)} : {})} : null
- const scrolling=useWinterPreviewScroll(active,monitor?winterMonitorViewId(monitor):'')
+ const draftKey=JSON.stringify(groups.filter(g=>g.draft).map(g=>[g.competitionId,g.rows.map(row=>row.id)]))
+ const draftId=useMemo(()=>draftKey==='[]'?undefined:crypto.randomUUID(),[draftKey])
+ if(monitor&&draftId)monitor.draftId=draftId
+ const scrolling=useWinterPreviewScroll(active,monitor?winterMonitorViewId(monitor):'',draftId)
  if(monitor&&scrolling.key)monitor.scrollController=scrolling.key
  // Publishing only on display changes avoids sending data on an idle timer.
  const displayKey=monitor?JSON.stringify({...monitor,updatedAt:''}):''

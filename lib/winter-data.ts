@@ -16,7 +16,7 @@ export type WinterCompetitionRow = EventRow & {
   fee: number; op_fee: number | null; member_fee: number | null; nonmember_fee: number | null
 }
 export type WinterEntryRow = EventRow & {
-  entry_id: string; meetingWithdrawal?:boolean; source?: string | null; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
+  entry_id: string; meetingWithdrawal?:boolean; receptionWithdrawal?:boolean; source?: string | null; competition_id: string; notes?:string|null; competition_no: string; start_order: number; status: string
   rider_id: string; horse_id: string; organization_id?: string; organization_name: string; is_op: boolean | null
 }
 export type WinterTimetableRow = EventRow & { competition_id:string; inspection_time:string|null; start_time:string|null; phase:ScheduledPhase; cancelled?:boolean; updated_at:string }
@@ -43,7 +43,7 @@ async function rows<T extends EventRow>(table: string, select: string, order: st
 }
 
 export async function loadWinterData(signal?: AbortSignal, meetingToken?:string) {
-  const [organizations, allRiders, allHorses, competitions, allEntries, affiliations, confirmed] = await Promise.all([
+  const [organizations, allRiders, allHorses, competitions, allEntries, affiliations, confirmed, receptionWithdrawals] = await Promise.all([
     rows<WinterOrganizationRow>("organizations", "event_id,id,name", "id.asc", signal),
     rows<WinterRiderRow>("riders", "event_id,id,name,organization_id,jef_member_no,is_participant,roster_source", "id.asc", signal),
     rows<WinterHorseRow>("horses", "event_id,id,name,organization_id,jef_registration_no,is_participant,roster_source", "id.asc", signal),
@@ -54,7 +54,12 @@ export async function loadWinterData(signal?: AbortSignal, meetingToken?:string)
       'fhs_winter_meeting_requests','event_id,reception_requests!inner(original_entry_id,from_competition_id,entry_id,request_type)','request_id.asc',signal,meetingToken,
       {'reception_requests.event_id':`eq.${WINTER_EVENT_ID}`,'reception_requests.status':'eq.reflected','reception_requests.request_type':'in.(withdraw,change)'},
     ) : [],
+    meetingToken ? rows<EventRow & {original_entry_id:string;from_competition_id:string}>(
+      'reception_requests','event_id,original_entry_id,from_competition_id','id.asc',signal,meetingToken,
+      {request_type:'eq.withdraw',status:'eq.reflected'},
+    ) : [],
   ])
+  const receptionSources=new Set(receptionWithdrawals.map(q=>q.from_competition_id+'/'+q.original_entry_id))
   const withdrawnSources=new Set(confirmed.filter(({reception_requests:q})=>q.request_type==='withdraw'||q.original_entry_id!==q.entry_id).map(({reception_requests:q})=>q.from_competition_id+'/'+q.original_entry_id))
   const affiliationNames: Record<string, string> = {}
   for (const affiliation of affiliations) {
@@ -66,7 +71,8 @@ export async function loadWinterData(signal?: AbortSignal, meetingToken?:string)
   const entries = allEntries.filter(row => row.source !== "winter-initial-cancelled").map(row => {
     const name = row.organization_id && affiliationNames[row.organization_id]
     const meetingWithdrawal=/^(wd|withdrawn)$/i.test(row.status) && withdrawnSources.has(row.competition_id+'/'+row.entry_id)
-    return {...row,...(name ? {organization_name:name} : {}),...(meetingWithdrawal ? {meetingWithdrawal:true} : {})}
+    const receptionWithdrawal=/^(wd|withdrawn)$/i.test(row.status) && receptionSources.has(row.competition_id+'/'+row.entry_id)
+    return {...row,...(receptionWithdrawal ? {receptionWithdrawal:true} : {}),...(name ? {organization_name:name} : {}),...(meetingWithdrawal ? {meetingWithdrawal:true} : {})}
   })
   organizations.sort(compareWinterOrganizations)
   for (const row of competitions) row.name=row.name.normalize("NFKC").replace(/\s+/g," ").trim()

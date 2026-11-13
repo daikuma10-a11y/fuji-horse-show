@@ -17,20 +17,20 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export function winterDraftSummary(draft: WinterDraft) {
   if (draft.type === 'add') {
     const i = draft.input, review = reviewWinterAdd(i,{requireVisitor:false})
-    return { id: i.id, organizationId: i.organization.id, organizationName: i.organization.name, type: '追加',
+    return { id: i.id, organizationId: i.organization.id, organizationName: i.organization.name, type: '追加', competitionId:i.competition.id, note:i.note?.trim(),
       label: `第${i.competition.competition_no}競技 ${i.competition.name}　${i.rider.name} ／ ${i.horse.name}${i.selection.isOp ? '（OP）' : ''}`, visitorName: i.visitorName, total: review.total, originalId: null,
       category: i.selection.membership === 'member' ? '会員' : i.selection.membership === 'nonmember' ? '非会員' : '通常料金' }
   }
   if (draft.type === 'change') {
     const i = draft.input, review = reviewWinterChange(i,{requireVisitor:false})
-    return { id: i.target.id, organizationId: i.target.organization.id, organizationName: i.target.organization.name, type: '変更',
+    return { id: i.target.id, organizationId: i.target.organization.id, organizationName: i.target.organization.name, type: '変更', competitionId:i.target.competition.id,
       label: `第${i.from.competition_no}競技 → 第${i.target.competition.competition_no}競技　${i.target.rider.name} ／ ${i.target.horse.name}${i.target.selection.isOp ? '（OP）' : ''}`, visitorName: i.target.visitorName, total: review.fee.total, originalId: i.original.entry_id,
       category: `${i.target.selection.membership === 'member' ? '会員' : i.target.selection.membership === 'nonmember' ? '非会員' : '通常料金'}${review.treatedAsWithdrawAdd ? '・棄権＋追加扱い' : ''}` }
   }
   if (draft.type !== 'withdraw') throw new Error('未確定一覧の形式が不正です')
   assertWinterEvent(draft.entry.event_id)
   if (['wd','withdrawn'].includes(draft.entry.status.toLowerCase()) || typeof draft.visitorName !== 'string' || draft.visitorName.trim().length > 100) throw new Error('棄権の対象と担当者を確認してください')
-  return { id: draft.id, organizationId: draft.organizationId, organizationName: draft.organizationName, type: '棄権',
+  return { id: draft.id, organizationId: draft.organizationId, organizationName: draft.organizationName, type: '棄権', competitionId:draft.entry.competition_id,
     label: `第${draft.entry.competition_no}競技 ${draft.entry.start_order}番　${draft.riderName} ／ ${draft.horseName}${draft.entry.is_op ? '（OP）' : ''}`, visitorName: draft.visitorName, total: 0, originalId: draft.entry.entry_id, category: '0円' }
 }
 

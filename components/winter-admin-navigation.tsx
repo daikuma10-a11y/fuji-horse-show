@@ -12,6 +12,6 @@ export const winterAdminTabs=[
  {id:'meeting',label:'打ち合わせ会',icon:ListOrdered},
  {id:'roster',label:'事前登録',icon:Users},
 ] as const
-export function WinterAdminNavigation({tab,onSelect}:{tab:WinterAdminTab;onSelect:(tab:WinterAdminTab)=>void}){
- return <MasterAdminNavigation tabs={winterAdminTabs} selectedId={tab} idPrefix="winter-tab" onSelect={id=>onSelect(id as WinterAdminTab)}/>
+export function WinterAdminNavigation({tab,onSelect,pendingCount}:{pendingCount?:number;tab:WinterAdminTab;onSelect:(tab:WinterAdminTab)=>void}){
+ return <MasterAdminNavigation tabs={winterAdminTabs} pendingCount={pendingCount} selectedId={tab} idPrefix="winter-tab" onSelect={id=>onSelect(id as WinterAdminTab)}/>
 }

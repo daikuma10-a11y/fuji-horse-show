@@ -1,3 +1,4 @@
+import type {MasterSavedSettlement} from './master/self-settlement'
 export type SettlementDocumentLine = {
   key?: string; competitionNumber?: number; riderId?: string; receiptRider?: string; period: string; action: string; competition: string; rider: string; horse: string
   entryFee: number; serviceFee: number; difference: number; amount: number; paid: number; note: string
@@ -33,10 +34,10 @@ function zip(files: Record<string, string>): Uint8Array {
   for (const chunk of [...chunks, ...central, end]) { result.set(chunk, cursor); cursor += chunk.length }
   return result
 }
+const textCell = (ref: string, value: string, style = 0) => `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`
+const numberCell = (ref: string, value: number, formula?: string) => `<c r="${ref}" s="2">${formula ? `<f>${xml(formula)}</f>` : ''}<v>${value}</v></c>`
 export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   const rows: string[] = [], merges: string[] = []
-  const textCell = (ref: string, value: string, style = 0) => `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`
-  const numberCell = (ref: string, value: number, formula?: string) => `<c r="${ref}" s="2">${formula ? `<f>${xml(formula)}</f>` : ''}<v>${value}</v></c>`
   const addRow = (number: number, cells: string, height = 25) => rows.push(`<row r="${number}" ht="${height}" customHeight="1">${cells}</row>`)
   const label = (row: number, title: string, value: string | number, formula?: string) => { merges.push(`A${row}:D${row}`, `E${row}:I${row}`); addRow(row, textCell(`A${row}`, title, 1) + (typeof value === 'number' ? numberCell(`E${row}`, value, formula) : textCell(`E${row}`, value))) }
   addRow(1, textCell('A1', 'Fuji Horse Show 精算書', 3), 32); merges.push('A1:I1')
@@ -63,6 +64,9 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   row += 7
   addRow(row + 1, textCell(`A${row + 1}`, 'Excelで編集した内容はアプリには自動反映されません。')); merges.push(`A${row + 1}:I${row + 1}`)
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><sheetFormatPr defaultRowHeight="25"/><cols><col min="1" max="1" width="10" customWidth="1"/><col min="2" max="2" width="35" customWidth="1"/><col min="3" max="4" width="24" customWidth="1"/><col min="5" max="5" width="32" customWidth="1"/><col min="6" max="9" width="12" customWidth="1"/>${document.selection ? '<col min="10" max="10" hidden="1" width="12" customWidth="1"/>' : ''}</cols><sheetData>${rows.join('')}</sheetData><mergeCells count="${merges.length}">${merges.map(ref => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>`
+  return packageSettlementSheet(sheet)
+}
+function packageSettlementSheet(sheet:string){
   return zip({
     '[Content_Types].xml': '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
     '_rels/.rels': '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
@@ -73,9 +77,71 @@ export function settlementWorkbook(document: SettlementDocument): Uint8Array {
   })
 }
 export function downloadSettlementWorkbook(document: SettlementDocument) {
-  const bytes = settlementWorkbook(document)
+  downloadWorkbookBytes(settlementWorkbook(document),document.organization,document.issuedDate)
+}
+function downloadWorkbookBytes(bytes:Uint8Array,organization:string,issuedDate:string){
   const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob), link = window.document.createElement('a')
-  link.href = url; link.download = `精算書_${document.organization.replace(/[\\/:*?"<>|]/g, '_')}_${document.issuedDate.replace(/\//g, '-')}.xlsx`; link.click()
+  link.href = url; link.download = `精算書_${organization.replace(/[\\/:*?"<>|]/g, '_')}_${issuedDate.replace(/\//g, '-')}.xlsx`; window.document.body.appendChild(link);link.click();link.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** Uses the same corrected statement and saved snapshot as the printed handout. */
+export function masterStatementWorkbook(record:MasterSavedSettlement){
+  const doc=record.document.document, rows:string[]=[], merges:string[]=[]
+  function add(values:(string|number)[],height=26,style=0,merge?:string){
+    const row=rows.length+1
+    const cells=values.map((value,index)=>{
+      const ref=String.fromCharCode(65+index)+row
+      return typeof value==='number'?numberCell(ref,value):textCell(ref,value,style)
+    }).join('')
+    rows.push(`<row r="${row}" ht="${height}" customHeight="1">${cells}</row>`)
+    if(merge)merges.push(`A${row}:${merge}${row}`)
+  }
+  function total(label:string,value:string|number,formula?:string){
+    const n=rows.length+1
+    merges.push(`A${n}:E${n}`)
+    rows.push(`<row r="${n}" ht="32" customHeight="1">${textCell('A'+n,label,1)}${typeof value==='number'?numberCell('F'+n,value,formula):textCell('F'+n,value)}</row>`)
+    return 'F'+n
+  }
+  add([doc.title??'Fuji Horse Show 精算書'],32,3,'F')
+  add([doc.organization+' 御中'],28,1,'F')
+  const at=new Date(record.created_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})
+  add([record.draft?'確認日時：'+at:`保存日時：${at}　確認者：${record.confirmed_by??''}　受付番号：${record.id.slice(0,8).toUpperCase()}`],26,0,'F')
+  if(!record.draft)add(['支払い予定の確認書です。領収書は入金確認後に係員が発行します。'],26,0,'F')
+  for(const line of doc.notice?.split('\n')??[])add([line],Math.max(26,Math.ceil(line.length/65)*23),0,'F')
+  const normal=total('事前エントリー合計',doc.normalTotal)
+  const advancePaid=total('事前分の入金済み',doc.advancePaid)
+  const extraRow=rows.length+1
+  const extra=total('追加・変更等の合計',doc.extraTotal)
+  const extraPaid=total('追加・変更等の入金済み',doc.extraPaid)
+  const charges=[normal,extra]
+  let billed='',refund='',horse=''
+  for(const item of doc.summaryRows??[]){
+    if(item.amount===undefined){add([item.label,item.value],32);continue}
+    const ref=total(item.kind==='horse'?item.label+'　'+item.value:item.label,item.amount,
+      item.kind==='total'?charges.join('+'):item.kind==='initial'&&horse?normal+'+'+horse:undefined)
+    if(item.kind==='adjustment'||item.kind==='horse')charges.push(ref)
+    if(item.kind==='horse')horse=ref
+    if(item.kind==='total')billed=ref
+    if(item.kind==='refund')refund=ref
+  }
+  total('お支払額',doc.due,billed?`${billed}-${advancePaid}-${extraPaid}${refund?'+'+refund:''}`:undefined)
+  add(['支払い方法',doc.method])
+  if(doc.bankDetails)add(['振込先',doc.bankDetails],Math.max(48,doc.bankDetails.split('\n').length*21))
+  add(['締切後・大会期間中の追加・変更・棄権'],28,1,'F')
+  add(['区分','競技','選手','馬','備考','金額'],25,1)
+  const firstDetail=rows.length+1
+  for(const line of doc.lines)add([line.action,line.competition,line.rider,line.horse,line.action.startsWith('棄権')?'':line.note,line.amount],Math.max(36,Math.ceil(line.note.length/18)*18))
+  if(doc.lines.length){
+    const ref='F'+extraRow
+    rows[extraRow-1]=rows[extraRow-1].replace(numberCell(ref,doc.extraTotal),numberCell(ref,doc.extraTotal,`SUM(F${firstDetail}:F${rows.length})`))
+  }
+  if(!doc.lines.length)add(['追加・変更・棄権の記録はありません。'],26,0,'F')
+  const columns=[20,46,19,24,34,16].map((width,i)=>`<col min="${i+1}" max="${i+1}" width="${width}" customWidth="1"/>`).join('')
+  return packageSettlementSheet(`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><cols>${columns}</cols><sheetData>${rows.join('')}</sheetData><mergeCells count="${merges.length}">${merges.map(ref=>`<mergeCell ref="${ref}"/>`).join('')}</mergeCells><pageMargins left=".3" right=".3" top=".4" bottom=".4" header=".2" footer=".2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`)
+}
+export function downloadMasterStatement(record:MasterSavedSettlement){
+  const doc=record.document.document
+  downloadWorkbookBytes(masterStatementWorkbook(record),doc.organization,doc.issuedDate+(record.draft?'_確認用':'_'+record.id.slice(0,8)))
 }

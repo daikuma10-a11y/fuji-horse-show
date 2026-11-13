@@ -11,6 +11,38 @@ Deno.serve(async(req:Request)=>{
   if(typeof body.proxySecret!=='string'||await sha(body.proxySecret)!==PROXY_HASH)return json({error:'Unauthorized'},401)
   const url=Deno.env.get('SUPABASE_URL')!,key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const rest=async(path:string,options:RequestInit={})=>{const response=await fetch(`${url}/rest/v1/${path}`,{...options,signal:AbortSignal.timeout(15000),headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',...options.headers}});const data=await response.json().catch(()=>null);if(!response.ok){const error=new Error(data?.message||'精算内容を取得できません') as Error&{uncertain?:boolean};error.uncertain=response.status>=500;throw error;}return data}
+  if(body.action==='monitor-withdrawals'){
+   const [monitor]=await rest(`fhs_winter_monitor?event_id=eq.${EVENT}&select=state&limit=1`)
+   if(!monitor)return json({entryIds:[]})
+   const groups=[monitor.state,...(monitor.state.followingCompetitions??[])]
+   const ids=groups.map(group=>group.competitionId)
+   if(ids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)))throw new Error('表示中の競技を確認できません')
+   const from='in.('+ids.join(',')+')', sources=new Set<string>()
+   for(const meeting of [false,true]){
+    const path=meeting?'fhs_winter_meeting_requests':'reception_requests'
+    const prefix=meeting?'reception_requests.':''
+    const select=meeting?'reception_requests!inner(original_entry_id,entry_id,from_competition_id,request_type)':'original_entry_id,from_competition_id'
+    for(let offset=0;;offset+=500){
+     const query=new URLSearchParams({event_id:'eq.'+EVENT,select,order:meeting?'request_id.asc':'id.asc',limit:'500',offset:String(offset),
+      [prefix+'status']:'eq.reflected',[prefix+'request_type']:meeting?'in.(withdraw,change)':'eq.withdraw',[prefix+'from_competition_id']:from})
+     if(meeting)query.set(prefix+'event_id','eq.'+EVENT)
+     const page=await rest(path+'?'+query)
+     for(const item of page){
+      const row=meeting?item.reception_requests:item
+      if(!meeting||row.request_type==='withdraw'||row.entry_id!==row.original_entry_id)sources.add(row.from_competition_id+'/'+row.original_entry_id)
+     }
+     if(page.length<500)break
+    }
+   }
+   const entryIds:string[]=[]
+   for(let offset=0;;offset+=500){
+    const query=new URLSearchParams({event_id:'eq.'+EVENT,competition_id:from,or:'(status.ilike.withdrawn,status.ilike.wd)',select:'entry_id,competition_id,source',order:'entry_id.asc',limit:'500',offset:String(offset)})
+    const rows=await rest('reception_entries?'+query)
+    for(const row of rows)if(row.source!=='winter-initial-cancelled'&&sources.has(row.competition_id+'/'+row.entry_id))entryIds.push(row.entry_id)
+    if(rows.length<500)break
+   }
+   return json({entryIds})
+  }
   if(body.action==='public-setup'){
    const token=[...crypto.getRandomValues(new Uint8Array(32))].map(n=>n.toString(16).padStart(2,'0')).join('')
    await rest('fhs_winter_settlement_devices',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({token_hash:await sha(token),expires_at:new Date(Date.now()+12*3600000).toISOString()})})
