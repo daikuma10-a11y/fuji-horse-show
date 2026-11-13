@@ -1,5 +1,6 @@
 'use client'
 
+import {compareRosterMembers} from '@/lib/master/roster-order'
 import {useState} from 'react'
 import {MasterApplicationReviewField} from './application-review-row'
 import {applicationCountMessage,entryCountTarget,type ApplicationCountReview} from '@/lib/master/application-entry-counts'
@@ -23,7 +24,7 @@ export function ApplicationCountEntryAdder({row,people,disabled,onAdd}:{row:Appl
  return <fieldset disabled={disabled} className="min-w-0 space-y-3 rounded-lg border border-blue-300 bg-blue-50 p-3">
   <legend className="px-1 font-bold">人馬の書き忘れの場合</legend>
   <p className="text-sm">出場する選手と馬を選んで追加してください。この競技の人数と料金に反映します。</p>
-  <div className="grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind} className="min-w-0 text-sm font-semibold">{kind==='rider'?'選手':'馬名'}<select aria-label={`${row.key} 追加する${kind==='rider'?'選手':'馬'}`} className={field} value={input[kind]} onChange={e=>change({[kind]:e.target.value})}><option value="">選んでください</option>{people.filter(p=>p.kind===kind).map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>)}</div>
+  <div className="grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind} className="min-w-0 text-sm font-semibold">{kind==='rider'?'選手':'馬名'}<select aria-label={`${row.key} 追加する${kind==='rider'?'選手':'馬'}`} className={field} value={input[kind]} onChange={e=>change({[kind]:e.target.value})}><option value="">選んでください</option>{people.filter(p=>p.kind===kind).sort(compareRosterMembers).map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>)}</div>
   {row.buckets.some(b=>b.kind==='op')&&<label className="flex min-h-11 items-center gap-2"><input aria-label={`${row.key} 追加する出場者のOP参加`} type="checkbox" className="size-5" checked={input.op} onChange={e=>change({op:e.target.checked})}/>OP参加</label>}
   {error&&<p role="alert" className="font-semibold text-red-800">{error}</p>}
   {message&&<p role="status" className="font-semibold text-emerald-900">{message}</p>}
@@ -59,7 +60,7 @@ export function MasterApplicationCountReview({rows,disabled,competitions=[],peop
    </section>
    {!!rowEntries.length&&<section className="space-y-2" aria-label="この競技の出場者の訂正"><h6 className="font-bold">この競技の出場者（{rowEntries.length}名）</h6><div className="space-y-2">{rowEntries.map((entry,i)=><fieldset key={entry.key} disabled={disabled||!onEntry} className="min-w-0 rounded border border-slate-300 bg-white p-3">
     <legend className="px-1 text-sm font-semibold">{i+1}人目{entry.added?'（この画面で追加）':''}</legend>
-    <div className="grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind} className="min-w-0 text-sm font-semibold">{kind==='rider'?'選手':'馬名'}<select aria-label={`${row.key} ${entry.key} ${kind==='rider'?'選手':'馬'}`} className={field} value={entry[kind]} onChange={e=>{if(!disabled)onEntry?.(entry.key,{[kind]:e.target.value})}}><option value="">選んでください</option>{people.filter(p=>p.kind===kind).map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>)}</div>
+    <div className="grid gap-3 sm:grid-cols-2">{(['rider','horse'] as const).map(kind=><label key={kind} className="min-w-0 text-sm font-semibold">{kind==='rider'?'選手':'馬名'}<select aria-label={`${row.key} ${entry.key} ${kind==='rider'?'選手':'馬'}`} className={field} value={entry[kind]} onChange={e=>{if(!disabled)onEntry?.(entry.key,{[kind]:e.target.value})}}><option value="">選んでください</option>{people.filter(p=>p.kind===kind).sort(compareRosterMembers).map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>)}</div>
     {(entry.op||row.buckets.some(b=>b.kind==='op'))&&<label className="mt-2 flex min-h-11 items-center gap-2"><input aria-label={`${row.key} ${entry.key} OP参加`} type="checkbox" className="size-5" checked={entry.op} onChange={e=>{if(!disabled)onEntry?.(entry.key,{op:e.target.checked})}}/>OP参加</label>}
     {entry.added&&onRemoveEntry&&<button type="button" className="min-h-11 text-sm text-red-800 underline" onClick={()=>{if(!disabled)onRemoveEntry(entry.key)}}>追加した出場者を取り消す</button>}
    </fieldset>)}</div></section>}

@@ -17,7 +17,7 @@ export const winterMasterDates=WINTER_DATES.map(value=>({value,label:new Date(va
 export function winterMasterRoster(data:Data):MasterRosterSource {
  assertWinterEvent(data.eventId)
  for(const rows of [data.organizations,data.riders,data.horses,data.competitions,data.entries])for(const row of rows)assertWinterEvent(row.event_id)
- return {organizations:winterAffiliatedOrganizations(data).map(row=>({id:row.id,name:row.name})),players:data.riders.map(row=>({id:row.id,name:row.name,reading:row.reading,orgId:row.organization_id,jefRegistered:!!row.jef_member_no?.trim(),officialId:row.jef_member_no??undefined})),horses:data.horses.map(row=>({id:row.id,name:row.name,reading:row.reading,orgId:row.organization_id,jefRegistered:!!row.jef_registration_no?.trim(),officialId:row.jef_registration_no??undefined}))}
+ return {organizations:winterAffiliatedOrganizations(data).map(row=>({id:row.id,name:row.name})),players:data.riders.map(row=>({id:row.id,name:row.name,reading:row.reading,pickerRank:row.pickerRank,orgId:row.organization_id,jefRegistered:!!row.jef_member_no?.trim(),officialId:row.jef_member_no??undefined})),horses:data.horses.map(row=>({id:row.id,name:row.name,reading:row.reading,pickerRank:row.pickerRank,orgId:row.organization_id,jefRegistered:!!row.jef_registration_no?.trim(),officialId:row.jef_registration_no??undefined}))}
 }
 export function winterMasterEntryModel(data:Data,competitionId:string){
  const model=eventStartListModel({...data,organizations:winterAffiliatedOrganizations(data)},data.eventId,competitionId,[])

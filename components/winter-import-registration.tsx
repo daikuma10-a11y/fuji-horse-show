@@ -1,4 +1,5 @@
 'use client'
+import {loadWinterPickerData} from '@/lib/winter-picker-data'
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react'
 import Link from 'next/link'
 import {SharedRosterManager} from './shared-roster-manager'
@@ -33,7 +34,7 @@ export function WinterImportRegistration({source,confirmed,onRestore,onBusy}:{so
  }
  async function load(){
   const next=await verified()
-  const [data,initial]=await Promise.all([loadWinterData(),loadWinterInitialCharges(next.accessToken)])
+  const [data,initial]=await Promise.all([loadWinterPickerData(),loadWinterInitialCharges(next.accessToken)])
   const value={data,initial};setSnapshot(value);return value
  }
  function current():ImportCheckpoint{return {kind:'winter-import-registration',version:1,eventId:WINTER_EVENT_ID,reference:importReference(reference),source:{...source},bindings:{...bindings},states:{}}}

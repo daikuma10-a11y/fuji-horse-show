@@ -1,3 +1,4 @@
+import {loadWinterPickerData} from './winter-picker-data'
 import {readDeviceRecord,writeDeviceRecord,listDeviceRecords,type DeviceRecord} from './master/device-reception-store'
 import {updateMeetingWork} from './winter-meeting'
 import {reviewWinterChange} from './winter-change'
@@ -75,7 +76,7 @@ export async function prepareReception(options:{signal?:AbortSignal}={}){
  // Repair navigation even if an interrupted draft is present, without replacing
  // that draft or its data snapshot. The user can then resume the same input.
  checkInput()
- const data=await loadWinterData(AbortSignal.timeout(60000)),retrievedAt=new Date().toISOString(),old=await readPreparation()
+ const data=await loadWinterPickerData(AbortSignal.timeout(60000)),retrievedAt=new Date().toISOString(),old=await readPreparation()
  checkInput()
  const result=await workerMessage('PREPARE')
  if(!result.ready)throw new Error('画面の保存が完了していません')
@@ -92,8 +93,8 @@ export async function prepareReception(options:{signal?:AbortSignal}={}){
  return p
 }
 export async function loadReceptionData(signal?:AbortSignal){
- if(new URLSearchParams(window.location.search).get('meeting')==='1')return loadWinterData(signal)
- const p=await preparedReception();await recoverSealedInput();return p?{...p.data,offlinePreparedAt:p.retrievedAt}:loadWinterData(signal)
+ if(new URLSearchParams(window.location.search).get('meeting')==='1')return loadWinterPickerData(signal)
+ const p=await preparedReception();await recoverSealedInput();return p?{...p.data,offlinePreparedAt:p.retrievedAt}:loadWinterPickerData(signal)
 }
 export function receptionNavigate(path:string,push:(path:string)=>void){if(new URLSearchParams(window.location.search).get('meeting')==='1')push(path);else window.location.assign(path)}
 export async function listOfflineReceipts(){const rows=await listDeviceRecords<WinterOfflineReceipt>(WINTER_EVENT_ID,'receipt');for(const r of rows){if(r.schema!==1||!Array.isArray(r.items)||!r.items.length||r.items.some(i=>!i.context||!Object.keys(offlineStatusLabel).includes(i.status)||!Array.isArray(i.history)||i.handoff&&(!['registered','review','cancelled'].includes(i.handoff.status)||!Number.isFinite(Date.parse(i.handoff.receivedAt)))))throw new Error('保存済み受付の形式を確認できません。消さずに管理者へ確認してください');for(const i of r.items)winterDraftSummary(i.draft)}return rows}

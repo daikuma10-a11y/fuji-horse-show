@@ -1,3 +1,5 @@
+import {compareRosterMembers,kanaSortKey} from './master/roster-order'
+import {compareWinterOrganizations} from './winter-display-order'
 import { winterRpc } from './winter-reception'
 import { WINTER_EVENT_ID } from './winter-event'
 export type RosterEntity = {id:string;kind:'rider'|'horse';name:string;reading:string;jef_number:string|null;updated_at:string;archived_at:string|null}
@@ -9,10 +11,10 @@ export type WinterRosterBinding = {entity_id:string;club_id:string;rider_id:stri
 const url='https://mhgyhyxagkkwdiepifdp.supabase.co/rest/v1/'
 const key='sb_publishable_kjIzIQnO0mztPHLCt9t9CQ_0vhqSF95'
 const columns:Record<string,string>={fhs_roster_entities:'id,kind,name,reading,jef_number,updated_at,archived_at',fhs_roster_clubs:'id,name',fhs_roster_affiliations:'id,entity_id,club_id,started_at,ended_at',fhs_winter_participants:'event_id,entity_id,club_id,name_snapshot,reading_snapshot,jef_number_snapshot,club_name_snapshot',fhs_winter_reception_roster:'entity_id,club_id,rider_id,horse_id'}
-async function rows<T>(table:string,token:string,filters:Record<string,string>={}):Promise<T[]>{
+async function rows<T>(table:string,token:string,filters:Record<string,string>={},select=columns[table]):Promise<T[]>{
  const result:T[]=[]
  for(let offset=0;;offset+=500){
-  const query=new URLSearchParams({select:columns[table],order:['fhs_winter_participants','fhs_winter_reception_roster'].includes(table)?'entity_id.asc,club_id.asc':'id.asc',limit:'500',offset:String(offset)})
+  const query=new URLSearchParams({select,order:['fhs_winter_participants','fhs_winter_reception_roster'].includes(table)?'entity_id.asc,club_id.asc':'id.asc',limit:'500',offset:String(offset)})
   for(const [column,value] of Object.entries(filters))query.set(column,value)
   if(table==='fhs_winter_participants')query.set('event_id',`eq.${WINTER_EVENT_ID}`)
   const response=await fetch(url+table+'?'+query,{cache:'no-store',signal:AbortSignal.timeout(15000),headers:{apikey:key,Authorization:`Bearer ${token}`}}).catch(e=>{if(e instanceof Error&&['TimeoutError','AbortError'].includes(e.name))throw new Error('名簿の読み込みが時間切れです。選択中のチェックは保持しています。接続を確認して再読み込みしてください。');throw e})
@@ -22,8 +24,8 @@ async function rows<T>(table:string,token:string,filters:Record<string,string>={
  }
 }
 export async function loadWinterPickerReadings(token:string) {
- const [participants,bindings]=await Promise.all([rows<Participant>('fhs_winter_participants',token),loadWinterRosterBindings(token)])
- const byMembership=new Map(participants.map(p=>[p.entity_id+':'+p.club_id,p.reading_snapshot]))
+ const [participants,bindings]=await Promise.all([rows<Participant & {fhs_roster_entities:{reading:string}|null}>('fhs_winter_participants',token,{},'entity_id,club_id,reading_snapshot,fhs_roster_entities(reading)'),loadWinterRosterBindings(token)])
+ const byMembership=new Map(participants.map(p=>[p.entity_id+':'+p.club_id,p.fhs_roster_entities?.reading?.trim()||p.reading_snapshot]))
  const byTarget=new Map<string,string>()
  for(const b of bindings){
    const id=b.rider_id??b.horse_id, reading=byMembership.get(b.entity_id+':'+b.club_id)
@@ -76,7 +78,7 @@ async function rosterRpc(name:string,args:Record<string,unknown>,token:string){
 
 export function clubEntities(data:SharedRoster,clubId:string){
  const ids=new Set(data.affiliations.filter(x=>x.club_id===clubId&&x.ended_at===null).map(x=>x.entity_id))
- return data.entities.filter(x=>ids.has(x.id)&&!x.archived_at).sort((a,b)=>(a.reading||a.name).localeCompare(b.reading||b.name,'ja')||a.name.localeCompare(b.name,'ja'))
+ return data.entities.filter(x=>ids.has(x.id)&&!x.archived_at).sort(compareRosterMembers)
 }
 export function saveRosterEntity(input:{kind:'rider'|'horse';name:string;reading:string;jefNumber:string;clubName:string;id?:string;expectedUpdatedAt?:string;replaceAffiliations?:boolean},token:string){
  return rosterRpc('save_fhs_roster_entity',{p_kind:input.kind,p_name:input.name,p_reading:input.reading,p_jef_number:input.jefNumber,p_club_name:input.clubName,p_id:input.id??null,p_expected_updated_at:input.expectedUpdatedAt??null,p_replace_affiliations:!!input.replaceAffiliations},token)
@@ -84,4 +86,32 @@ export function saveRosterEntity(input:{kind:'rider'|'horse';name:string;reading
 export function archiveRosterEntity(entity:RosterEntity,token:string){return rosterRpc('archive_fhs_roster_entity',{p_id:entity.id,p_expected_updated_at:entity.updated_at},token)}
 export function saveWinterParticipants(clubId:string,ids:string[],expectedIds:string[],token:string){
  return rosterRpc('save_fhs_winter_participants',{p_club_id:clubId,p_ids:ids,p_expected_ids:expectedIds},token)
+}
+
+export function searchRosterMemberships(data:SharedRoster, text:string){
+ const query=kanaSortKey(text)
+ if(!query)return []
+ const groups=new Map(data.clubs.map(club=>[club.id,club]))
+ const affiliations=new Map<string,RosterClub[]>()
+ for(const row of data.affiliations){
+   const club=groups.get(row.club_id)
+   if(!club||row.ended_at)continue
+   const current=affiliations.get(row.entity_id)??[]
+   current.push(club)
+   affiliations.set(row.entity_id,current)
+ }
+ return data.entities.filter(e=>!e.archived_at&&[e.name,e.reading,e.jef_number||''].some(v=>kanaSortKey(v).includes(query)))
+   .flatMap(entity=>(affiliations.get(entity.id)??[null]).map(club=>({entity,club})))
+   .sort((a,b)=>(a.club&&b.club?compareWinterOrganizations(a.club,b.club):Number(!!b.club)-Number(!!a.club))||compareRosterMembers(a.entity,b.entity))
+}
+
+export async function loadHorseChoiceReadings(ids:string[],token:string){
+ const readings=new Map<string,string>()
+ for(let start=0;start<ids.length;start+=80){
+   const batch=ids.slice(start,start+80)
+   const found=await rows<{id:string;reading:string}>('fhs_roster_entities',token,
+     {id:'in.('+batch.join(',')+')',kind:'eq.horse'},'id,reading')
+   for(const item of found)readings.set(item.id,item.reading)
+ }
+ return readings
 }

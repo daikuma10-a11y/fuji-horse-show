@@ -11,6 +11,32 @@ Deno.serve(async(req:Request)=>{
   if(typeof body.proxySecret!=='string'||await sha(body.proxySecret)!==PROXY_HASH)return json({error:'Unauthorized'},401)
   const url=Deno.env.get('SUPABASE_URL')!,key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const rest=async(path:string,options:RequestInit={})=>{const response=await fetch(`${url}/rest/v1/${path}`,{...options,signal:AbortSignal.timeout(15000),headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',...options.headers}});const data=await response.json().catch(()=>null);if(!response.ok){const error=new Error(data?.message||'精算内容を取得できません') as Error&{uncertain?:boolean};error.uncertain=response.status>=500;throw error;}return data}
+  if(body.action==='picker-members'){
+   // Only current event IDs and their sort keys may reach the authenticated frontend server.
+   const pages=async<T>(table:string,select:string,order:string,filters:Record<string,string>={})=>{
+    const rows:T[]=[]
+    for(let offset=0;;offset+=500){
+     const query=new URLSearchParams({...filters,select,order,limit:'500',offset:String(offset)})
+     const page:T[]=await rest(table+'?'+query)
+     rows.push(...page)
+     if(page.length<500)return rows
+    }
+   }
+   type Member={id:string;name:string;roster_source:string|null;is_participant:boolean|null}
+   const event={event_id:'eq.'+EVENT}
+   const [riders,horses,participants,bindings]=await Promise.all([
+    pages<Member>('riders','id,name,is_participant,roster_source','id.asc',event),
+    pages<Member>('horses','id,name,is_participant,roster_source','id.asc',event),
+    pages<{entity_id:string;club_id:string;reading_snapshot:string;fhs_roster_entities:{reading:string}}>(
+     'fhs_winter_participants','entity_id,club_id,reading_snapshot,fhs_roster_entities(reading)','entity_id.asc,club_id.asc',event),
+    pages<{entity_id:string;club_id:string;rider_id:string|null;horse_id:string|null}>(
+     'fhs_winter_reception_roster','entity_id,club_id,rider_id,horse_id','entity_id.asc,club_id.asc'),
+   ])
+   const byMembership=new Map(participants.map(p=>[p.entity_id+'/'+p.club_id,p.fhs_roster_entities?.reading?.trim()||p.reading_snapshot]))
+   const byEventId=new Map(bindings.map(b=>[b.rider_id??b.horse_id,byMembership.get(b.entity_id+'/'+b.club_id)]))
+   const members=[...riders,...horses].filter(row=>row.roster_source!=='winter-substituted'&&(row.roster_source!=='shared_roster'||row.is_participant===true))
+   return json({members:members.map(row=>({id:row.id,name:row.name,reading:byEventId.get(row.id)||''}))})
+  }
   if(body.action==='monitor-withdrawals'){
    const [monitor]=await rest(`fhs_winter_monitor?event_id=eq.${EVENT}&select=state&limit=1`)
    if(!monitor)return json({entryIds:[]})

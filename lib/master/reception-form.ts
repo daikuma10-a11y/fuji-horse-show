@@ -18,10 +18,11 @@ export interface MasterWithdrawAdapter extends Pick<MasterStartListSource, 'getP
  onStaged: ()=>void
 }
 
-export type MasterPickerProps={selectedId?:string;registeredOnly?:boolean;onSelect:(id:string)=>void;onNavigate?:()=>void}
+export type MasterPickerProps={selectedId?:string;preferredOrganizationId?:string;registeredOnly?:boolean;onSelect:(id:string)=>void;onNavigate?:()=>void}
 export type MasterAddState={competition:MasterFormCompetition;playerId:string;horseId:string;organizationId:string;isOp:boolean;note:string}
 export interface MasterAddAdapter extends Pick<MasterWithdrawAdapter,'homeHref'|'notice'|'onExit'|'DateSelect'|'CompetitionList'|'getPlayer'|'getHorse'|'getOrg'|'onStaged'> {
  canonicalOrganizationId?:(id:string)=>string
+ preferRiderHorses?:boolean
  PlayerPicker:ComponentType<MasterPickerProps>
  HorsePicker:ComponentType<MasterPickerProps>
  canUseOp?:(competition:MasterFormCompetition)=>boolean
