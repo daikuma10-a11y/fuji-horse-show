@@ -22,7 +22,7 @@ import {loadWinterRequests,winterRpc,type WinterRequestRow} from '@/lib/winter-r
 import {loadWinterData} from '@/lib/winter-data'
 type Data=Awaited<ReturnType<typeof loadWinterData>>
 const button='min-h-12 rounded-lg bg-primary px-4 font-bold text-primary-foreground disabled:opacity-50'
-export function WinterStartList({data,session,onSession,onChanged}:{data:Data;session:AdminSession;onSession:(v:AdminSession)=>void;onChanged:()=>void}){
+export function WinterStartList({data,session,onSession,onChanged,meetingDay}:{meetingDay?:{date:string}|null;data:Data;session:AdminSession;onSession:(v:AdminSession)=>void;onChanged:()=>void}){
  const[compId,setCompId]=useState(''),[page,setPage]=useState(0),[error,setError]=useState(''),[saved,setSaved]=useState<{id:string;at:string}|null>(null),[busy,setBusy]=useState(false),[requests,setRequests]=useState<WinterRequestRow[]>([])
  const[position,setPosition]=useState<{x:number;y:number}|null>(null),drag=useRef<{x:number;y:number;left:number;top:number}|null>(null),lock=useRef(false)
  const[remoteStatus,setRemoteStatus]=useState(''),[resend,setResend]=useState(0),remotePending=useRef<WinterMonitorState|null>(null),remoteRunning=useRef(false),alive=useRef(true),latestSession=useRef(session)
@@ -47,6 +47,10 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  sessionCallback.current=onSession
  useEffect(()=>{const controller=new AbortController();setIdentities([]);setIdentityStatus('共通名簿の照合中…');loadWinterRosterIdentities(session,controller.signal).then(value=>{if(!controller.signal.aborted){setIdentities(value.identities);setIdentityStatus('');sessionCallback.current(value.session)}}).catch(()=>{if(!controller.signal.aborted)setIdentityStatus('共通名簿を照合できません。所属違いの同一人馬は未確認です。')});return()=>controller.abort()},[session.accessToken,data])
  const [dailyMonitor,setDailyMonitor]=useState(false)
+ function selectDay(value:string){
+  setDailyMonitor(true);setDate(value);setCompId('');setPage(0);setError('')
+ }
+ useEffect(()=>{if(meetingDay)selectDay(meetingDay.date)},[meetingDay])
  const competition=data.competitions.find(c=>c.id===compId)
  const comps=useMemo(()=>data.competitions.filter(c=>c.competition_date===date),[data.competitions,date])
  const day=useMemo(()=>new Map(comps.map(c=>{
@@ -159,7 +163,7 @@ export function WinterStartList({data,session,onSession,onChanged}:{data:Data;se
  </section>}
  <div className="print-hide contents"><button onClick={()=>setWideView(v=>!v)} className={wideView?'sticky top-0 z-20 self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary shadow':'self-end rounded-lg border-2 border-primary bg-card px-3 py-1 text-sm font-bold text-primary'}>{wideView?'通常画面へ戻る':'出番表を一画面で見る'}</button>
  <p className={wideView?'sr-only':'text-sm text-muted-foreground'}>人馬の行を少し長押しすると持ち上がります。そのまま上下に動かし、入れたい位置で指を離してください。右の移動マークならすぐに動かせます。最後に「出番順を保存」を押してください。</p>
- <MasterStartSelectors dates={WINTER_DATES.map(value=>({value,label:dateLabel(value)}))} date={date} competitions={comps.map(c=>({id:c.id,number:c.competition_no,name:c.name,official:c.official}))} selectedId={compId} wide={wideView} busy={busy} jump onDate={value=>{setDailyMonitor(true);setDate(value);setCompId('');setPage(0);setError('')}} onCompetition={selectCompetition}/>
+ <MasterStartSelectors dates={WINTER_DATES.map(value=>({value,label:dateLabel(value)}))} date={date} competitions={comps.map(c=>({id:c.id,number:c.competition_no,name:c.name,official:c.official}))} selectedId={compId} wide={wideView} busy={busy} jump onDate={selectDay} onCompetition={selectCompetition}/>
  <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
   <span>{dailyMonitor ? `モニター表示：${dateLabel(date)}の全競技` : competition ? `モニター表示：${winterCompetitionLabel(competition)}` : '日付を押すと、その日の全競技をモニターに表示します。'}</span>
   {dailyMonitor&&<><span>{remoteStatus}</span><button type="button" className="rounded border px-3 py-1" onClick={()=>setResend(v=>v+1)}>モニターに再送</button></>}

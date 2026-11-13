@@ -3,8 +3,23 @@ import Link from 'next/link'
 import {useEffect,useRef,useState} from 'react'
 import {emptyWinterQueue,readWinterQueue,writeWinterQueue,validateWinterQueue,winterDraftSummary,submitWinterBatch,WinterBatchRejected,type WinterQueue} from '@/lib/winter-batch'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
+import {MasterStartSelectors} from './master/start-list-controls'
+import {MasterStartDaySection,jumpToStartCompetition} from './master/start-list-day'
+import {MasterStartRows} from './master/start-list-rows'
+import {MasterCompetitionTime} from './master/timetable'
+import {winterStartListModel} from '@/lib/winter-start-list-model'
+import {winterMasterDates} from '@/lib/winter-master-reception'
+import {winterTimetableSection} from '@/lib/winter-event'
+import {winterCompetitionLabel} from '@/lib/winter-display-order'
+import type {loadWinterData} from '@/lib/winter-data'
+
+type Data = Awaited<ReturnType<typeof loadWinterData>>
+const weekend = winterMasterDates.filter(({value}) => [0,6].includes(new Date(value+'T00:00:00Z').getUTCDay()))
 const button='inline-flex min-h-14 items-center rounded-xl border-2 px-4 py-3 text-xl font-bold disabled:opacity-50'
-export function WinterMeetingPanel({session,onSession,onChanged,onStartlist}:{session:AdminSession;onSession:(s:AdminSession)=>void;onChanged:()=>void;onStartlist:()=>void}){
+export function WinterMeetingPanel({data,dataError,session,onSession,onChanged,onStartlist}:{data:Data|null;dataError:string;session:AdminSession;onSession:(s:AdminSession)=>void;onChanged:()=>void;onStartlist:(date:string)=>void}){
+ const [date,setDate]=useState<string>(weekend[0].value)
+ const queueHeading=useRef<HTMLHeadingElement>(null)
+ const competitions=data?.competitions.filter(c=>c.competition_date===date)??[]
  const[queue,setQueue]=useState<WinterQueue|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),lock=useRef(false)
  function load(){if(lock.current)return;try{setQueue(readWinterQueue(window.localStorage,'meeting'));setError('')}catch(e){setQueue(null);setError(e instanceof Error?e.message:'保留一覧を確認できません')}}
  useEffect(()=>{load();const update=()=>load();window.addEventListener('storage',update);window.addEventListener('winter-queue-changed',update);return()=>{window.removeEventListener('storage',update);window.removeEventListener('winter-queue-changed',update)}},[])
@@ -16,5 +31,27 @@ export function WinterMeetingPanel({session,onSession,onChanged,onStartlist}:{se
  function exportDraft(){if(!queue)return;const blob=new Blob([JSON.stringify({kind:'winter-meeting-draft',queue},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Winter-meeting-draft.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
  async function importDraft(file:File){if(lock.current||queue?.attempted)return;try{if(file.size>2_000_000)throw new Error('ファイルが大きすぎます');const data=JSON.parse(await file.text());if(data.kind!=='winter-meeting-draft')throw new Error('打ち合わせ会の保留ファイルを選択してください');const next=validateWinterQueue(data.queue,'meeting');if(readWinterQueue(window.localStorage,'meeting').attempted)throw new Error('保存結果未確認の一覧は置き換えられません');if(!window.confirm('現在の保留一覧を、このファイルの内容で置き換えますか？'))return;writeWinterQueue(window.localStorage,next,'meeting');setQueue(next);setError('')}catch(e){setError(e instanceof Error?e.message:'保留ファイルを取り込めません')}}
  const summaries=queue?.items.map(winterDraftSummary)??[]
- return <section className="space-y-4 rounded-xl border-2 p-5"><h2 className="text-2xl font-bold">打ち合わせ会・保留一覧</h2><p>相談中の追加・変更・棄権を、この端末に保留します。通常受付とは別の一覧です。複数団体・合計50件までまとめて確定できます。確定するまでDB・出番表・精算は変更しません。</p><div className="flex flex-wrap gap-3">{!queue?.attempted&&!busy&&<><Link className={button} href="/winter/add?meeting=1">追加を保留入力</Link><Link className={button} href="/winter/change?meeting=1">変更を保留入力</Link><Link className={button} href="/winter/withdraw?meeting=1">棄権を保留入力</Link></>}<button className={button} disabled={busy} onClick={load}>保留一覧を再読み込み</button><button className={button} onClick={onStartlist}>出番表・モニターで相談する</button><button className={button} disabled={!queue||busy} onClick={exportDraft}>保留内容をファイルに保存</button><label className={button}>保留ファイルを取り込む<input type="file" accept=".json" className="max-w-52 text-base" disabled={busy||queue?.attempted} onChange={e=>{const file=e.target.files?.[0];if(file)void importDraft(file);e.target.value=''}}/></label></div><p>端末を替えるときは保留ファイルを保存・取り込みしてください。ブラウザーのデータを消すと端末内の下書きも消えます。</p>{error&&<p role="alert" className="rounded-xl bg-red-100 p-3">{error}</p>}{message&&<p role="status" className="rounded-xl bg-green-100 p-3">{message}</p>}{queue?.attempted&&<p className="rounded-xl bg-orange-100 p-3">確定結果が未確認です。内容を固定し、同じ登録番号で再確認してください。</p>}{!summaries.length&&queue&&<p>保留中の内容はありません。</p>}{summaries.map(s=><article key={s.id} className="space-y-2 rounded-xl border p-3"><p className="text-xl font-bold">{s.organizationName} ／ {s.type}</p><p>{s.label}</p><p>{s.category} ／ {s.total.toLocaleString('ja-JP')}円 ／ 担当：{s.visitorName}</p><p>受付番号：{s.id}</p><button className={button} disabled={busy||queue?.attempted} onClick={()=>remove(s.id)}>保留一覧から外す</button></article>)}{summaries.length>0&&<><p className="text-2xl font-bold">{summaries.length}件 ／ 合計 {summaries.reduce((n,s)=>n+s.total,0).toLocaleString('ja-JP')}円</p><button className={button+' bg-blue-800 text-white'} disabled={busy} onClick={()=>void save()}>{busy?'確定結果を確認中…':queue?.attempted?'同じ登録番号で確定を再確認':'全件を確定して出番表と精算へ反映'}</button></>}</section>
+ return <>
+  <section className="space-y-4 rounded-xl border-2 p-5" aria-labelledby="meeting-startlist-title">
+   <h2 id="meeting-startlist-title" className="text-2xl font-bold">打ち合わせ会の出番表</h2>
+   <div className="flex flex-wrap gap-3">
+    <button type="button" className={button} onClick={()=>onStartlist(date)}>この日の出番表・モニターで相談する</button>
+    <button type="button" className={button} onClick={()=>queueHeading.current?.focus()}>保留一覧へ</button>
+   </div>
+   <MasterStartSelectors dates={weekend} date={date} competitions={competitions.map(c=>({id:c.id,number:c.competition_no,name:c.name,official:c.official}))}
+    selectedId="" wide={false} busy={false} jump onDate={setDate} onCompetition={id=>jumpToStartCompetition('meeting-'+id)}/>
+   {!data ? <p role="status">{dataError?'出番表を取得できません。「最新の情報を確認」で再読み込みしてください。':'出番表を読み込んでいます…'}</p>
+    : !competitions.length ? <p>この日の競技はありません。</p>
+    : competitions.map(c=>{
+     const venue=winterTimetableSection(c.competition_no)
+     const time=data.timetable.find(t=>t.competition_id===c.id)
+     return <MasterStartDaySection key={c.id} id={'meeting-'+c.id} title={winterCompetitionLabel(c)} official={c.official} wide={false}>
+      {venue?.startListVenue&&<p>会場：{venue.startListVenue}</p>}
+      <MasterCompetitionTime inspection={time?.inspection_time} start={time?.start_time} phase={time?.phase} showInspection={venue?.showInspection}/>
+      <MasterStartRows model={winterStartListModel(data,c.id,[])} competitionId={c.id} readOnly compact showAdminChanges/>
+     </MasterStartDaySection>
+    })}
+  </section>
+  <section className="space-y-4 rounded-xl border-2 p-5"><h2 ref={queueHeading} tabIndex={-1} className="text-2xl font-bold">打ち合わせ会・保留一覧</h2><p>相談中の追加・変更・棄権を、この端末に保留します。通常受付とは別の一覧です。複数団体・合計50件までまとめて確定できます。確定するまでDB・出番表・精算は変更しません。</p><div className="flex flex-wrap gap-3">{!queue?.attempted&&!busy&&<><Link className={button} href="/winter/add?meeting=1">追加を保留入力</Link><Link className={button} href="/winter/change?meeting=1">変更を保留入力</Link><Link className={button} href="/winter/withdraw?meeting=1">棄権を保留入力</Link></>}<button className={button} disabled={busy} onClick={load}>保留一覧を再読み込み</button><button className={button} disabled={!queue||busy} onClick={exportDraft}>保留内容をファイルに保存</button><label className={button}>保留ファイルを取り込む<input type="file" accept=".json" className="max-w-52 text-base" disabled={busy||queue?.attempted} onChange={e=>{const file=e.target.files?.[0];if(file)void importDraft(file);e.target.value=''}}/></label></div><p>端末を替えるときは保留ファイルを保存・取り込みしてください。ブラウザーのデータを消すと端末内の下書きも消えます。</p>{error&&<p role="alert" className="rounded-xl bg-red-100 p-3">{error}</p>}{message&&<p role="status" className="rounded-xl bg-green-100 p-3">{message}</p>}{queue?.attempted&&<p className="rounded-xl bg-orange-100 p-3">確定結果が未確認です。内容を固定し、同じ登録番号で再確認してください。</p>}{!summaries.length&&queue&&<p>保留中の内容はありません。</p>}{summaries.map(s=><article key={s.id} className="space-y-2 rounded-xl border p-3"><p className="text-xl font-bold">{s.organizationName} ／ {s.type}</p><p>{s.label}</p><p>{s.category} ／ {s.total.toLocaleString('ja-JP')}円 ／ 担当：{s.visitorName}</p><p>受付番号：{s.id}</p><button className={button} disabled={busy||queue?.attempted} onClick={()=>remove(s.id)}>保留一覧から外す</button></article>)}{summaries.length>0&&<><p className="text-2xl font-bold">{summaries.length}件 ／ 合計 {summaries.reduce((n,s)=>n+s.total,0).toLocaleString('ja-JP')}円</p><button className={button+' bg-blue-800 text-white'} disabled={busy} onClick={()=>void save()}>{busy?'確定結果を確認中…':queue?.attempted?'同じ登録番号で確定を再確認':'全件を確定して出番表と精算へ反映'}</button></>}</section>
+ </>
 }
