@@ -10,7 +10,7 @@ try{
  for(const variant of ['organizations','account','saved']){
   const state=[[{id:'org-1',name:'テスト団体'}],'',variant==='organizations'?'':'org-1',variant==='organizations'?null:account,'v','担当者','bank_transfer',true,variant==='saved'?record:null,[],false,'',false]
   const page=render(SelfSettlement,{},state),old=render(legacy.exports.SelfSettlement,{},state)
-  if(variant==='organizations')assert.equal(page,old)
+  if(variant==='organizations')assert.equal(page,old.replace('団体を選択 → 明細確認 → 支払い方法 → 確定・印刷','団体を選択 → 支払い方法を確定 → 明細確認・印刷 → 精算を確定'))
   else{assert.ok(page.includes('内容が違う場合は係員にお尋ねください。'));assert.ok(!page.includes('内容が違う・係員に相談'));assert.ok(page.includes(variant==='saved'?'明細確認、印刷':'この団体の明細・金額を確認しました'))}
  }
  const paper=render(MasterConfirmationPaper,{record},[]);assert.equal(paper,render(legacy.exports.ConfirmationPaper,{record},[]).replaceAll('追加・変更・棄権','追加・変更'),'Autumn print template with revised detail heading')
