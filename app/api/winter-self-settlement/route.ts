@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from 'next/server'
 import {validateWinterCheckoutAccount,validateWinterSettlementRecord} from '@/lib/winter-checkout'
 import {compareWinterOrganizations} from '@/lib/winter-display-order'
 import {assertWinterEvent} from '@/lib/winter-event'
+import {validateWinterStatementContext} from '@/lib/winter-statement-context'
 const cookie='fhs-winter-self-settlement-device'
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 class DefinitiveCheckoutError extends Error {constructor(message:string,public status:number){super(message)}}
@@ -21,7 +22,12 @@ export async function GET(req:NextRequest){
   const request=async(action:string,input:Record<string,unknown>={})=>{try{return await proxy(action,token,input)}catch(e){if(!(e instanceof DefinitiveCheckoutError)||e.status!==401)throw e;token=(await proxy('public-setup','')).token;fresh=true;return proxy(action,token,input)}}
   const org=req.nextUrl.searchParams.get('org')
   let value
-  if(org){if(!uuid.test(org))return json({error:'団体を選択してください'},400);if(req.nextUrl.searchParams.get('history')==='1'){value=await request('history',{org});if(!Array.isArray(value.records))throw new Error('精算履歴を確認できません');value.records=value.records.map((record:unknown)=>validateWinterSettlementRecord(record,org))}else{value=await request('account',{org});value.account=validateWinterCheckoutAccount(value.account);if(value.account.organization.id!==org)throw new Error('団体が一致しません');if(value.saved)value.saved=validateWinterSettlementRecord(value.saved,org)}}
+  if(org){if(!uuid.test(org))return json({error:'団体を選択してください'},400);if(req.nextUrl.searchParams.get('scope')==='1'){
+   value=await request('statement-scope',{org});value.account=validateWinterCheckoutAccount(value.account)
+   if(value.account.organization.id!==org)throw new Error('団体が一致しません')
+   if(typeof value.version!=='string'||!(/^[a-f0-9]{64}$/).test(value.version))throw new Error('精算内容の版を確認できません')
+   value={account:value.account,version:value.version,context:validateWinterStatementContext(value.context,value.account)}
+  }else if(req.nextUrl.searchParams.get('history')==='1'){value=await request('history',{org});if(!Array.isArray(value.records))throw new Error('精算履歴を確認できません');value.records=value.records.map((record:unknown)=>validateWinterSettlementRecord(record,org))}else{value=await request('account',{org});value.account=validateWinterCheckoutAccount(value.account);if(value.account.organization.id!==org)throw new Error('団体が一致しません');if(value.saved)value.saved=validateWinterSettlementRecord(value.saved,org)}}
   else{value=await request('organizations');if(!Array.isArray(value.organizations))throw new Error('団体を確認できません');for(const o of value.organizations)assertWinterEvent(o.event_id);value.organizations.sort(compareWinterOrganizations)}
   const response=json(value)
   if(fresh)response.cookies.set(cookie,token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/api/winter-self-settlement',maxAge:12*3600})

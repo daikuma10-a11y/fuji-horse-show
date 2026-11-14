@@ -47,6 +47,14 @@ const render=()=>h.render(()=>{const tree=WinterSelfSettlement();return expand(t
  draftButton.props.onClick();t=render();assert.equal(prints,0);assert.equal(posts.length,0)
  const preview=nodes(t).find(n=>n.type==='section'&&n.props['aria-label']==='精算書の明細')
  assert.deepEqual(nodes(preview).find(n=>n.props?.record)?.props.record,draftPaper)
+ // Public scope is only mounted inside the opened, payment-authorized preview.
+ button(t,'日付・入金後の明細').props.onClick();t=render()
+ assert.ok(nodes(t).some(n=>n.type?.name==='WinterSelfStatementScope'))
+ assert.ok(!nodes(t).some(n=>n.props?.record?.draft),'full-period browser-print paper is hidden while scoped view is active')
+ assert.ok(!nodes(t).some(n=>n.type==='button'&&text(n)==='印刷'))
+ button(t,'全期間の精算書').props.onClick();t=render()
+ assert.ok(!nodes(t).some(n=>n.type?.name==='WinterSelfStatementScope'))
+
  button(preview,'印刷').props.onClick();button(preview,'印刷').props.onClick()
  assert.equal(prints,2);assert.equal(posts.length,0,'draft printing does not confirm or receive a payment')
  // Acknowledging the displayed statement is possible; unresolved payment warnings still block saving.
