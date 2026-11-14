@@ -1,3 +1,4 @@
+import {showSettlementLine} from './master/self-settlement'
 import type {MasterSavedSettlement} from './master/self-settlement'
 export type SettlementDocumentLine = {
   key?: string; competitionNumber?: number; riderId?: string; receiptRider?: string; period: string; action: string; competition: string; rider: string; horse: string
@@ -89,6 +90,7 @@ function downloadWorkbookBytes(bytes:Uint8Array,organization:string,issuedDate:s
 /** Uses the same corrected statement and saved snapshot as the printed handout. */
 export function masterStatementWorkbook(record:MasterSavedSettlement){
   const doc=record.document.document, rows:string[]=[], merges:string[]=[]
+  const lines=doc.lines.filter(showSettlementLine)
   function add(values:(string|number)[],height=26,style=0,merge?:string){
     const row=rows.length+1
     const cells=values.map((value,index)=>{
@@ -129,15 +131,15 @@ export function masterStatementWorkbook(record:MasterSavedSettlement){
   total('お支払額',doc.due,billed?`${billed}-${advancePaid}-${extraPaid}${refund?'+'+refund:''}`:undefined)
   add(['支払い方法',doc.method])
   if(doc.bankDetails)add(['振込先',doc.bankDetails],Math.max(48,doc.bankDetails.split('\n').length*21))
-  add(['締切後・大会期間中の追加・変更・棄権'],28,1,'F')
+  add(['締切後・大会期間中の追加・変更'],28,1,'F')
   add(['区分','競技','選手','馬','備考','金額'],25,1)
   const firstDetail=rows.length+1
-  for(const line of doc.lines)add([line.action,line.competition,line.rider,line.horse,line.action.startsWith('棄権')?'':line.note,line.amount],Math.max(36,Math.ceil(line.note.length/18)*18))
-  if(doc.lines.length){
+  for(const line of lines)add([line.action,line.competition,line.rider,line.horse,line.action.startsWith('棄権')?'':line.note,line.amount],Math.max(36,Math.ceil(line.note.length/18)*18))
+  if(lines.length){
     const ref='F'+extraRow
     rows[extraRow-1]=rows[extraRow-1].replace(numberCell(ref,doc.extraTotal),numberCell(ref,doc.extraTotal,`SUM(F${firstDetail}:F${rows.length})`))
   }
-  if(!doc.lines.length)add(['追加・変更・棄権の記録はありません。'],26,0,'F')
+  if(!lines.length)add(['追加・変更の記録はありません。'],26,0,'F')
   const columns=[20,46,19,24,34,16].map((width,i)=>`<col min="${i+1}" max="${i+1}" width="${width}" customWidth="1"/>`).join('')
   return packageSettlementSheet(`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><cols>${columns}</cols><sheetData>${rows.join('')}</sheetData><mergeCells count="${merges.length}">${merges.map(ref=>`<mergeCell ref="${ref}"/>`).join('')}</mergeCells><pageMargins left=".3" right=".3" top=".4" bottom=".4" header=".2" footer=".2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`)
 }
