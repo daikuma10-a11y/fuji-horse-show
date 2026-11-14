@@ -1,4 +1,5 @@
 import type {SettlementDocument,SettlementDocumentLine} from '../settlement-document'
+import type {ReactNode} from 'react'
 export type MasterSettlementDocument=Omit<SettlementDocument,'lines'>&{
  lines:(Omit<SettlementDocumentLine,'paid'>&{paid?:number})[]
  title?:string
@@ -12,6 +13,7 @@ export type MasterSettlementViewProps={
  organizations:{id:string;name:string}[];query:string;org:string;account:MasterSettlementAccount|null;record:MasterSavedSettlement|null;history:MasterSavedSettlement[];busy:boolean;error:string;checked:boolean;name:string;method:string
  draftPaper?:MasterSavedSettlement|null;onPrintDraft?:()=>void;onExcel?:(record:MasterSavedSettlement)=>void;homeHref?:string;normalDetails?:boolean;locked?:boolean;pendingMessage?:string;canEditSaved?:boolean
  canUseMethod?:(method:string)=>boolean
+ statementScope?:ReactNode
  onQuery:(value:string)=>void;onName:(value:string)=>void;onMethod:(value:string)=>void;onChecked:(value:boolean)=>void;onSelect:(id:string)=>void;onReset:()=>void;onConfirm:()=>void;onPrint:()=>void;onEditSaved:()=>void;onHistory:()=>void;onChooseHistory:(record:MasterSavedSettlement)=>void;onRetry?:()=>void
 }
 

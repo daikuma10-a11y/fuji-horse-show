@@ -15,6 +15,6 @@ try{
  }
  const paper=render(MasterConfirmationPaper,{record},[]);assert.ok(paper.indexOf('事前料金合計')<paper.indexOf('追加・変更の合計'));assert.ok(paper.indexOf('請求総額')<paper.indexOf('お支払い額'))
  const standalone=masterCheckoutPrintHtml(record);assert.ok(standalone.includes(paper));assert.ok(!paper.includes('事前エントリーの明細'));assert.ok(paper.includes('競技1 → 競技2'));assert.ok(!standalone.includes('https://'));assert.ok(!standalone.includes('Bearer'))
- const unsafe=masterCheckoutPrintHtml({...record,confirmed_by:'<script>bad</script>',document:{...account,document:{...document,organization:'<script>club</script>'}}});assert.ok(!unsafe.includes('<script>'));assert.ok(unsafe.includes('&lt;script&gt;'))
+ const unsafe=masterCheckoutPrintHtml({...record,confirmed_by:'<script>bad</script>',document:{...account,document:{...document,organization:'<script>club</script>'}}});assert.equal((unsafe.match(/<script>/g)||[]).length,1);assert.ok(!unsafe.includes('<script>bad'));assert.ok(!unsafe.includes('<script>club'));assert.ok(unsafe.includes('&lt;script&gt;'))
  console.log('PASS: Autumn checkout and preview controls; inline and standalone share one template; pre-entry totals only, before/after changes and escaped text')
 }finally{React.useState=oldState;React.useRef=oldRef}

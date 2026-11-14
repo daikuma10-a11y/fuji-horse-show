@@ -95,6 +95,33 @@ Deno.serve(async(req:Request)=>{
    const history=await rest(`fhs_winter_settlement_confirmations?event_id=eq.${EVENT}&organization_key=eq.${body.org}&select=id,event_id,organization_key,account_version,payment_method,confirmer_name,account,created_at&order=created_at.desc,id.desc&limit=1`)
    return json({...current,saved:history[0]??null})
   }
+  if(body.action==='statement-scope'){
+   const current=await rest('rpc/get_winter_settlement_account',{method:'POST',body:JSON.stringify({p_org:body.org})})
+   const pages=async(table:string,select:string,filters:Record<string,string>)=>{
+    const rows=[]
+    for(let offset=0;;offset+=500){
+     const query=new URLSearchParams({...filters,event_id:'eq.'+EVENT,select,order:'id.asc',limit:'500',offset:String(offset)})
+     const page=await rest(table+'?'+query);if(!Array.isArray(page))throw new Error('明細の履歴を確認できません')
+     rows.push(...page);if(page.length<500)return rows
+    }
+   }
+   const [competitions,requests,onsite,payments,adjustments]=await Promise.all([
+    pages('competitions','id,competition_date',{}),
+    pages('reception_requests','id,target_competition_id,reflected_at',{organization_id:'eq.'+body.org,status:'eq.reflected'}),
+    pages('fhs_winter_settlement_only','id,created_at,inputs',{organization_key:'eq.'+body.org}),
+    pages('fhs_winter_extra_payments','id,created_at,amount,payment_method,reverses_id',{organization_key:'eq.'+body.org}),
+    pages('fhs_winter_charge_adjustments','id,created_at',{organization_key:'eq.'+body.org}),
+   ])
+   const latest=await rest('rpc/get_winter_settlement_account',{method:'POST',body:JSON.stringify({p_org:body.org})})
+   if(current.version!==latest.version)throw new Error('精算内容が更新されました。もう一度読み直してください。')
+   const dates=new Map(competitions.map(row=>[row.id,row.competition_date]))
+   const context={eventId:EVENT,orgId:body.org,dates:[...new Set(competitions.map(row=>row.competition_date))].sort(),
+    sources:[...requests.map(row=>({id:row.id,date:dates.get(row.target_competition_id),at:row.reflected_at})),...onsite.map(row=>({id:row.id,date:dates.get(row.inputs.competitionId),at:row.created_at}))],
+    payments:payments.map(row=>({id:row.id,at:row.created_at,amount:row.amount,method:row.payment_method,reversesId:row.reverses_id})),
+    adjustments:adjustments.map(row=>({id:row.id,at:row.created_at})),
+   }
+   return json({account:current.account,version:current.version,context})
+  }
   if(body.action==='confirm')return json({saved:await rest('rpc/confirm_winter_settlement',{method:'POST',body:JSON.stringify({p_id:body.id,p_org:body.org,p_version:body.version,p_method:body.method,p_name:body.name,p_token_hash:hash})})})
   return json({error:'Unknown action'},400)
  }catch(e){return json({error:e instanceof Error?e.message:'処理に失敗しました',uncertain:!!(e as {uncertain?:boolean})?.uncertain||(e instanceof Error&&['TimeoutError','AbortError','TypeError'].includes(e.name))},409)}
