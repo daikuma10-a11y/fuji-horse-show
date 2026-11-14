@@ -11,6 +11,10 @@ const money=(kind:SummaryRow['kind'],label:string,amount:number):SummaryRow=>({k
 
 /** Display rows use the saved amounts. Credits and refunds are explanatory, never new charges. */
 export function masterSettlementSummary(document:MasterSettlementDocument){
+ if(document.scope)return {
+  charges:[money('extra','対象明細合計',document.scope.total)],
+  payments:[money('other','団体全体のお支払い残額',Math.max(0,document.due)),...(document.due<0?[money('other','団体全体のご返金額',-document.due)]:[])],
+ }
  const detail=document.summaryRows??[]
  const horses=detail.filter(row=>row.kind==='horse')
  const initial=detail.find(row=>row.kind==='initial')?.amount??document.normalTotal+horses.reduce((sum,row)=>sum+(row.amount??0),0)

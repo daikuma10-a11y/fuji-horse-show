@@ -3,6 +3,7 @@ export type MasterSettlementDocument=Omit<SettlementDocument,'lines'>&{
  lines:(Omit<SettlementDocumentLine,'paid'>&{paid?:number})[]
  title?:string
  notice?:string
+ scope?:{label:string;total:number}
  summaryRows?:{label:string;value:string;amount?:number;kind?:'horse'|'adjustment'|'refund'|'total'|'initial'}[]
 }
 export type MasterSettlementAccount={document:MasterSettlementDocument;normalLines:{id:string;competition:string;rider:string;horse:string;amount:number}[];warnings:string[]}

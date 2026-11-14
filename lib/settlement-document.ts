@@ -122,7 +122,7 @@ export function masterStatementWorkbook(record:MasterSavedSettlement){
   const balanceFormula=`${refs('total')[0]}-${refs('advance')[0]}-${refs('paid')[0]}${refs('refund').map(ref=>'+'+ref).join('')}`
   const extraRow=firstTotal+items.findIndex(row=>row.kind==='extra')
   for(const item of items){
-    const formula=item.kind==='initial'?initialFormula:item.kind==='total'?totalFormula:
+    const formula=doc.scope?undefined:item.kind==='initial'?initialFormula:item.kind==='total'?totalFormula:
       item.kind==='due'?`MAX(0,${balanceFormula})`:item.kind==='refundDue'?`MAX(0,-(${balanceFormula}))`:
       item.kind==='overpayment'?`MAX(0,${refs('advance')[0]}-${refs('initial')[0]})`:undefined
     const explanation=item.kind==='horse'?item.value:item.value.split('\n').slice(1).join(' ／ ')
@@ -136,7 +136,8 @@ export function masterStatementWorkbook(record:MasterSavedSettlement){
   for(const line of lines)add([line.action,line.competition,line.rider,line.horse,line.action.startsWith('棄権')?'':line.note,line.amount],Math.max(36,Math.ceil(line.note.length/18)*18))
   if(lines.length){
     const ref='F'+extraRow
-    rows[extraRow-1]=rows[extraRow-1].replace(numberCell(ref,doc.extraTotal),numberCell(ref,doc.extraTotal,`SUM(F${firstDetail}:F${rows.length})`))
+    const amount=doc.scope?.total??doc.extraTotal
+    rows[extraRow-1]=rows[extraRow-1].replace(numberCell(ref,amount),numberCell(ref,amount,`SUM(F${firstDetail}:F${rows.length})`))
   }
   if(!lines.length)add(['追加・変更の記録はありません。'],26,0,'F')
   const columns=[20,46,19,24,34,16].map((width,i)=>`<col min="${i+1}" max="${i+1}" width="${width}" customWidth="1"/>`).join('')
@@ -144,5 +145,5 @@ export function masterStatementWorkbook(record:MasterSavedSettlement){
 }
 export function downloadMasterStatement(record:MasterSavedSettlement){
   const doc=record.document.document
-  downloadWorkbookBytes(masterStatementWorkbook(record),doc.organization,doc.issuedDate+(record.draft?'_確認用':'_'+record.id.slice(0,8)))
+  downloadWorkbookBytes(masterStatementWorkbook(record),doc.organization,doc.issuedDate+(doc.scope?'_対象明細':record.draft?'_確認用':'_'+record.id.slice(0,8)))
 }
