@@ -55,6 +55,7 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
  if(instruction&&!['bank_transfer','cash_at_venue'].includes(instruction.payment_method))throw new Error('支払方法を確認できません')
  if(instruction?.payment_method==='bank_transfer'&&!instruction.bank_details.trim())throw new Error('振込先を確認できません')
  const normalTotal=initial.reduce((sum,x)=>sum+amount(x.entry_fee),0)
+ const entriesById=new Map(data.entries.map(entry=>[entry.entry_id,entry]))
  const lines=reflected.map(x=>{
   const comp=data.competitions.find(c=>c.id===x.target_competition_id)
   const rider=data.riders.find(r=>r.id===x.rider_id),horse=horseHistory.find(h=>h.id===x.horse_id)
@@ -65,7 +66,12 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
   const oldRider=before&&data.riders.find(r=>r.id===before.riderId),oldHorse=before&&horseHistory.find(h=>h.id===before.horseId)
   if(before&&(!oldComp||!oldRider||!oldHorse))throw new Error('変更前の人馬・競技を確認できません')
   const changed=(a:string|undefined,b:string)=>a&&a!==b?`${a} → ${b}`:b
-  return {id:x.id,competition:comp,competitionLabel:changed(oldComp&&winterCompetitionLabel(oldComp),winterCompetitionLabel(comp)),rider:changed(oldRider?.name,rider.name),horse:changed(oldHorse?.name,horse.name),action:x.request_type==='add'?'追加':x.request_type==='change'?'変更':'棄権',amount:fee}
+  const targetOp=x.request_type==='add' ? x.payload?.add?.isOp : x.payload?.change?.toIsOp
+  // An organizer can add OP after the meeting. Match the exact outing, never just its rider.
+  const entry=x.request_type==='add' && x.entry_id ? entriesById.get(x.entry_id) : undefined
+  const addedAsOp=entry?.is_op===true && entry.competition_id===comp.id && entry.rider_id===rider.id && entry.horse_id===horse.id
+  const isOp=x.request_type!=='withdraw' && ((targetOp??x.payload?.inputs?.isOp)===true || addedAsOp)
+  return {...(isOp?{isOp:true}:{}),id:x.id,competition:comp,competitionLabel:changed(oldComp&&winterCompetitionLabel(oldComp),winterCompetitionLabel(comp)),rider:changed(oldRider?.name,rider.name),horse:changed(oldHorse?.name,horse.name),action:x.request_type==='add'?'追加':x.request_type==='change'?'変更':'棄権',amount:fee}
  }).sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const onsite=(ledger.onsite??[]).filter(x=>x.organization_key===orgId),onsiteReversed=new Set<string>()
  for(const row of onsite){
@@ -77,7 +83,7 @@ export function winterSettlementAccount(data:Data,ledger:WinterSettlementData,or
   const freeChange = row.fee_amount===0 && winterFreeFriendshipChange(bc?.competition_no,comp.competition_no)
   const action=row.action_type??'add';amount(row.entry_fee);if((action==='add'&&(row.entry_fee===0||row.fee_amount!==row.entry_fee+3000))||(action==='change'&&(row.entry_fee===0||!Number.isSafeInteger(row.fee_amount)||(row.fee_amount<2000&&!freeChange)))||(action==='withdraw'&&(row.entry_fee!==0||row.fee_amount!==0))||!row.note.trim())throw new Error('現場登録の料金履歴を確認できません')
   const changed=(a:string|undefined,b:string)=>a&&a!==b?`${a} → ${b}`:b
-  lines.push({id:row.id,competition:comp,competitionLabel:changed(bc&&winterCompetitionLabel(bc),winterCompetitionLabel(comp)),rider:changed(br?.name,rider.name),horse:changed(bh?.name,horse.name),action:(action==='change'?'現場変更':action==='withdraw'?'現場棄権':'現場追加')+(row.reverses_id?'取消':''),amount:row.reverses_id?-row.fee_amount:row.fee_amount})
+  lines.push({...((action!=='withdraw' && row.inputs.isOp===true)?{isOp:true}:{}),id:row.id,competition:comp,competitionLabel:changed(bc&&winterCompetitionLabel(bc),winterCompetitionLabel(comp)),rider:changed(br?.name,rider.name),horse:changed(bh?.name,horse.name),action:(action==='change'?'現場変更':action==='withdraw'?'現場棄権':'現場追加')+(row.reverses_id?'取消':''),amount:row.reverses_id?-row.fee_amount:row.fee_amount})
  }
  lines.sort((a,b)=>compareWinterCompetitions(a.competition,b.competition)||a.id.localeCompare(b.id))
  const extraTotal=lines.reduce((sum,x)=>sum+x.amount,0),advancePaid=amount(advance?.paid_amount??0)

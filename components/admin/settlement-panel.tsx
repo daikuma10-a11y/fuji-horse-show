@@ -1,4 +1,5 @@
 "use client"
+import {settlementOpNote} from '@/lib/master/self-settlement'
 import {MasterAdminSettlementGroups,MasterAdminSettlementSummary} from "@/components/master/admin-settlement"
 
 import { useEffect, useState, type FormEvent } from "react"
@@ -210,7 +211,7 @@ export function SettlementPanel({ session }: { session: AdminSession }) {
       const rider = change ? changed(playerName(change.fromPlayerId), requestRiderName(request)) : requestRiderName(request)
       const horse = change ? changed(horseName(change.fromHorseId), change.toHorseName || horseName(change.toHorseId)) : horseName(request.add?.horseId ?? request.withdraw?.horseId ?? '')
       const compText = change ? changed(compLabel(change.fromCompetitionId), compLabel(change.toCompetitionId)) : compLabel(request.add?.competitionId ?? request.withdraw?.competitionId ?? '')
-      const opNote = change && !!change.fromIsOp !== !!change.toIsOp ? `参加区分：${change.fromIsOp ? 'OP' : '通常'} → ${change.toIsOp ? 'OP' : '通常'}` : ''
+      const opNote = change ? settlementOpNote(!!change.toIsOp, !!change.fromIsOp) : settlementOpNote(request.add?.isOp)
       const parts = request.fee.addBase + request.fee.addEntry + request.fee.changeBase + request.fee.competitionDiff
       const addCharge = request.type === 'add' || request.type === 'change' && request.change?.treatedAsWithdrawAdd
       const entryFee = addCharge ? overrideFor('add', request.id)?.corrected_fee ?? (parts ? request.fee.addEntry : request.fee.total) : 0

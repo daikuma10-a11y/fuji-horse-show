@@ -9,14 +9,15 @@ assert.throws(()=>api.validateWinterCheckoutAccount({...account,total:27000}),/�
 assert.throws(()=>api.validateWinterSettlementRecord(record,'other'),/一致/)
 assert.throws(()=>api.validateWinterSettlementRecord({...record,event_id:'autumn'},'org'),/Winter/)
 const html=print.winterCheckoutPrintHtml(record);assert(html.includes('Fuji Horse Show 精算書'));assert(!html.includes('精算書（確認用）'));assert(!html.includes('精算内容の確定は行っていません'));assert(!html.includes('保存済み精算内容'));assert(html.includes('saved-id'));assert(html.includes('支払い予定の確認書です'));assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(html.includes('¥2,000'));assert(!html.includes('Bearer'))
+assert.ok(!html.includes('OP参加'),'older statements without an OP flag keep their original detail')
 const zero={...record,payment_method:'no_payment_due',account:{...account,extraPaid:2000,remaining:0}}
 assert(print.winterCheckoutPrintHtml(zero).includes('<td>お支払い不要</td>'))
 const provisional=draft.winterSettlementPrintHtml(account,new Date(record.created_at))
 assert(provisional.includes('精算書（確認用）'));assert(!provisional.includes('受付番号：'));assert(!provisional.includes('保存日時：'));assert(provisional.includes('¥2,000'))
 // The recipient sees the final charge once on the affected row, in both print paths.
 const changes=[{id:'op',action:'変更',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:2000},
- {id:'added',action:'追加',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:8000},
- {id:'swap',action:'変更',competitionLabel:'第16競技',rider:'別選手',horse:'旧馬 → 新馬',amount:2000},
+ {id:'added',isOp:true,action:'追加',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:8000},
+ {id:'swap',isOp:true,action:'変更',competitionLabel:'第16競技',rider:'別選手',horse:'旧馬 → 新馬',amount:2000},
  {id:'withdraw',action:'棄権',competitionLabel:'第7競技',rider:'別選手',horse:'別馬',amount:0},
  {id:'onsite-withdraw',action:'現場棄権',competitionLabel:'第7競技',rider:'選手',horse:'別馬',amount:0},
  {id:'onsite-reversal',action:'現場棄権取消',competitionLabel:'第7競技',rider:'選手',horse:'別馬',amount:0}]
@@ -30,6 +31,8 @@ for(const page of [draft.winterSettlementPrintHtml(linked),print.winterCheckoutP
  assert.deepEqual(detail,['¥7,000','¥2,000'])
  assert(!page.includes('棄権')&&!page.includes('別馬'));assert(!page.includes('OP後付け')&&!page.includes('変更料免除'))
  for(const value of ['OP競技料4,000円＋追加料3,000円','¥9,000','¥9,500','別途追加料金','¥500'])assert(page.includes(value))
+ assert(page.includes('<td>OP参加 ／ OP競技料4,000円＋追加料3,000円</td>'))
+ assert(page.includes('<td>OP参加</td>'))
  assert(!page.includes('内部記録')&&!page.includes('金額訂正合計'))
 }
 const {masterStatementWorkbook}=load('lib/settlement-document.ts')
@@ -39,7 +42,7 @@ for(const paper of [draft.winterSettlementDraft(linked),model.winterMasterSavedS
  const sheet=strFromU8(unzipSync(bytes)['xl/worksheets/sheet1.xml'])
  for(const amount of [7000,2000,33500,9500])assert.ok(sheet.includes('<v>'+amount+'</v>'))
  for(const hidden of ['棄権','別馬','OP後付け','変更料免除','内部記録','<script>'])assert.ok(!sheet.includes(hidden))
- assert.ok(sheet.includes('OP競技料4,000円＋追加料3,000円'))
+ assert.ok(sheet.includes('OP参加 ／ OP競技料4,000円＋追加料3,000円'));assert.ok(sheet.includes('>OP参加</t>'))
  assert.match(sheet,/<f>SUM\(F\d+:F\d+\)<\/f><v>9000<\/v>/)
  if(process.env.FHS_STATEMENT_QA)fs.writeFileSync(path.join(process.env.FHS_STATEMENT_QA,paper.draft?'draft.xlsx':'saved.xlsx'),bytes)
 }
