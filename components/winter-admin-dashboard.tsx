@@ -15,7 +15,7 @@ import {WinterMasterRegistration} from '@/components/winter-master-registration'
 import {WinterMeetingPanel} from '@/components/winter-meeting-panel'
 import {WinterExportPanel} from '@/components/winter-export-panel'
 import {subscribeWinterUpdates} from '@/lib/winter-live'
-import {WinterSettlementActions} from '@/components/winter-settlement-actions'
+import {WinterPostRegistration} from '@/components/winter-settlement-actions'
 import {WinterInitialEntryRegistration} from '@/components/winter-initial-entry-registration'
 import {WinterStartList} from '@/components/winter-start-list'
 import {WinterTimetable} from '@/components/winter-timetable'
@@ -128,9 +128,7 @@ export function WinterAdminDashboard(){
  !data?<p role="status">Winterのデータを読み込んでいます…</p>:
  t.id==='timetable'?<WinterTimetable data={data} session={session} onSession={updateSession} onChanged={refresh}/>:
  t.id==='startlist'?<WinterStartList active={tab==='startlist'} meetingDay={meetingStartDay} data={data} session={session} onSession={updateSession} onChanged={refresh}/>:
- <><h2 className="text-2xl font-bold">事後登録（精算のみ）</h2>
- <WinterInitialEntryRegistration settlementOnly data={data} session={session} onChanged={refresh} onChooseParticipants={()=>openRegistration('roster')}/>
- <WinterSettlementActions data={data} session={session} onSession={updateSession} onChanged={refresh}/></>}
+ <WinterPostRegistration data={data} session={session} onSession={updateSession} onChanged={refresh} onChooseParticipants={()=>openRegistration('roster')}/>}
  </section>)}
  </>}
  </main></div>

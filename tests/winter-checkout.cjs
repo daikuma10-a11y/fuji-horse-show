@@ -1,3 +1,4 @@
+require('./register-ts.cjs')
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path')
 function load(file,mocks={}){const full=path.resolve(file),m=new Module(full,module);m.filename=full;m.paths=module.paths;m.require=n=>n in mocks?mocks[n]:require(Module._resolveFilename(n,m));m._compile(ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText,full);return m.exports}
 const event=load('lib/winter-event.ts'),api=load('lib/winter-checkout.ts',{'./winter-event':event}),model=load('lib/winter-master-settlement.ts',{'./winter-checkout':api}),template=load('lib/master/settlement-print.ts',{'../fees':load('lib/fees.ts')}),draft=load('lib/winter-settlement-print.ts',{'./winter-event':event,'./winter-master-settlement':model,'./master/settlement-print':template}),print=load('lib/winter-checkout-print.ts',{'./winter-checkout':api,'./winter-master-settlement':model,'./master/settlement-print':template})
@@ -16,7 +17,9 @@ assert(provisional.includes('精算書（確認用）'));assert(!provisional.inc
 const changes=[{id:'op',action:'変更',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:2000},
  {id:'added',action:'追加',competitionLabel:'第5競技',rider:'選手',horse:'馬',amount:8000},
  {id:'swap',action:'変更',competitionLabel:'第16競技',rider:'別選手',horse:'旧馬 → 新馬',amount:2000},
- {id:'withdraw',action:'棄権',competitionLabel:'第7競技',rider:'別選手',horse:'別馬',amount:0}]
+ {id:'withdraw',action:'棄権',competitionLabel:'第7競技',rider:'別選手',horse:'別馬',amount:0},
+ {id:'onsite-withdraw',action:'現場棄権',competitionLabel:'第7競技',rider:'選手',horse:'別馬',amount:0},
+ {id:'onsite-reversal',action:'現場棄権取消',competitionLabel:'第7競技',rider:'選手',horse:'別馬',amount:0}]
 const corrections=[{delta:-2000,reason:'内部記録A',statement_items:[{lineId:'op',delta:-2000,note:'OP後付け・変更料免除',omitIfZero:true}]},
  {delta:-1000,reason:'内部記録B',statement_items:[{lineId:'added',delta:-1000,note:'OP競技料4,000円＋追加料3,000円'}]},
  {delta:500,reason:'別途追加料金'}]
@@ -24,8 +27,8 @@ const linked={...account,lines:changes,adjustments:corrections,extraTotal:12000,
 const original=JSON.stringify(linked)
 for(const page of [draft.winterSettlementPrintHtml(linked),print.winterCheckoutPrintHtml({...record,account:linked})]){
  const detail=[...page.matchAll(/<tr>(.*?)<td class="amount">([^<]*)<\/td><\/tr>/gs)].map(m=>m[2])
- assert.deepEqual(detail,['¥7,000','¥2,000','¥0'])
- assert(!page.includes('OP後付け')&&!page.includes('変更料免除'))
+ assert.deepEqual(detail,['¥7,000','¥2,000'])
+ assert(!page.includes('棄権')&&!page.includes('別馬'));assert(!page.includes('OP後付け')&&!page.includes('変更料免除'))
  for(const value of ['OP競技料4,000円＋追加料3,000円','¥9,000','¥9,500','別途追加料金','¥500'])assert(page.includes(value))
  assert(!page.includes('内部記録')&&!page.includes('金額訂正合計'))
 }
@@ -35,7 +38,7 @@ for(const paper of [draft.winterSettlementDraft(linked),model.winterMasterSavedS
  const bytes=masterStatementWorkbook(paper)
  const sheet=strFromU8(unzipSync(bytes)['xl/worksheets/sheet1.xml'])
  for(const amount of [7000,2000,33500,9500])assert.ok(sheet.includes('<v>'+amount+'</v>'))
- for(const hidden of ['OP後付け','変更料免除','内部記録','<script>'])assert.ok(!sheet.includes(hidden))
+ for(const hidden of ['棄権','別馬','OP後付け','変更料免除','内部記録','<script>'])assert.ok(!sheet.includes(hidden))
  assert.ok(sheet.includes('OP競技料4,000円＋追加料3,000円'))
  assert.match(sheet,/<f>SUM\(F\d+:F\d+\)<\/f><v>9000<\/v>/)
  if(process.env.FHS_STATEMENT_QA)fs.writeFileSync(path.join(process.env.FHS_STATEMENT_QA,paper.draft?'draft.xlsx':'saved.xlsx'),bytes)
