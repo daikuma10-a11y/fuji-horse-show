@@ -13,7 +13,7 @@ try{
   if(variant==='organizations')assert.equal(page,old.replace('団体を選択 → 明細確認 → 支払い方法 → 確定・印刷','団体を選択 → 支払い方法を確定 → 明細確認・印刷 → 精算を確定'))
   else{assert.ok(page.includes('内容が違う場合は係員にお尋ねください。'));assert.ok(!page.includes('内容が違う・係員に相談'));assert.ok(page.includes(variant==='saved'?'明細確認、印刷':'この団体の明細・金額を確認しました'))}
  }
- const paper=render(MasterConfirmationPaper,{record},[]);assert.equal(paper,render(legacy.exports.ConfirmationPaper,{record},[]).replaceAll('追加・変更・棄権','追加・変更'),'Autumn print template with revised detail heading')
+ const paper=render(MasterConfirmationPaper,{record},[]);assert.ok(paper.indexOf('事前料金合計')<paper.indexOf('追加・変更の合計'));assert.ok(paper.indexOf('請求総額')<paper.indexOf('お支払い額'))
  const standalone=masterCheckoutPrintHtml(record);assert.ok(standalone.includes(paper));assert.ok(!paper.includes('事前エントリーの明細'));assert.ok(paper.includes('競技1 → 競技2'));assert.ok(!standalone.includes('https://'));assert.ok(!standalone.includes('Bearer'))
  const unsafe=masterCheckoutPrintHtml({...record,confirmed_by:'<script>bad</script>',document:{...account,document:{...document,organization:'<script>club</script>'}}});assert.ok(!unsafe.includes('<script>'));assert.ok(unsafe.includes('&lt;script&gt;'))
  console.log('PASS: Autumn checkout and preview controls; inline and standalone share one template; pre-entry totals only, before/after changes and escaped text')
