@@ -16,11 +16,11 @@ const render=()=>h.render(()=>{const tree=WinterSelfSettlement();return expand(t
 ;(async()=>{
  account.warnings=['事前入金は未確認です。本部に確認してください。']
  let t=render();await flush();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.ok(text(t).includes('馬匹登録料（1頭）'));assert.ok(text(t).includes('¥14,000'));assert.ok(!text(t).includes('事前エントリーの明細'));assert.ok(text(t).includes('入金は合計欄を参照'))
- const draftLabel='明細確認'
+ const draftLabel='明細確認、印刷'
  assert.match(text(t),/内容が違う場合は係員にお尋ねください。/)
  assert.ok(!text(t).includes('内容が違う・係員に相談'))
  const check=nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox')
- assert.equal(check.props.checked,false);assert.ok(nodes(t).indexOf(check)<nodes(t).indexOf(button(t,draftLabel)))
+ assert.equal(check.props.checked,false);assert.ok(nodes(t).indexOf(button(t,draftLabel))<nodes(t).indexOf(check))
  const draftPaper=nodes(t).find(n=>n.props?.record?.draft)?.props.record
  assert.ok(draftPaper);assert.match(draftPaper.document.document.title,/精算書（確認用）/)
  assert.match(draftPaper.document.document.notice,/事前入金は未確認/)

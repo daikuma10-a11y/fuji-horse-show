@@ -44,8 +44,8 @@ export function MasterSelfSettlementView(props:MasterSettlementViewProps){
       <p>読み直した金額を確認し、確認者のお名前・支払い方法を入力して精算を確定してください。</p>
      </section>}
      <ConsultNotice/>
-      <label className="flex min-h-20 items-center gap-4 rounded-xl border-2 bg-card p-4 text-2xl font-bold"><input type="checkbox" checked={checked} disabled={busy||!!props.locked} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onChange={e=>setChecked(e.target.checked)} className="size-8"/>この団体の明細・金額を確認しました</label>
       {props.onPrintDraft&&<StatementPreview key={org} paper={props.draftPaper} onPrint={props.onPrintDraft} disabled={busy||!!props.locked}/>}
+      <label className="flex min-h-20 items-center gap-4 rounded-xl border-2 bg-card p-4 text-2xl font-bold"><input type="checkbox" checked={checked} disabled={busy||!!props.locked} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onChange={e=>setChecked(e.target.checked)} className="size-8"/>この団体の明細・金額を確認しました</label>
       <label className="block text-xl font-bold">確認者のお名前<input value={name} maxLength={100} disabled={busy||props.locked} onChange={e=>setName(e.target.value)} className="mt-2 min-h-16 w-full rounded-xl border-2 bg-card px-4 text-2xl"/></label>
       {account.document.due>0&&<fieldset disabled={busy||props.locked} className="space-y-3"><legend className="mb-3 text-2xl font-bold">支払い方法を選んでください</legend>{[['bank_transfer','後日振込'],['cash_at_venue','当日現金・係員へ支払い']].map(([value,label])=><label key={value} className={`flex min-h-20 items-center gap-4 rounded-xl border-2 p-4 text-2xl font-bold ${method===value?'border-blue-700 bg-blue-50':'bg-card'}`}><input type="radio" name="payment" value={value} checked={method===value} disabled={props.canUseMethod?.(value)===false} onChange={()=>setMethod(value)} className="size-7"/>{label}</label>)}</fieldset>}
       <button type="button" disabled={busy||props.locked||!checked||!name.trim()||!method||!!account.warnings.length} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onClick={()=>void confirm()} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>{busy?'確定内容を保存中…':account.warnings.length?'本部確認待ち・精算は未確定':'この内容で精算を確定'}</button>
@@ -65,7 +65,7 @@ function StatementPreview({paper,onPrint,disabled}:{paper?:RecordRow|null;onPrin
  const visible=open&&!!paper
  return <div className="space-y-3">
   <button type="button" aria-expanded={visible} aria-controls="statement-preview" disabled={disabled||!paper}
-    onClick={()=>setOpen(value=>!value)} className={`${button} w-full border-blue-700 bg-white text-blue-800`}>明細確認</button>
+    onClick={()=>setOpen(value=>!value)} className={`${button} w-full border-blue-700 bg-white text-blue-800`}>明細確認、印刷</button>
   <div id="statement-preview" hidden={!visible}>
    {visible&&<section aria-label="精算書の明細" className="space-y-4 rounded-2xl border-2 bg-white p-4 text-black">
     <div className="overflow-x-auto"><MasterConfirmationPaper record={paper}/></div>

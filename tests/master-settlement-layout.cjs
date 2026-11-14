@@ -11,7 +11,7 @@ try{
   const state=[[{id:'org-1',name:'テスト団体'}],'',variant==='organizations'?'':'org-1',variant==='organizations'?null:account,'v','担当者','bank_transfer',true,variant==='saved'?record:null,[],false,'',false]
   const page=render(SelfSettlement,{},state),old=render(legacy.exports.SelfSettlement,{},state)
   if(variant==='organizations')assert.equal(page,old)
-  else{assert.ok(page.includes('内容が違う場合は係員にお尋ねください。'));assert.ok(!page.includes('内容が違う・係員に相談'));assert.ok(page.includes(variant==='saved'?'明細確認':'この団体の明細・金額を確認しました'))}
+  else{assert.ok(page.includes('内容が違う場合は係員にお尋ねください。'));assert.ok(!page.includes('内容が違う・係員に相談'));assert.ok(page.includes(variant==='saved'?'明細確認、印刷':'この団体の明細・金額を確認しました'))}
  }
  const paper=render(MasterConfirmationPaper,{record},[]);assert.equal(paper,render(legacy.exports.ConfirmationPaper,{record},[]).replaceAll('追加・変更・棄権','追加・変更'),'Autumn print template with revised detail heading')
  const standalone=masterCheckoutPrintHtml(record);assert.ok(standalone.includes(paper));assert.ok(!paper.includes('事前エントリーの明細'));assert.ok(paper.includes('競技1 → 競技2'));assert.ok(!standalone.includes('https://'));assert.ok(!standalone.includes('Bearer'))
