@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from 'react'
+import { displayChannelName, isPresentationDisplay } from '@/lib/monitor-presentation'
 import { isMonitorReport, type MonitorReport } from '@/lib/monitor-link'
 
 // Local messages only: the preview and audience window share this PC and origin.
@@ -29,11 +30,11 @@ export function useMonitorLink(input: DisplayLink) {
    let sequence=0, waitingSince=0
    let applied: {x:number;y:number}|null=null
    let ack: {client:string;sequence:number}|null=null
-   const link = new BroadcastChannel(token); channel.current = link
+   const link = new BroadcastChannel(displayChannelName(token)); channel.current = link
    const report = () => {
     const state = latest.current
     const visible = Array.from(document.querySelectorAll<HTMLElement>('[data-monitor-competition]')).filter(element => { const rect=element.getBoundingClientRect(); return rect.bottom > 80 && rect.top < window.innerHeight }).map(element => element.dataset.monitorCompetition)
-    const status: MonitorReport = { kind:'monitor-status', competition: visible.length ? visible.join(' ／ ') : state.competition, pending:state.pending, ready:state.ready, fullscreen:!!document.fullscreenElement, hidden:document.visibilityState==='hidden', width:window.innerWidth,height:window.innerHeight,x:window.scrollX,y:window.scrollY,fontSize:state.fontSize ?? 18 }
+    const status: MonitorReport = { kind:'monitor-status', competition: visible.length ? visible.join(' ／ ') : state.competition, pending:state.pending, ready:state.ready, fullscreen:isPresentationDisplay()||!!document.fullscreenElement||window.matchMedia?.('(display-mode: fullscreen)').matches===true, hidden:document.visibilityState==='hidden', width:window.innerWidth,height:window.innerHeight,x:window.scrollX,y:window.scrollY,fontSize:state.fontSize ?? 18 }
     link.postMessage({...status,ack})
    }
    const scroll = () => {

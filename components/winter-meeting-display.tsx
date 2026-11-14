@@ -6,6 +6,8 @@ import {useMonitorLink} from './monitor-link'
 import {WinterMonitorView} from './winter-monitor-view'
 import {validateWinterMonitor,type WinterMonitorState} from '@/lib/winter-monitor'
 
+import {displayChannelName} from '@/lib/monitor-presentation'
+
 export function WinterMeetingDisplay({channel}:{channel:string}){
  const [state,setState]=useState<WinterMonitorState|null>(null)
  const [full,setFull]=useState(false),[replica,setReplica]=useState(false)
@@ -23,7 +25,7 @@ export function WinterMeetingDisplay({channel}:{channel:string}){
 
  useEffect(()=>{
   setReplica(window.parent!==window)
-  const link=new BroadcastChannel(channel)
+  const link=new BroadcastChannel(displayChannelName(channel))
   let received=0,hasSnapshot=false
   link.onmessage=event=>{
    if(event.data?.kind==='meeting-closed'){received=0;setConnected(false);return}
