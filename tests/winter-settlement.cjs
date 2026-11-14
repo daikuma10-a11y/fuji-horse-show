@@ -1,3 +1,4 @@
+require('./register-ts.cjs')
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path')
 function load(file,mocks={}){const full=path.resolve(file),m=new Module(full,module);m.filename=full;m.paths=module.paths;m.require=n=>n in mocks?mocks[n]:require(Module._resolveFilename(n,m));m._compile(ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText,full);return m.exports}
 const event=load('lib/winter-event.ts'),order=load('lib/winter-display-order.ts'),ev=event.WINTER_EVENT_ID,org='11111111-1111-4111-8111-111111111111',user='22222222-2222-4222-8222-222222222222'
@@ -9,6 +10,24 @@ const ledger={initial:[initial],requests:[request('a','add','reflected',13000),r
 let account=api.winterSettlementAccount(data,ledger,org)
 assert.equal(account.normalTotal,5000);assert.equal(account.extraTotal,15000);assert.equal(account.remaining,20000);assert.equal(account.lines.length,3);assert.equal(account.pending,1)
 assert(account.warnings.some(x=>x.includes('未反映')));assert(account.warnings.some(x=>x.includes('未確認')))
+// OP applies to each accepted entry, including settlement-only runs, never to the rider globally.
+const requestFlags=[
+ ['added','add',{add:{isOp:true}}],
+ ['changed','change',{change:{toIsOp:true}}],
+ ['regular','change',{change:{toIsOp:false},inputs:{isOp:true}}],
+ ['legacy','add',{inputs:{isOp:true}}],
+ ['unknown','add',{}],
+]
+const onsiteInputs={competitionId:'c',riderId:'r',horseId:'h',isOp:true}
+const onsiteAdd={id:'onsite',event_id:ev,organization_key:org,inputs:onsiteInputs,entry_fee:4000,fee_amount:7000,note:'登録済み'}
+const opAccount=api.winterSettlementAccount(data,{...ledger,
+ requests:requestFlags.map(([id,action,payload])=>({...request(id,action,'reflected',2000),payload})),
+ onsite:[onsiteAdd,{...onsiteAdd,id:'onsite-change',action_type:'change',fee_amount:2000}]},org)
+assert.deepEqual(opAccount.lines.filter(line=>line.isOp).map(line=>line.id).sort(),['added','changed','legacy','onsite','onsite-change'])
+const exactOpEntry={...data.entries[0],competition_id:'c',horse_id:'h',is_op:true}
+const lateOp=entry=>api.winterSettlementAccount({...data,entries:[entry]},ledger,org).lines.filter(line=>line.isOp).map(line=>line.id)
+assert.deepEqual(lateOp(exactOpEntry),['a'])
+for(const key of ['entry_id','horse_id','competition_id','rider_id'])assert.deepEqual(lateOp({...exactOpEntry,[key]:'other'}),[])
 const advance={event_id:ev,organization_key:org,paid_amount:5000,note:'確認済み',updated_at:'2026-10-11T00:00:00Z',updated_by:user}
 account=api.winterSettlementAccount(data,{...ledger,advances:[advance]},org);assert.equal(account.remaining,15000)
 assert.throws(()=>api.winterSettlementAccount(data,{...ledger,initial:[{...initial,event_id:'autumn'}]},org),/Winter/)

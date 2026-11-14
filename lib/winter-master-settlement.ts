@@ -1,5 +1,5 @@
 import {winterCheckoutBankDetails,validateWinterCheckoutAccount,validateWinterSettlementRecord,type WinterCheckoutAccount,type WinterSettlementRecord} from './winter-checkout'
-import {showSettlementLine} from './master/self-settlement'
+import {showSettlementLine,settlementOpNote} from './master/self-settlement'
 import type {MasterSettlementAccount,MasterSavedSettlement} from './master/self-settlement'
 const yen=(amount:number)=>'¥'+amount.toLocaleString('ja-JP')
 export function winterMasterSettlementAccount(value:WinterCheckoutAccount,issuedAt=new Date(),method?:WinterSettlementRecord['payment_method']):MasterSettlementAccount{
@@ -9,7 +9,7 @@ export function winterMasterSettlementAccount(value:WinterCheckoutAccount,issued
  const lines=account.lines.map(line=>{
   if(!line.id||ids.has(line.id)||!Number.isSafeInteger(line.amount)||[line.action,line.competitionLabel,line.rider,line.horse].some(text=>typeof text!=='string'))throw new Error('精算書の明細を確認できません')
   ids.add(line.id)
-  return {key:line.id,period:'締切後・大会期間中',action:line.action,competition:line.competitionLabel,rider:line.rider,horse:line.horse,entryFee:0,serviceFee:0,difference:0,amount:line.amount,note:''}
+  return {key:line.id,period:'締切後・大会期間中',action:line.action,competition:line.competitionLabel,rider:line.rider,horse:line.horse,entryFee:0,serviceFee:0,difference:0,amount:line.amount,note:settlementOpNote(line.isOp)}
  })
  if(lines.reduce((sum,line)=>sum+line.amount,0)!==account.extraTotal)throw new Error('精算書の明細合計が一致しません')
  // Itemize only explicitly linked corrections; free-text reasons never determine a charge.

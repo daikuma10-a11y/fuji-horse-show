@@ -18,3 +18,9 @@ export type MasterSettlementViewProps={
 export function showSettlementLine(line:{action:string;amount:number}){
  return line.amount!==0 || !/^(?:現場)?棄権(?:取消(?:済み)?|未計上)?$/.test(line.action)
 }
+
+export function settlementOpNote(isOp?:boolean,previous?:boolean){
+ if(previous!==undefined && isOp!==undefined && previous!==isOp)
+  return `参加区分：${previous?'OP':'通常'} → ${isOp?'OP':'通常'}`
+ return isOp===true?'OP参加':''
+}
