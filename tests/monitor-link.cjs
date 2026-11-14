@@ -1,5 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module')
-function load(file,mocks={}){const m=new Module(file,module);m.paths=module.paths;m.require=n=>n in mocks?mocks[n]:require(n);m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText,file);return m.exports}
+function load(file,mocks={}){mocks={'@/lib/monitor-presentation':presentation,...mocks};const m=new Module(file,module);m.paths=module.paths;m.require=n=>n in mocks?mocks[n]:require(n);m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText,file);return m.exports}
+require('./register-ts.cjs')
+const presentation=require('../lib/monitor-presentation.ts')
 const helper=load('lib/monitor-link.ts')
 let context,channels=[],posts=0
 function within(c,fn){const old=context;context=c;global.window=c.window;global.document=c.document;try{return fn()}finally{context=old;global.window=old?.window;global.document=old?.document}}

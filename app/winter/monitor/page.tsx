@@ -9,11 +9,16 @@ import {listenToScroll} from '@/lib/winter-monitor-scroll'
 import {loadWinterData} from '@/lib/winter-data'
 import { WinterMonitorView } from '@/components/winter-monitor-view'
 import {subscribeWinterUpdates,loadRemoteWinterMonitor} from '@/lib/winter-live'
+import {displayChannelName,isPresentationDisplay,listenForPresentation} from '@/lib/monitor-presentation'
 export default function WinterMonitorPage(){
  const [channel,setChannel]=useState<string|null>(null)
  useEffect(()=>{const read=()=>setChannel(window.location.hash.slice(1));read();window.addEventListener('hashchange',read);return()=>window.removeEventListener('hashchange',read)},[])
+ const meeting=channel!==null && /^winter-meeting-[a-f0-9-]{36}$/.test(channel)
+ useEffect(()=>{
+  if(channel!==null)return listenForPresentation(meeting?channel:WINTER_MONITOR_CHANNEL)
+ },[channel,meeting])
  if(channel===null)return null
- return /^winter-meeting-[a-f0-9-]{36}$/.test(channel)?<WinterMeetingDisplay channel={channel}/>:<OfficialMonitor/>
+ return meeting?<WinterMeetingDisplay channel={channel}/>:<OfficialMonitor/>
 }
 function OfficialMonitor(){
  const[published,setState]=useState<WinterMonitorState|null>(null),[error,setError]=useState(''),[fullscreen,setFullscreen]=useState(false)
@@ -41,7 +46,7 @@ function OfficialMonitor(){
    timeout=setTimeout(()=>setHeartbeat(null),draftTimeoutMs)
   })
   heartbeatReceiver.current=listener
-  const link=typeof BroadcastChannel==='undefined'?null:new BroadcastChannel(WINTER_MONITOR_CHANNEL)
+  const link=typeof BroadcastChannel==='undefined'?null:new BroadcastChannel(displayChannelName(WINTER_MONITOR_CHANNEL))
   if(link)link.onmessage=event=>{if(event.data?.kind==='draft-heartbeat')void listener.receive(event.data.packet)}
   return ()=>{link?.close();listener.close();heartbeatReceiver.current=null;clearTimeout(timeout);setHeartbeat(null)}
  },[draftId,controller?.x,controller?.y])
@@ -59,6 +64,16 @@ function OfficialMonitor(){
   });receiver.current=listener
   return ()=>{listener.close();receiver.current=null}
  },[view,key?.x,key?.y])
+ useEffect(()=>{
+  if(!isPresentationDisplay())return
+  const link=new BroadcastChannel(displayChannelName(WINTER_MONITOR_CHANNEL))
+  link.onmessage=({data})=>{
+   if(data?.kind!=='monitor-published')return
+   try{setState(validateWinterMonitor(data.state));setError('')}catch{/* Ignore invalid publications. */}
+  }
+  link.postMessage({kind:'monitor-publication-query'})
+  return ()=>link.close()
+ },[])
  const [fontSize,setFontSize]=useState(18)
  const changeFont=useMonitorLink({fontSize,setFontSize,
   channelName:WINTER_MONITOR_CHANNEL,

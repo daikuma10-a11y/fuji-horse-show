@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import {canPresent, connectPresentation, isPresentationDisplay, type MonitorPresentationConnection} from '@/lib/monitor-presentation'
+
+const keyboardHint = '外部モニターの出番表をクリックして F11 を押すと、本部の操作中も全画面で表示できます。'
 const unavailable = '外部モニター側の「全画面表示」を押してください。'
 export const previewClick = 'monitor-preview-fullscreen'
+export const displayClick = 'monitor-display-open'
+export function requestMonitorDisplay(channel:string){
+ return canPresent() && !window.dispatchEvent(new CustomEvent(displayClick,{detail:channel,cancelable:true}))
+}
 
 // Send directly to the audience Window while the preview click is still active.
 // BroadcastChannel is used for scrolling, but cannot delegate a fullscreen gesture.
@@ -38,7 +45,7 @@ export function useAudienceFullscreen(token: string | null, displayPath: string 
   }
  }, [token, displayPath])
 
- const request = useCallback(() => {
+ const requestPopup = useCallback(() => {
   const target = audience.current
   window.clearTimeout(timeout.current)
   if (!target || target.closed) {
@@ -52,7 +59,48 @@ export function useAudienceFullscreen(token: string | null, displayPath: string 
    timeout.current = window.setTimeout(() => setHint(unavailable), 4000)
   } catch { setHint(unavailable) }
  }, [token])
- return { request, hint }
+ const [fallback,setFallback]=useState(false)
+ const [connection,setConnection]=useState<MonitorPresentationConnection|null>(null)
+ const mounted=useRef(true)
+ useEffect(()=>{
+  mounted.current=true
+  if(token && displayPath)void connectPresentation(token,displayPath,true).then(c=>{
+   if(c&&mounted.current)setConnection(c)
+  }).catch(()=>{})
+  return ()=>{mounted.current=false}
+ },[token,displayPath])
+ useEffect(()=>{
+  if(!connection || !displayPath)return
+  const connected=()=>{
+   const previous=audience.current
+   try{if(previous && !previous.closed && previous.opener===window && previous.location.href===new URL(displayPath,window.location.href).href)previous.close()}catch{}
+   setFallback(false);setHint('')
+  }
+  const ended=()=>{setConnection(null);setHint('外部モニターへの全画面配信を終了しました。')}
+  if(connection.state==='connected')connected()
+  else if(connection.state!=='connecting'){ended();return}
+  connection.addEventListener('connect',connected)
+  connection.addEventListener('close',ended)
+  connection.addEventListener('terminate',ended)
+  return ()=>{
+   connection.removeEventListener('connect',connected)
+   connection.removeEventListener('close',ended)
+   connection.removeEventListener('terminate',ended)
+  }
+ },[connection,displayPath])
+ const request=useCallback(()=>{
+  if(!token || !displayPath)return
+  if(!canPresent()){requestPopup();return}
+  if(connection?.state==='connected')return
+  setHint('表示先の一覧から外部モニターを選んでください。')
+  const started=connectPresentation(token,displayPath)
+  void started.then(c=>{if(c&&mounted.current)setConnection(c)}).catch(()=>{
+   if(!mounted.current)return
+   setFallback(true)
+   setHint('表示を開始できませんでした。もう一度表示先を選ぶか、別ウィンドウで開いてください。')
+  })
+ },[token,displayPath,requestPopup,connection])
+ return { request, stop:connection?()=>connection.terminate():null, fallback, hint }
 }
 
 export function MonitorFullscreenButton({ channel, fullscreen, preview }: { channel: string; fullscreen: boolean; preview: boolean }) {
@@ -75,10 +123,10 @@ export function MonitorFullscreenButton({ channel, fullscreen, preview }: { chan
   const timer = window.setInterval(ready, 2000)
   return () => { window.removeEventListener('message', receive); window.clearInterval(timer) }
  }, [channel])
- if (fullscreen) return null
+ if (fullscreen || (typeof window!=='undefined' && isPresentationDisplay())) return null
  async function enterFullscreen() {
   try { await document.documentElement.requestFullscreen() }
-  catch { setHint('全画面表示を開始できません。ブラウザーの全画面操作をお使いください。') }
+  catch { setHint(keyboardHint) }
  }
  function click() {
   if (window.parent !== window) {

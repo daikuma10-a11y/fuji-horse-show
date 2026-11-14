@@ -1,4 +1,5 @@
 "use client"
+import {requestMonitorDisplay} from "./master/monitor-fullscreen"
 import {timetablePhase} from '@/lib/master/timetable'
 import {loadWinterRosterIdentities,type WinterRosterIdentity} from '@/lib/winter-entry-intervals'
 import {compareWinterOrganizations,winterCompetitionLabel} from "@/lib/winter-display-order"
@@ -135,7 +136,16 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  if(monitor&&scrolling.key)monitor.scrollController=scrolling.key
  // Publishing only on display changes avoids sending data on an idle timer.
  const displayKey=monitor?JSON.stringify({...monitor,updatedAt:''}):''
- useEffect(()=>{if(!monitor)return;try{publishWinterMonitor(monitor)}catch(reason){setError(reason instanceof Error?reason.message:'モニター送信に失敗しました')}},[displayKey])
+ useEffect(()=>{
+  if(!monitor)return
+  try{publishWinterMonitor(monitor)}catch(reason){setError(reason instanceof Error?reason.message:'モニター送信に失敗しました')}
+  if(typeof BroadcastChannel==='undefined')return
+  const link=new BroadcastChannel(WINTER_MONITOR_CHANNEL)
+  const send=()=>link.postMessage({kind:'monitor-published',state:monitor})
+  link.onmessage=({data})=>{if(data?.kind==='monitor-publication-query')send()}
+  send()
+  return ()=>link.close()
+ },[displayKey])
  useEffect(()=>{if(!monitor)return;const timer=setTimeout(()=>{remotePending.current=monitor;void sendRemote()},300);return()=>clearTimeout(timer)},[displayKey,resend])
  async function save(id:string){
    const draft=drafts[id],current=day.get(id)
@@ -167,7 +177,8 @@ export function WinterStartList({data,session,onSession,onChanged,meetingDay,act
  {dayPrinter.error&&<p className="print-hide text-destructive" role="alert">{dayPrinter.error}</p>}
  <div className="print-hide flex flex-wrap justify-end gap-2"><button type="button" className={button} disabled={readingBusy} onClick={()=>void prepareReadings()}>{readingBusy?'フリガナを読み込み中…':'人馬のフリガナ一覧'}</button><button type="button" className={button} disabled={busy||excelBusy} onClick={()=>void exportExcel()}>{excelBusy?'Excelを作成中…':'この日の出番表・成績表をExcelに保存'}</button><button className={button} onClick={exportCsv}>出番表を出力（CSV）</button><a className={button} href="/winter/monitor" target="fhs-winter-startlist-monitor" onClick={event=>{
   if(!competition)setDailyMonitor(true)
-  if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey&&window.open(event.currentTarget.href,event.currentTarget.target,'popup'))event.preventDefault()
+  if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return
+  if(requestMonitorDisplay(WINTER_MONITOR_CHANNEL)||window.open(event.currentTarget.href,event.currentTarget.target,'popup'))event.preventDefault()
  }}>モニター表示</a><button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary" disabled={busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts()}>この日の出番表を印刷</button>{competition&&<button className="min-h-12 rounded-lg border-2 border-primary px-4 font-bold text-primary disabled:opacity-50" disabled={dirty||busy||excelBusy||dayPrinter.busy} onClick={()=>printStarts(competition.id)}>この競技だけを印刷</button>}</div>
  {active&&<MonitorStatus token={WINTER_MONITOR_CHANNEL} displayPath="/winter/monitor" onPreviewScroll={monitor&&scrolling.key?scrolling.scroll:undefined}/>}
  {readingOpen&&<section className="print-hide rounded-xl border-2 border-primary bg-card p-4" aria-label="人馬のフリガナ一覧">
