@@ -3,6 +3,9 @@ import {MasterSelfSettlementView,MasterConfirmationPaper} from '@/components/mas
 import { useEffect, useRef, useState } from 'react'
 import type { SavedSettlement } from '@/lib/self-settlement-saved'
 import type { selfSettlementAccount } from '@/lib/self-settlement-account'
+import { bankDetailsForEvent } from '@/lib/event-payment-settings'
+import { AUTUMN_EVENT_ID } from '@/lib/supabase-rest'
+import type { MasterSavedSettlement } from '@/lib/master/self-settlement'
 
 type Account=ReturnType<typeof selfSettlementAccount>
 type RecordRow=SavedSettlement
@@ -28,5 +31,7 @@ export function SelfSettlement(){
  }
  async function loadHistory(){setBusy(true);working.current=true;setError('');try{const data=await api(`/api/self-settlement?org=${encodeURIComponent(org)}&history=1`);setHistory(data.records)}catch(e){setError(e instanceof Error?e.message:'履歴を取得できません')}finally{setBusy(false);working.current=false}}
  function print(){lastAction.current=Date.now();printing.current=true;window.print()}
- return <MasterSelfSettlementView organizations={organizations} query={query} org={org} account={account} record={record} history={history} busy={busy} error={error} checked={checked} name={name} method={method} onQuery={setQuery} onName={value=>{setName(value);attemptId.current=null}} onMethod={value=>{setMethod(value);attemptId.current=null}} onChecked={setChecked} onSelect={id=>void select(id)} onReset={reset} onConfirm={()=>void confirm()} onPrint={print} onEditSaved={()=>{setRecord(null);setChecked(false);setName('');setMethod(account?.document.due===0?'no_payment_due':'');attemptId.current=null}} onHistory={()=>void loadHistory()} onChooseHistory={row=>{const original=history.find(record=>record.id===row.id);if(original)setRecord(original)}}/>
+ const draftMethod=account&&account.document.due<=0?'no_payment_due':method
+ const draftPaper:MasterSavedSettlement|null=account&&draftMethod?{id:'draft',draft:true,payment_method:draftMethod,amount:account.document.due,created_at:new Date().toISOString(),document:{...account,document:{...account.document,title:'Fuji Horse Show 精算書（確認用）',notice:['最終請求書・領収書ではありません。',...account.warnings].join('\n'),method:draftMethod==='bank_transfer'?'後日振込':draftMethod==='cash_at_venue'?'当日現金':'お支払い不要',bankDetails:draftMethod==='bank_transfer'?bankDetailsForEvent(AUTUMN_EVENT_ID):''}}}:null
+ return <MasterSelfSettlementView draftPaper={draftPaper} onPrintDraft={print} organizations={organizations} query={query} org={org} account={account} record={record} history={history} busy={busy} error={error} checked={checked} name={name} method={method} onQuery={setQuery} onName={value=>{setName(value);attemptId.current=null}} onMethod={value=>{setMethod(value);attemptId.current=null}} onChecked={setChecked} onSelect={id=>void select(id)} onReset={reset} onConfirm={()=>void confirm()} onPrint={print} onEditSaved={()=>{setRecord(null);setChecked(false);setName('');setMethod(account?.document.due===0?'no_payment_due':'');attemptId.current=null}} onHistory={()=>void loadHistory()} onChooseHistory={row=>{const original=history.find(record=>record.id===row.id);if(original)setRecord(original)}}/>
 }

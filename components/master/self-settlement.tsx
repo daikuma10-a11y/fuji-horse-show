@@ -8,15 +8,18 @@ import type {MasterSettlementViewProps,MasterSettlementAccount as Account,Master
 const button='min-h-16 rounded-2xl border-2 px-5 py-3 text-xl font-bold disabled:opacity-40'
 export function MasterSelfSettlementView(props:MasterSettlementViewProps){
  const {organizations,query,org,account,record,history,busy,error,checked,name,method}=props
+ const [confirmedPayment,setConfirmedPayment]=useState<{account:Account;method:string}|null>(null)
+ const paymentReady=!!account&&(account.document.due<=0||confirmedPayment?.account===account&&confirmedPayment.method===method&&!!method&&props.canUseMethod?.(method)!==false)
  const lines=account?.document.lines.filter(showSettlementLine)??[]
- const paper=record??props.draftPaper
+ const paper=record??(paymentReady&&!props.locked?props.draftPaper:null)
  const reset=props.onReset,select=props.onSelect,confirm=props.onConfirm,print=props.onPrint,loadHistory=props.onHistory
- const setQuery=props.onQuery,setName=props.onName,setMethod=props.onMethod,setChecked=props.onChecked
+ const setQuery=props.onQuery,setName=props.onName,setChecked=props.onChecked
+ const setMethod=(value:string)=>{setConfirmedPayment(null);setChecked(false);props.onMethod(value)}
  const setRecord=props.onChooseHistory
  return <>
   <main className="print-hide mx-auto min-h-dvh max-w-5xl space-y-5 bg-background px-5 py-6 text-foreground">
    <header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-3xl font-bold">大会精算</h1>{!busy&&<Link href={props.homeHref??"/"} onClick={props.locked?event=>event.preventDefault():reset} aria-disabled={props.locked||undefined} className="rounded-xl border-2 px-4 py-3 text-lg font-bold">受付へ戻る</Link>}</header>
-   <p className="text-lg">{props.onPrintDraft?'団体を選ぶと、明細の確認・印刷ができます。精算を確定する場合は支払い方法と確認者を入力してください。':'団体を選択 → 明細確認 → 支払い方法 → 確定・印刷'}</p>
+   <p className="text-lg">団体を選択 → 支払い方法を確定 → 明細確認・印刷 → 精算を確定</p>
    {props.pendingMessage&&<div role="status" className="rounded-xl bg-orange-100 p-4 text-xl"><p>{props.pendingMessage}</p>{props.onRetry&&<button type="button" className={button} disabled={busy} onClick={props.onRetry}>同じ登録番号で保存を再確認</button>}</div>}
    {error&&<p role="alert" className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-xl font-bold text-red-800">{error}</p>}
    {!org?<>
@@ -33,22 +36,26 @@ export function MasterSelfSettlementView(props:MasterSettlementViewProps){
     </>:account?<>
      <h2 className="text-3xl font-bold">{account.document.organization}</h2>
      <section className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5"><p className="text-xl font-bold">お支払いいただく金額</p><p className="mt-2 text-5xl font-bold text-blue-800">{formatYen(account.document.due)}</p><dl className="mt-5 grid grid-cols-2 gap-3 text-lg"><dt>事前エントリー</dt><dd>{formatYen(account.document.normalTotal)}</dd><dt>事前分の入金済み</dt><dd>{formatYen(account.document.advancePaid)}{!account.document.advanceRecorded&&'（未確認）'}</dd><dt>追加・変更など</dt><dd>{formatYen(account.document.extraTotal)}</dd><dt>追加・変更などの入金済み</dt><dd>{formatYen(account.document.extraPaid)}</dd>{account.document.summaryRows?.map(row=><div key={row.label} className="contents"><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></section>
+     {account.document.due>0&&<fieldset disabled={busy||props.locked} className="space-y-3"><legend className="mb-3 text-2xl font-bold">支払い方法を選んでください</legend>{[['bank_transfer','後日振込'],['cash_at_venue','当日現金・係員へ支払い']].map(([value,label])=><label key={value} className={`flex min-h-20 items-center gap-4 rounded-xl border-2 p-4 text-2xl font-bold ${method===value?'border-blue-700 bg-blue-50':'bg-card'}`}><input type="radio" name="payment" value={value} checked={method===value} disabled={props.canUseMethod?.(value)===false} onChange={()=>{if(!busy&&!props.locked)setMethod(value)}} className="size-7"/>{label}</label>)}</fieldset>}
+     {account.document.due>0&&<button type="button" disabled={busy||props.locked||!method||props.canUseMethod?.(method)===false||paymentReady} onClick={()=>{if(!busy&&!props.locked&&method&&props.canUseMethod?.(method)!==false)setConfirmedPayment({account,method})}} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>{paymentReady?'支払い方法を確定しました':'この支払い方法で明細確認へ'}</button>}
+     {!paymentReady&&<p className="text-lg">支払い方法を選んで確定すると、明細の確認・印刷ができます。</p>}
+     {paymentReady&&<>
      {props.onExcel&&props.draftPaper&&<button type="button" disabled={busy||props.locked} onClick={()=>props.draftPaper&&props.onExcel?.(props.draftPaper)} className={button}>精算書をExcelに保存（確認用）</button>}
      {props.normalDetails!==false&&<details className="rounded-xl border-2 bg-card p-4"><summary className="cursor-pointer text-xl font-bold">事前エントリーの明細（{account.normalLines.length}件）</summary><NormalLines account={account}/></details>}
      <section className="rounded-xl border-2 bg-card p-4"><h3 className="mb-3 text-2xl font-bold">追加・変更の明細</h3>{lines.length?lines.map((line,i)=><div key={line.key??i} className="border-t py-4 text-lg"><p className="font-bold">{line.action} ／ {line.competition}</p><p className="mt-1 whitespace-pre-line">{line.rider} ／ {line.horse}</p><p className="mt-2 font-bold">料金 {formatYen(line.amount)}{typeof line.paid==='number'?` ／ 入金済み ${formatYen(line.paid)}`:' ／ 入金は合計欄を参照'}</p>{line.note&&<p className="mt-1">{line.note}</p>}</div>):<p className="text-lg">追加・変更はありません。</p>}</section>
+     </>}
      {!!account.warnings.length&&<section id="settlement-confirmation-blockers" className="space-y-3 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-lg text-amber-950">
       <div role="alert"><h3 className="text-2xl font-bold">本部確認待ち・まだ精算を確定できません</h3>{account.warnings.map(w=><p key={w} className="mt-2 font-bold">{w}</p>)}</div>
-      <p>明細の確認チェックは押せます。精算の確定には、上の確認事項の解消が必要です。</p>
+      <p>支払い方法を確定すると明細を確認できます。精算の確定には、上の確認事項の解消が必要です。</p>
       {account.warnings.some(w=>w.includes('事前入金'))&&<p>本部担当者は精算画面でこの団体を開き、「事前入金を記録・修正」から実際に確認した入金額を保存してください。未入金と確認できた場合は0円を保存します。「未確認」と「未入金」は別の状態です。</p>}
       <button type="button" disabled={busy||props.locked} onClick={()=>void select(org)} className={`${button} w-full border-amber-700 bg-white`}>本部確認後に明細を読み直す</button>
       <p>読み直した金額を確認し、確認者のお名前・支払い方法を入力して精算を確定してください。</p>
      </section>}
      <ConsultNotice/>
-      {props.onPrintDraft&&<StatementPreview key={org} paper={props.draftPaper} onPrint={props.onPrintDraft} disabled={busy||!!props.locked}/>}
-      <label className="flex min-h-20 items-center gap-4 rounded-xl border-2 bg-card p-4 text-2xl font-bold"><input type="checkbox" checked={checked} disabled={busy||!!props.locked} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onChange={e=>setChecked(e.target.checked)} className="size-8"/>この団体の明細・金額を確認しました</label>
+      {props.onPrintDraft&&<StatementPreview key={`${org}:${method}:${paymentReady}`} paper={paymentReady?props.draftPaper:null} onPrint={props.onPrintDraft} disabled={busy||!!props.locked||!paymentReady}/>}
+      <label className="flex min-h-20 items-center gap-4 rounded-xl border-2 bg-card p-4 text-2xl font-bold"><input type="checkbox" checked={checked} disabled={busy||!!props.locked||!paymentReady} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onChange={e=>{if(paymentReady)setChecked(e.target.checked)}} className="size-8"/>この団体の明細・金額を確認しました</label>
       <label className="block text-xl font-bold">確認者のお名前<input value={name} maxLength={100} disabled={busy||props.locked} onChange={e=>setName(e.target.value)} className="mt-2 min-h-16 w-full rounded-xl border-2 bg-card px-4 text-2xl"/></label>
-      {account.document.due>0&&<fieldset disabled={busy||props.locked} className="space-y-3"><legend className="mb-3 text-2xl font-bold">支払い方法を選んでください</legend>{[['bank_transfer','後日振込'],['cash_at_venue','当日現金・係員へ支払い']].map(([value,label])=><label key={value} className={`flex min-h-20 items-center gap-4 rounded-xl border-2 p-4 text-2xl font-bold ${method===value?'border-blue-700 bg-blue-50':'bg-card'}`}><input type="radio" name="payment" value={value} checked={method===value} disabled={props.canUseMethod?.(value)===false} onChange={()=>setMethod(value)} className="size-7"/>{label}</label>)}</fieldset>}
-      <button type="button" disabled={busy||props.locked||!checked||!name.trim()||!method||!!account.warnings.length} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onClick={()=>void confirm()} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>{busy?'確定内容を保存中…':account.warnings.length?'本部確認待ち・精算は未確定':'この内容で精算を確定'}</button>
+      <button type="button" disabled={busy||props.locked||!paymentReady||!checked||!name.trim()||!method||!!account.warnings.length} aria-describedby={account.warnings.length?'settlement-confirmation-blockers':undefined} onClick={()=>{if(paymentReady)void confirm()}} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>{busy?'確定内容を保存中…':account.warnings.length?'本部確認待ち・精算は未確定':'この内容で精算を確定'}</button>
      <button type="button" disabled={busy||props.locked} onClick={()=>void loadHistory()} className={`${button} w-full bg-card`}>この団体の確定履歴・再印刷</button>
      {history.map(row=><button key={row.id} type="button" disabled={props.locked} onClick={()=>setRecord(row)} className={`${button} w-full bg-card text-left`}>{new Date(row.created_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})} ／ {row.id.slice(0,8).toUpperCase()}<span className="block text-lg">{formatYen(row.amount)} ／ 保存時点の精算書を表示</span></button>)}
     </>:null}
@@ -65,11 +72,11 @@ function StatementPreview({paper,onPrint,disabled}:{paper?:RecordRow|null;onPrin
  const visible=open&&!!paper
  return <div className="space-y-3">
   <button type="button" aria-expanded={visible} aria-controls="statement-preview" disabled={disabled||!paper}
-    onClick={()=>setOpen(value=>!value)} className={`${button} w-full border-blue-700 bg-white text-blue-800`}>明細確認、印刷</button>
+    onClick={()=>{if(!disabled&&paper)setOpen(value=>!value)}} className={`${button} w-full border-blue-700 bg-white text-blue-800`}>明細確認、印刷</button>
   <div id="statement-preview" hidden={!visible}>
    {visible&&<section aria-label="精算書の明細" className="space-y-4 rounded-2xl border-2 bg-white p-4 text-black">
     <div className="overflow-x-auto"><MasterConfirmationPaper record={paper}/></div>
-    <button type="button" disabled={disabled} onClick={onPrint} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>印刷</button>
+    <button type="button" disabled={disabled} onClick={()=>{if(!disabled)onPrint()}} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>印刷</button>
    </section>}
   </div>
  </div>

@@ -58,3 +58,18 @@ assert.equal(missingDocument.extraTotal,9000)
 assert(missingDocument.summaryRows.some(row=>row.value==='¥-2,000'))
 assert.throws(()=>model.winterMasterSettlementAccount({...linked,adjustments:[{...corrections[0],statement_items:[{lineId:'op',delta:-1,note:'免除'}]},...corrections.slice(1)]}),/内訳/)
 console.log('PASS: snapshot totals/event/org guards, saved print escaping, cash not implicitly paid, zero balance, read-only reprint without POST')
+
+// A visitor's current choice overrides an older staff instruction without changing the account.
+const selectable={...account,bankDetails:event.WINTER_BANK_DETAILS,instruction:{payment_method:'cash_at_venue',bank_details:'old'}}
+const beforeChoice=JSON.stringify(selectable)
+for(const method of ['bank_transfer','cash_at_venue','no_payment_due']){
+ const paper=draft.winterSettlementDraft(selectable,new Date(record.created_at),method)
+ const expected=method==='bank_transfer'?event.WINTER_BANK_DETAILS:''
+ assert.equal(paper.payment_method,method)
+ assert.equal(paper.document.document.bankDetails,expected)
+ const printed=template.masterConfirmationContent(paper)
+ const sheet=strFromU8(unzipSync(masterStatementWorkbook(paper))['xl/worksheets/sheet1.xml'])
+ for(const content of [printed,sheet])assert.equal(content.includes(event.WINTER_BANK_DETAILS),method==='bank_transfer')
+}
+assert.equal(JSON.stringify(selectable),beforeChoice)
+console.log('PASS: selected payment and official bank agree in preview, print and Excel; cash/no-payment remove bank; account unchanged')

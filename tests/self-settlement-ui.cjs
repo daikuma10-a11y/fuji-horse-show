@@ -12,12 +12,20 @@ const {SelfSettlement}=load('components/self-settlement.tsx',{'react':h.api,'nex
 const expand=require('./settlement-view-render.cjs')(hooks,h.api)
 const render=()=>h.render(()=>{const tree=SelfSettlement();return expand(typeof tree.type==='function'?tree.type(tree.props):tree)}),flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()}
 async function main(){account.warnings=['未反映の申請があります。'];let t=render();await flush();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.match(text(t),/8000円/)
- let checkbox=nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox');assert.equal(checkbox.props.disabled,false);checkbox.props.onChange({target:{checked:true}});nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.onChange({target:{value:'確認者'}});nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.onChange();t=render();assert.equal(button(t,'本部確認待ち・精算は未確定').props.disabled,true);button(t,'本部確認待ち・精算は未確定').props.onClick();assert.equal(posts,0,'shared acknowledgement never bypasses Autumn blockers');assert.ok(!text(t).includes('未入金と確認できた場合'))
+ assert.equal(button(t,'明細確認、印刷').props.disabled,true)
+ nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.onChange();t=render()
+ assert.equal(button(t,'明細確認、印刷').props.disabled,true)
+ button(t,'この支払い方法で明細確認へ').props.onClick();t=render()
+ assert.equal(button(t,'明細確認、印刷').props.disabled,false)
+ const draft=nodes(t).find(n=>n.props?.record?.draft)?.props.record
+ assert.equal(draft.document.document.bankDetails,'静岡銀行 御殿場支店 普通 0903214','Autumn destination remains event-specific')
+ let checkbox=nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox');assert.equal(checkbox.props.disabled,false);checkbox.props.onChange({target:{checked:true}});nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.onChange({target:{value:'確認者'}});t=render();assert.equal(button(t,'本部確認待ち・精算は未確定').props.disabled,true);button(t,'本部確認待ち・精算は未確定').props.onClick();assert.equal(posts,0,'shared acknowledgement never bypasses Autumn blockers');assert.ok(!text(t).includes('未入金と確認できた場合'))
  account.warnings=[];button(t,'本部確認後に明細を読み直す').props.onClick();await flush();t=render();assert.equal(posts,0);assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.checked,false)
  let confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,true)
+ nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.onChange();t=render()
+ button(t,'この支払い方法で明細確認へ').props.onClick();t=render()
  nodes(t).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}})
- nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.onChange({target:{value:'確認者'}})
- nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.onChange();t=render();confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,false)
+ nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.onChange({target:{value:'確認者'}});t=render();confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,false)
  const pending=confirm.props.onClick();confirm.props.onClick();assert.equal(posts,1,'rapid double click must not send twice')
  resolveConfirm({record:{id:'saved-id',document:account,amount:8000,payment_method:'bank_transfer',created_at:new Date().toISOString()}});await pending;await flush();t=render();assert.match(text(t),/精算内容を確定しました/)
  button(t,'明細確認、印刷').props.onClick();t=render();assert.equal(prints,0);button(t,'印刷').props.onClick();button(t,'印刷').props.onClick();assert.equal(prints,2);assert.equal(posts,1,'reprinting does not confirm again')
@@ -27,6 +35,6 @@ async function main(){account.warnings=['未反映の申請があります。'];
  button(t,'← 団体を選び直す').props.onClick();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.match(text(t),/サーバーに保存済みです/);button(t,'明細確認、印刷').props.onClick();t=render();button(t,'印刷').props.onClick();assert.equal(posts,1);
  button(t,'明細を確認・支払い方法を変更').props.onClick();t=render();
  now+=121000;timers.forEach(fn=>fn());t=render();assert.match(text(t),/ご所属の団体を選んでください/)
- h.close();Date.now=originalNow;console.log('PASS: organization → detail → acknowledgment/method → confirmation; rapid double-click, reprint, clear next visitor, inactivity reset')
+ h.close();Date.now=originalNow;console.log('PASS: organization → payment confirmation → preview → acknowledgment → checkout confirmation; rapid double-click, reprint, clear next visitor, inactivity reset')
 }
 main().catch(error=>{console.error(error);process.exitCode=1})
