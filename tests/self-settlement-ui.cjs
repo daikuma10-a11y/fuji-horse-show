@@ -20,11 +20,11 @@ async function main(){account.warnings=['未反映の申請があります。'];
  nodes(t).find(n=>n.type==='input'&&n.props.value==='bank_transfer').props.onChange();t=render();confirm=button(t,'この内容で精算を確定');assert.equal(confirm.props.disabled,false)
  const pending=confirm.props.onClick();confirm.props.onClick();assert.equal(posts,1,'rapid double click must not send twice')
  resolveConfirm({record:{id:'saved-id',document:account,amount:8000,payment_method:'bank_transfer',created_at:new Date().toISOString()}});await pending;await flush();t=render();assert.match(text(t),/精算内容を確定しました/)
- button(t,'明細確認').props.onClick();t=render();assert.equal(prints,0);button(t,'印刷').props.onClick();button(t,'印刷').props.onClick();assert.equal(prints,2);assert.equal(posts,1,'reprinting does not confirm again')
+ button(t,'明細確認、印刷').props.onClick();t=render();assert.equal(prints,0);button(t,'印刷').props.onClick();button(t,'印刷').props.onClick();assert.equal(prints,2);assert.equal(posts,1,'reprinting does not confirm again')
  button(t,'終了・次の団体へ').props.onClick();t=render();assert.match(text(t),/ご所属の団体を選んでください/);assert.equal(text(t).includes('8000円'),false)
  button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.equal(nodes(t).find(n=>n.type==='input'&&n.props.maxLength===100).props.value,'')
  savedRecord={id:'saved-id',organization_key:'org-1',document:account,amount:8000,payment_method:'bank_transfer',created_at:new Date().toISOString()};
- button(t,'← 団体を選び直す').props.onClick();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.match(text(t),/サーバーに保存済みです/);button(t,'明細確認').props.onClick();t=render();button(t,'印刷').props.onClick();assert.equal(posts,1);
+ button(t,'← 団体を選び直す').props.onClick();t=render();button(t,'テスト団体 ›').props.onClick();await flush();t=render();assert.match(text(t),/サーバーに保存済みです/);button(t,'明細確認、印刷').props.onClick();t=render();button(t,'印刷').props.onClick();assert.equal(posts,1);
  button(t,'明細を確認・支払い方法を変更').props.onClick();t=render();
  now+=121000;timers.forEach(fn=>fn());t=render();assert.match(text(t),/ご所属の団体を選んでください/)
  h.close();Date.now=originalNow;console.log('PASS: organization → detail → acknowledgment/method → confirmation; rapid double-click, reprint, clear next visitor, inactivity reset')
