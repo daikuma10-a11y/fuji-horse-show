@@ -10,7 +10,8 @@ const template=winterCompetition('5')
 const comp={event_id,id:'comp',competition_date:date,competition_no:'5',name:template.name,official:false,fee:template.fee,op_fee:template.opFee,member_fee:template.memberFee,nonmember_fee:template.nonmemberFee}
 const rider={event_id,id:'r1',name:'選手甲',organization_id:bill.id},horse={event_id,id:'h1',name:'馬甲',organization_id:club.id}
 const entry={event_id,entry_id:'e1',competition_id:comp.id,start_order:4,status:'active',rider_id:rider.id,horse_id:horse.id,is_op:false}
-const data={eventId:event_id,organizations:[club,bill],riders:[rider],horses:[horse],entries:[entry],competitions:[comp]}
+const riderB={...rider,id:'r2',name:'選手乙',organization_id:club.id}, horseB={...horse,id:'h2',name:'馬乙',organization_id:bill.id}
+const data={eventId:event_id,organizations:[club,bill],riders:[rider,riderB],horses:[horse,horseB],entries:[entry],competitions:[comp]}
 const props={data,session:{email:'staff@example.invalid'},onChanged(){},onSession(){},onChooseParticipants(){}}
 const html=renderToStaticMarkup(React.createElement(WinterPostRegistration,props))
 assert.match(html,/大会日を選んでください/)
@@ -20,6 +21,7 @@ const input={id:id(),organization:club,competition:comp,rider,horse,visitorName:
 const add=postAddition(input),repeat=postAddition({...input,id:id()})
 const change=postChange({original:entry,from:comp,fromSelection:{membership:'member',isOp:false},target:{...input,id:id()}},'当日変更')
 assert.equal(add.total,7000)
+const secondClub=postAddition({...input,id:id(),organization:bill,rider:riderB,horse:horseB})
 assert.equal(change.total,2000)
 assert.equal(change.billingOrg,bill.id)
 // Drive the actual registration screen, its shared editors, and their event handlers.
@@ -79,9 +81,22 @@ function runWorkflow(){
  changeAdapter.stageChange({entryId:entry.entry_id,toCompetitionId:comp.id,toPlayerId:rider.id,toHorseId:horse.id,toIsOp:true,organizationId:bill.id,changedFields:['op']})
  changeAdapter.onStaged()
  assert.ok(pick(WinterMasterStartList))
+ click('この競技に追加・再走行')
+ editor=mount(LoadedWinterReception,form)
+ editor().props.adapter.inputFields({competition:winterMasterCompetition(comp),organizationId:club.id}).props.children[1].props.onChange({membership:'member'})
+ const other=editor().props.adapter
+ other.stageAdd({competitionId:comp.id,playerId:riderB.id,horseId:horseB.id,isOp:true,organizationId:club.id,note:''})
+ other.onStaged()
  const review=element(view(),n=>n.props.id==='winter-post-review')
  const content=renderToStaticMarkup(review)
- assert.match(content,/未保存 2件/)
+ assert.match(content,/2団体・未保存 3件/)
+ assert.match(content,/合計 16,000円/)
+ const forClub=name=>renderToStaticMarkup(element(review,n=>n.type==='section'&&n.props['aria-label']===name))
+ assert.match(forClub(club.name),/小計 7,000円/)
+ assert.match(forClub(bill.name),/小計 9,000円/)
+ assert.match(forClub(club.name),/選手乙/)
+ assert.doesNotMatch(forClub(bill.name),/選手乙/)
+ assert.equal((content.match(/全団体分をまとめて精算に登録/g)||[]).length,1)
  assert.match(content,/9,000円/)
  assert.match(content,/選手の団体/)
  assert.doesNotMatch(content,/棄権/)
@@ -101,7 +116,7 @@ global.fetch=async(url,options)=>{
   const rows=JSON.parse(options.body).p_rows
   calls.push({action,ids:rows.map(r=>r.id)})
   for(const row of rows){
-   const saved={...row,action_type:row.action??'add',organization_key:bill.id,event_id,reverses_id:null,
+   const saved={...row,action_type:row.action??'add',organization_key:data.riders.find(r=>r.id===row.inputs.riderId).organization_id,event_id,reverses_id:null,
     entry_fee:row.inputs.entryFee??4000,fee_amount:row.inputs.expectedTotal??(row.inputs.entryFee+3000)}
    if(store.has(row.id))assert.deepEqual(store.get(row.id),saved)
    store.set(row.id,saved)
@@ -114,13 +129,15 @@ global.fetch=async(url,options)=>{
  return Response.json(ids.map(key=>store.get(key)))
 }
 ;(async()=>{
- let pending=[add,change,repeat]
+ let pending=[add,change,secondClub,repeat]
  const remove=ids=>{pending=pending.filter(i=>!ids.includes(i.id))}
- await assert.rejects(savePostItems(pending,'test',remove),err=>err.uncertain&&err.completedIds.length===2)
+ await assert.rejects(savePostItems(pending,'test',remove),err=>err.uncertain&&err.completedIds.length===3)
  assert.deepEqual(pending.map(i=>i.id),[change.id])
  await savePostItems(pending,'test',remove)
  assert.equal(pending.length,0)
- assert.deepEqual(calls.map(c=>c.ids),[[add.id,repeat.id],[change.id],[change.id]])
- assert.equal(store.size,3)
- console.log('PASS: date-first entry, cross-club OP addition and repeat, mixed changes, settlement-only readback and idempotent partial retry')
+ assert.deepEqual(calls.map(c=>c.ids),[[add.id,repeat.id],[secondClub.id],[change.id],[change.id]])
+ assert.equal(store.size,4)
+ assert.equal(store.get(secondClub.id).organization_key,club.id)
+ assert.equal(store.get(add.id).organization_key,bill.id)
+ console.log('PASS: two billing clubs, one submission, separate subtotals, cross-club OP addition and repeat, mixed changes, settlement-only readback and idempotent partial retry')
 })().catch(e=>{console.error(e);process.exitCode=1})

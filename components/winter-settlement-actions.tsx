@@ -3,7 +3,7 @@ import {useRef,useState} from 'react'
 import {verifyAdminSession,type AdminSession} from '@/lib/supabase-rest'
 import type {loadWinterData} from '@/lib/winter-data'
 import {WinterInitialBatchFailure} from '@/lib/winter-initial-entry'
-import {winterAffiliatedOrganizations} from '@/lib/winter-display-order'
+import {compareWinterOrganizations,winterAffiliatedOrganizations} from '@/lib/winter-display-order'
 import {savePostItems,type WinterPostItem} from '@/lib/winter-post-registration'
 import {WinterReceptionData,WinterMasterDateSelect,WinterMasterCompetitionList,WinterMasterStartList} from './winter-reception-selectors'
 import {LoadedWinterReception} from './winter-master-reception-form'
@@ -29,6 +29,13 @@ export function WinterPostRegistration({data,session,onSession,onChanged,onChoos
  const [error,setError]=useState(''),[message,setMessage]=useState('')
  const lock=useRef(false),heading=useRef<HTMLHeadingElement>(null)
  const groups=winterAffiliatedOrganizations(data)
+ const byClub=new Map<string,{name:string;rows:WinterPostItem[];subtotal:number}>()
+ for(const item of items){
+  const club=byClub.get(item.billingOrg)??{name:groups.find(group=>group.id===item.billingOrg)?.name??'所属名未確認',rows:[],subtotal:0}
+  club.rows.push(item)
+  club.subtotal+=item.total
+  byClub.set(item.billingOrg,club)
+ }
  const disabled=busy||uncertain
  function returnToEntries(){
   setEditor(null)
@@ -77,7 +84,7 @@ export function WinterPostRegistration({data,session,onSession,onChanged,onChoos
     initialCompetition={competition} initialEntry={editor.mode==='change'?editor.entry:undefined} onClose={returnToEntries}/>:
    <fieldset disabled={disabled} className="space-y-4">
     {items.length>0&&<button type="button" className={secondary} onClick={()=>document.getElementById('winter-post-review')?.scrollIntoView({block:'start'})}>確認一覧へ（{items.length}件）</button>}
-    <p>現場で受けた追加・再走行と変更を、精算だけに登録します。</p>
+    <p>複数団体の追加・再走行・変更を続けて入力し、最後にまとめて精算だけに登録できます。</p>
     {!data.riders.length||!data.horses.length?<button className={secondary} type="button" onClick={onChooseParticipants}>人馬の登録で参加人馬を選ぶ</button>:
      !date?<><h3 className="text-xl font-bold">大会日を選んでください</h3><WinterMasterDateSelect onSelect={setDate}/></>:
      !competition?<><button type="button" className={secondary} onClick={()=>setDate('')}>日付を選び直す</button>
@@ -91,15 +98,18 @@ export function WinterPostRegistration({data,session,onSession,onChanged,onChoos
       </>}
    </fieldset>}
   {items.length>0&&!editor&&<section id="winter-post-review" className="space-y-3 rounded-xl border-2 p-4">
-   <h3 className="text-xl font-bold">事後登録の確認一覧（未保存 {items.length}件）</h3>
-   <ul className="divide-y">{items.map(item=><li key={item.id} className="space-y-1 py-3">
+   <h3 className="text-xl font-bold">事後登録の確認一覧（{byClub.size}団体・未保存 {items.length}件）</h3>
+   {Array.from(byClub).sort((a,b)=>compareWinterOrganizations(a[1],b[1])).map(([id,{name,rows,subtotal}])=><section key={id} aria-label={name} className="rounded-xl border p-3">
+    <h4 className="flex flex-wrap justify-between gap-2 bg-blue-50 p-2 font-bold"><span>{name}（{rows.length}件）</span><span>小計 {yen(subtotal)}</span></h4>
+    <ul className="divide-y">{rows.map(item=><li key={item.id} className="space-y-1 py-3">
     <p><strong>{item.type==='add'?'追加・再走行':'変更'}</strong>　{item.summary}</p>
-    <p>請求先：{groups.find(org=>org.id===item.billingOrg)?.name}　{yen(item.total)}</p>
+    <p>{yen(item.total)}</p>
     {item.type==='change'&&<p>変更内容・理由：{item.row.note}</p>}
     <button type="button" className={secondary} disabled={disabled} onClick={()=>{setMessage('');setError('');setItems(rows=>rows.filter(row=>row.id!==item.id))}}>一覧から外す</button>
-   </li>)}</ul>
+    </li>)}</ul>
+   </section>)}
    <p className="text-xl font-bold">合計 {yen(items.reduce((sum,item)=>sum+item.total,0))}</p>
-   <button type="button" className={button} disabled={busy} onClick={()=>void save()}>{busy?'保存を確認中…':uncertain?'同じ登録番号で保存を再確認':'この一覧を精算だけに保存'}</button>
+   <button type="button" className={button} disabled={busy} onClick={()=>void save()}>{busy?'保存を確認中…':uncertain?'同じ登録番号で保存を再確認':'全団体分をまとめて精算に登録'}</button>
   </section>}
  </section></WinterReceptionData>
 }
