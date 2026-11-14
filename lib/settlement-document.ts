@@ -1,3 +1,4 @@
+import {masterSettlementSummary} from './master/settlement-summary'
 import {showSettlementLine} from './master/self-settlement'
 import type {MasterSavedSettlement} from './master/self-settlement'
 export type SettlementDocumentLine = {
@@ -112,23 +113,21 @@ export function masterStatementWorkbook(record:MasterSavedSettlement){
   add([record.draft?'確認日時：'+at:`保存日時：${at}　確認者：${record.confirmed_by??''}　受付番号：${record.id.slice(0,8).toUpperCase()}`],26,0,'F')
   if(!record.draft)add(['支払い予定の確認書です。領収書は入金確認後に係員が発行します。'],26,0,'F')
   for(const line of doc.notice?.split('\n')??[])add([line],Math.max(26,Math.ceil(line.length/65)*23),0,'F')
-  const normal=total('事前エントリー合計',doc.normalTotal)
-  const advancePaid=total('事前分の入金済み',doc.advancePaid)
-  const extraRow=rows.length+1
-  const extra=total('追加・変更等の合計',doc.extraTotal)
-  const extraPaid=total('追加・変更等の入金済み',doc.extraPaid)
-  const charges=[normal,extra]
-  let billed='',refund='',horse=''
-  for(const item of doc.summaryRows??[]){
-    if(item.amount===undefined){add([item.label,item.value],32);continue}
-    const ref=total(item.kind==='horse'?item.label+'　'+item.value:item.label,item.amount,
-      item.kind==='total'?charges.join('+'):item.kind==='initial'&&horse?normal+'+'+horse:undefined)
-    if(item.kind==='adjustment'||item.kind==='horse')charges.push(ref)
-    if(item.kind==='horse')horse=ref
-    if(item.kind==='total')billed=ref
-    if(item.kind==='refund')refund=ref
+  const summary=masterSettlementSummary(doc)
+  const items=[...summary.charges,...summary.payments]
+  const firstTotal=rows.length+1
+  const refs=(kind:string)=>items.flatMap((row,index)=>row.kind===kind?['F'+(firstTotal+index)]:[])
+  const initialFormula=[...refs('normal'),...refs('horse')].join('+')
+  const totalFormula=[...refs('initial'),...refs('extra'),...refs('adjustment')].join('+')
+  const balanceFormula=`${refs('total')[0]}-${refs('advance')[0]}-${refs('paid')[0]}${refs('refund').map(ref=>'+'+ref).join('')}`
+  const extraRow=firstTotal+items.findIndex(row=>row.kind==='extra')
+  for(const item of items){
+    const formula=item.kind==='initial'?initialFormula:item.kind==='total'?totalFormula:
+      item.kind==='due'?`MAX(0,${balanceFormula})`:item.kind==='refundDue'?`MAX(0,-(${balanceFormula}))`:
+      item.kind==='overpayment'?`MAX(0,${refs('advance')[0]}-${refs('initial')[0]})`:undefined
+    const explanation=item.kind==='horse'?item.value:item.value.split('\n').slice(1).join(' ／ ')
+    total(item.label+(explanation?'　'+explanation:''),item.amount??item.value,formula)
   }
-  total('お支払額',doc.due,billed?`${billed}-${advancePaid}-${extraPaid}${refund?'+'+refund:''}`:undefined)
   add(['支払い方法',doc.method])
   if(doc.bankDetails)add(['振込先',doc.bankDetails],Math.max(48,doc.bankDetails.split('\n').length*21))
   add(['締切後・大会期間中の追加・変更'],28,1,'F')

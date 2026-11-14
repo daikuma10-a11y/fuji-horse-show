@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import {useState} from 'react'
 import {masterConfirmationContent} from '@/lib/master/settlement-print'
+import {masterSettlementSummary} from '@/lib/master/settlement-summary'
 import {formatYen} from '@/lib/fees'
 import {showSettlementLine} from '@/lib/master/self-settlement'
 import type {MasterSettlementViewProps,MasterSettlementAccount as Account,MasterSavedSettlement as RecordRow} from '@/lib/master/self-settlement'
@@ -10,6 +11,7 @@ export function MasterSelfSettlementView(props:MasterSettlementViewProps){
  const {organizations,query,org,account,record,history,busy,error,checked,name,method}=props
  const [confirmedPayment,setConfirmedPayment]=useState<{account:Account;method:string}|null>(null)
  const paymentReady=!!account&&(account.document.due<=0||confirmedPayment?.account===account&&confirmedPayment.method===method&&!!method&&props.canUseMethod?.(method)!==false)
+ const totals=account?masterSettlementSummary(account.document):null
  const lines=account?.document.lines.filter(showSettlementLine)??[]
  const paper=record??(paymentReady&&!props.locked?props.draftPaper:null)
  const reset=props.onReset,select=props.onSelect,confirm=props.onConfirm,print=props.onPrint,loadHistory=props.onHistory
@@ -35,7 +37,13 @@ export function MasterSelfSettlementView(props:MasterSettlementViewProps){
      <div className="flex flex-wrap gap-3">{props.onExcel&&record&&<button type="button" className={button} onClick={()=>props.onExcel?.(record)}>精算書をExcelに保存</button>}<button type="button" onClick={reset} className={`${button} bg-card`}>終了・次の団体へ</button>{account&&props.canEditSaved!==false&&<button type="button" onClick={props.onEditSaved} className={`${button} bg-card`}>明細を確認・支払い方法を変更</button>}</div>
     </>:account?<>
      <h2 className="text-3xl font-bold">{account.document.organization}</h2>
-     <section className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5"><p className="text-xl font-bold">お支払いいただく金額</p><p className="mt-2 text-5xl font-bold text-blue-800">{formatYen(account.document.due)}</p><dl className="mt-5 grid grid-cols-2 gap-3 text-lg"><dt>事前エントリー</dt><dd>{formatYen(account.document.normalTotal)}</dd><dt>事前分の入金済み</dt><dd>{formatYen(account.document.advancePaid)}{!account.document.advanceRecorded&&'（未確認）'}</dd><dt>追加・変更など</dt><dd>{formatYen(account.document.extraTotal)}</dd><dt>追加・変更などの入金済み</dt><dd>{formatYen(account.document.extraPaid)}</dd>{account.document.summaryRows?.map(row=><div key={row.label} className="contents"><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></section>
+     <section className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5">
+      <p className="text-xl font-bold">{account.document.due<0?'ご返金額（未返金）':'お支払いいただく金額'}</p>
+      <p className="mt-2 text-5xl font-bold text-blue-800">{formatYen(Math.abs(account.document.due))}</p>
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+       {[totals?.charges,totals?.payments].map((rows,index)=><dl key={index} className="grid grid-cols-2 content-start gap-3 text-lg">{rows?.map((row,i)=><div key={i} className="contents"><dt>{row.label}</dt><dd className="whitespace-pre-line">{row.value}</dd></div>)}</dl>)}
+      </div>
+     </section>
      {account.document.due>0&&<fieldset disabled={busy||props.locked} className="space-y-3"><legend className="mb-3 text-2xl font-bold">支払い方法を選んでください</legend>{[['bank_transfer','後日振込'],['cash_at_venue','当日現金・係員へ支払い']].map(([value,label])=><label key={value} className={`flex min-h-20 items-center gap-4 rounded-xl border-2 p-4 text-2xl font-bold ${method===value?'border-blue-700 bg-blue-50':'bg-card'}`}><input type="radio" name="payment" value={value} checked={method===value} disabled={props.canUseMethod?.(value)===false} onChange={()=>{if(!busy&&!props.locked)setMethod(value)}} className="size-7"/>{label}</label>)}</fieldset>}
      {account.document.due>0&&<button type="button" disabled={busy||props.locked||!method||props.canUseMethod?.(method)===false||paymentReady} onClick={()=>{if(!busy&&!props.locked&&method&&props.canUseMethod?.(method)!==false)setConfirmedPayment({account,method})}} className={`${button} w-full border-blue-700 bg-blue-700 text-white`}>{paymentReady?'支払い方法を確定しました':'この支払い方法で明細確認へ'}</button>}
      {!paymentReady&&<p className="text-lg">支払い方法を選んで確定すると、明細の確認・印刷ができます。</p>}
