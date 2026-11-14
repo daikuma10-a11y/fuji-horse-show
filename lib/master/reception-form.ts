@@ -22,6 +22,7 @@ export type MasterPickerProps={selectedId?:string;preferredOrganizationId?:strin
 export type MasterAddState={competition:MasterFormCompetition;playerId:string;horseId:string;organizationId:string;isOp:boolean;note:string}
 export interface MasterAddAdapter extends Pick<MasterWithdrawAdapter,'homeHref'|'notice'|'onExit'|'DateSelect'|'CompetitionList'|'getPlayer'|'getHorse'|'getOrg'|'onStaged'> {
  canonicalOrganizationId?:(id:string)=>string
+ settlementOnly?:boolean
  preferRiderHorses?:boolean
  PlayerPicker:ComponentType<MasterPickerProps>
  HorsePicker:ComponentType<MasterPickerProps>

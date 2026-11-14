@@ -66,6 +66,7 @@ export function WinterAdminDashboard(){
   if(window.location.hash==='#winter-entry-cancellation'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-horse-substitution'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
   if(window.location.hash==='#winter-registration-overview'){setTab('roster');setVisited(['requests','roster']);setRegistrationSection('overview')}
+  if(window.location.hash==='#winter-panel-on-site'){setTab('on-site');setVisited(['requests','on-site'])}
   if(window.location.hash==='#winter-meeting'){setTab('meeting');setVisited(['requests','meeting'])}
   if(window.location.hash==='#winter-offline-reception'){setTab('requests');setVisited(['requests'])}
   if(window.location.hash==='#winter-stable-information'){setTab('stable');setVisited(['requests','stable'])}
